@@ -74,7 +74,7 @@ def build_threshold_graph(model_path: str, model_name: str, dims: dict,
                          {"path": "", "is_grayscale": False}, 60, 0, 1)
     model_id = add_node("xccv2/model_detection",
                         {"model_path": str(model_path or ""),
-                         "conf": round(conf, 2), "iou": 0.45,
+                         "conf": round(conf, 2), "iou": 0.20,
                          "device": "auto"}, 340, 1, 2)
     connect(loader_id, 0, model_id, 0)
 

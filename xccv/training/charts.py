@@ -109,7 +109,11 @@ class DistributionCanvas(_WheelThroughCanvas):
 
 
 class SplitDonutCanvas(_WheelThroughCanvas):
-    """O12（V0.7）：训练/验证划分环形图（已标训练/验证 + OK 训练/验证）。"""
+    """O12（V0.7）：训练/验证划分环形图。
+
+    V0.7.1 勘误：划分由训练参数区的训练集比例 / 验证集比例决定，
+    改参数即重绘（数量按 split_samples 同口径推算），不再只随统计刷新。
+    """
 
     _COLORS = (ACCENT, "#f58518", "#54a24b", "#b279a2")
 
@@ -127,22 +131,22 @@ class SplitDonutCanvas(_WheelThroughCanvas):
                      color=MUTED, fontsize=11)
         self.ax.set_axis_off()
 
-    def update_split(self, n_labeled: int, n_ok: int, val_ratio: float) -> None:
-        """按比例近似展示划分（划分种子细节以体检/日志为准，本图为示意）。"""
+    def update_split(self, n_labeled: int, n_ok: int,
+                     train_ratio: float, val_ratio: float) -> None:
+        """按当前训练参数推算各段数量并绘制（示意；种子细节以日志为准）。"""
+        from ..engine.dataset.converters import split_counts
+
         self.ax.clear()
         self.ax.set_facecolor(PANEL)
+        train_ratio = min(max(float(train_ratio), 0.0), 1.0)
         val_ratio = min(max(float(val_ratio), 0.0), 0.9)
         segs = []
-        if n_labeled:
-            segs.append((f"已标训练 {round(n_labeled * (1 - val_ratio))}",
-                         n_labeled * (1 - val_ratio)))
-            segs.append((f"已标验证 {round(n_labeled * val_ratio)}",
-                         n_labeled * val_ratio))
-        if n_ok:
-            segs.append((f"OK 训练 {round(n_ok * (1 - val_ratio))}",
-                         n_ok * (1 - val_ratio)))
-            segs.append((f"OK 验证 {round(n_ok * val_ratio)}",
-                         n_ok * val_ratio))
+        for name, n in (("已标", n_labeled), ("OK", n_ok)):
+            if not n:
+                continue
+            tr, va = split_counts(int(n), val_ratio, train_ratio)
+            segs.append((f"{name}训练 {tr}", tr))
+            segs.append((f"{name}验证 {va}", va))
         if not segs or sum(v for _, v in segs) <= 0:
             self.ax.text(0.5, 0.5, "暂无数据", ha="center", va="center",
                          color=MUTED, fontsize=11)
@@ -155,6 +159,10 @@ class SplitDonutCanvas(_WheelThroughCanvas):
                                 startangle=90,
                                 wedgeprops=dict(width=0.42, edgecolor=BG))
         self.ax.set_title("训练 / 验证划分", fontsize=13, color=FG)
+        # 环心标注当前参数，划分比例与下方训练参数一致（实时）
+        self.ax.text(0, 0, f"训练 {train_ratio:.0%}\n验证 {val_ratio:.0%}",
+                     ha="center", va="center", color=FG, fontsize=11,
+                     fontweight="bold", linespacing=1.4)
         self.ax.legend(wedges, names, loc="center left",
                        bbox_to_anchor=(1.0, 0.5), fontsize=9,
                        frameon=False, labelcolor=FG)

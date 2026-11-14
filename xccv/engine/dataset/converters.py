@@ -11,6 +11,33 @@ import random
 from .base import Sample, Shape
 
 
+def split_counts(n: int, val_ratio: float,
+                 train_ratio: float | None = None) -> tuple[int, int]:
+    """与 split_samples 完全同口径的数量推算（不抽样，仅算个数）。
+
+    → (n_train, n_val)。训练平台划分环状图按当前参数实时推算用；
+    n=0 或比例越界时返回 (0, 0) 兜底。
+    """
+    if n <= 0:
+        return 0, 0
+    if train_ratio is None:
+        train_ratio = 1.0 - val_ratio
+    train_ratio = min(max(float(train_ratio), 0.0), 1.0)
+    val_ratio = min(max(float(val_ratio), 0.0), 1.0)
+    overlap = train_ratio + val_ratio > 1.0 + 1e-9
+    if overlap:
+        n_val = round(n * val_ratio) if val_ratio > 0 else 0
+        n_train = round(n * train_ratio)
+    else:
+        n_train = round(n * train_ratio)
+        rest = n - n_train
+        frac = val_ratio / (1.0 - train_ratio) if train_ratio < 1.0 else 0.0
+        n_val = round(rest * frac) if val_ratio > 0 else 0
+    if val_ratio <= 0:
+        n_val = n_train   # 与 split_samples 同口径：验证集复用训练集
+    return n_train, n_val
+
+
 def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
                   stratify: bool = False, train_ratio: float | None = None,
                   stratify_labels: bool = False):

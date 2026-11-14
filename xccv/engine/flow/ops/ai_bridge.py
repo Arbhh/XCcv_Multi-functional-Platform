@@ -78,7 +78,7 @@ class AiModelBase(VisionNode):
         "model_path": ParamSpec("model_path", "模型文件", "path", "",
                                 tooltip=".pt 权重"),
         "conf": ParamSpec("conf", "置信度", "float", 0.25, range=(0.0, 1.0)),
-        "iou": ParamSpec("iou", "IOU", "float", 0.45, range=(0.0, 1.0)),
+        "iou": ParamSpec("iou", "IOU", "float", 0.20, range=(0.0, 1.0)),
         "device": ParamSpec("device", "设备", "enum", "auto",
                             options=["auto", "cpu", "gpu"]),
     }
@@ -183,7 +183,7 @@ class RoiBatchClassify(VisionNode):
                 ctx.warn(f"roi_batch_classify：第 {i} 个检出框越界/退化，跳过复判")
                 continue
             crop = mat[cy1:cy2, cx1:cx2]
-            sub = model.predict(crop, conf=float(params["conf"]), iou=0.45)
+            sub = model.predict(crop, conf=float(params["conf"]), iou=0.20)
             if not len(sub.labels):
                 results.append({"index": i, "label": "", "label_id": -1,
                                 "score": 0.0})

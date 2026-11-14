@@ -166,15 +166,19 @@ class ManifestTest(unittest.TestCase):
 
 
 class SplitDonutTest(unittest.TestCase):
-    """O12：环形图随统计刷新（offscreen 冒烟——构造已在 ProjectWindow 内）。"""
+    """O12：环形图随统计刷新（offscreen 冒烟——构造已在 ProjectWindow 内）。
+
+    V0.7.1：签名改为 (已标数, OK 数, 训练比例, 验证比例)——随划分参数实时重绘。
+    """
 
     def test_update_split_smoke(self):
         from xccv.training.charts import SplitDonutCanvas
 
         c = SplitDonutCanvas()
-        c.update_split(80, 20, 0.2)       # 四段
-        c.update_split(80, 0, 0.2)        # 仅已标
-        c.update_split(0, 0, 0.2)         # 空数据占位
+        c.update_split(80, 20, 0.8, 0.2)   # 四段
+        c.update_split(80, 0, 0.8, 0.2)    # 仅已标
+        c.update_split(0, 0, 0.8, 0.2)     # 空数据占位
+        c.update_split(80, 20, 1.0, 0.2)   # 重叠划分（训练 100% + 验证 20%）
         self.assertTrue(True)
 
 

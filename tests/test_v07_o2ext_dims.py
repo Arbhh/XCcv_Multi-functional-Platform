@@ -242,9 +242,11 @@ class PanelSmokeTest(unittest.TestCase):
 
         p = ThresholdPanel()
         p.set_stats(self._stats(), 0.25)
-        # 维度下拉：score + 4 个有数据的维度（long 无数据不出现）
+        # 维度下拉：score + 有数据的几何/灰度维度（long 无数据不出现；
+        # V0.7.1 前景占比按用户指示从面板移除，引擎 dims 表仍保留该列）
         keys = [p.cmb_dim.itemData(i) for i in range(p.cmb_dim.count())]
-        self.assertEqual(keys, ["score", "area", "short", "fg_ratio", "gray_diff"])
+        self.assertEqual(keys, ["score", "area", "short", "gray_diff"])
+        self.assertNotIn("fg_ratio", keys)
         # 切到短边：默认 0 未启用
         idx = p.cmb_dim.findData("short")
         p.cmb_dim.setCurrentIndex(idx)

@@ -64,7 +64,7 @@ def _nms_merge(boxes, labels, scores, iou_thr: float) -> list:
 
 def tiled_predict(model, image: np.ndarray, tile: int = 640,
                   overlap: float = 0.15, conf: float = 0.25,
-                  iou: float = 0.45, merge_iou: float = 0.5) -> Prediction:
+                  iou: float = 0.20, merge_iou: float = 0.5) -> Prediction:
     """大图分块推理：整图不大于 tile 时等价于 model.predict。"""
     h, w = image.shape[:2]
     if h <= tile and w <= tile:

@@ -252,3 +252,28 @@ def maybe_apply_ops(image: np.ndarray, shapes: list[Shape], ops: dict, rng=None,
     if not chosen:
         return image, shapes
     return apply_ops(image, shapes, chosen, rng=rng)
+
+def preview_apply_ops(image: np.ndarray, ops: dict, probs: dict | None = None,
+                      rng=None, always: tuple = ("resize",)) -> tuple:
+    """增强效果预览：与 maybe_apply_ops 同口径（每算子独立掷硬币），
+    返回 (图像, 本次实际生效的算子名列表)。
+
+    always 中的算子无条件应用不掷硬币——resize 是画布锚点（训练输入尺寸
+    与之统一），预览必须始终展示拉伸效果；其余光度/几何算子按概率随机。
+
+    训练平台"效果预览"用——resize 之外的光度/几何增强也能可视化，
+    名称列表展示在预览信息里，让用户知道这张预览里发生了什么。
+    不传 rng 时使用全局 random，与训练侧的随机性一致。
+    """
+    rng = rng if rng is not None else random
+    probs = probs or {}
+    out = image
+    applied: list[str] = []
+    for name, params in (ops or {}).items():
+        if name not in always and rng.random() >= float(
+                probs.get(name, AUGMENT_PROB)):
+            continue
+        fn, defaults = AUGMENT_OPS[name]
+        out, _shapes = fn(out, [], **{**defaults, **(params or {})}, rng=rng)
+        applied.append(name)
+    return out, applied

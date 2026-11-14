@@ -25,14 +25,20 @@ runs/
 检出结果/
 可视化/
 
+# IDE / 系统
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
 # 内部开发文档（更新说明 / 约定 / 交接 / 验收，面向开发者本机留存）
 docs/验收/
 docs/社区版更新说明_*.md
 docs/社区版约定.md
 docs/交接_*.md
 
-# IDE / 系统
-.idea/
-.vscode/
-Thumbs.db
-.DS_Store
+# Office 锁文件
+~$*.docx
+
+# AI 协作记忆（本机留存，不入仓库）
+AGENTS.md

@@ -1,0 +1,20 @@
+# 项目元数据（供 GitHub / 工具识别）。
+# 运行环境以 requirements.txt 为准（含 torch 安装源说明），本文件不参与 pip 安装。
+[project]
+name = "xccv-community"
+version = "0.7.1"
+description = "XCcv 社区版：离线工业视觉平台（标注 / 训练 / 测试 / 缺陷样本合成 / 流程图）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "XCcv Community" }]
+keywords = ["industrial-vision", "defect-detection", "yolo", "labelme", "pyqt5", "anomaly-detection", "ocr"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+[project.urls]
+Repository = "https://github.com/Arbhh/XCcv_community"
+Changelog = "https://github.com/Arbhh/XCcv_community/blob/master/CHANGELOG.md"

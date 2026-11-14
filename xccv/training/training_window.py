@@ -29,7 +29,7 @@ from PyQt5.QtGui import QBrush, QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QAbstractItemView, QCheckBox, QComboBox, QDialog,
     QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
-    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QProgressBar, QPushButton,
     QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -89,28 +89,40 @@ DEFAULT_LR = {
 
 # 图像增强策略行：(算子名, 中文名, [(参数名, 默认值, 最小, 最大, 是否整数)])
 AUGMENT_ROWS = [
-    ("resize", "调整图像大小（拉伸至宽×高）", [
-        ("width", 640, 2, 8192, True), ("height", 640, 2, 8192, True)]),
+    ("resize", "调整图像大小", [
+        ("width", 640, 2, 8192, True), ("height", 640, 2, 8192, True)],
+     "拉伸至设定的宽×高；训练输入尺寸与这里统一"),
     ("random_rescale", "随机比例缩放", [
-        ("min_scale", 0.8, 0.1, 2.0, False), ("max_scale", 1.2, 0.1, 3.0, False)]),
-    ("random_flip_h", "随机水平翻转", []),
-    ("random_flip_v", "随机垂直翻转", []),
-    ("rotate90", "随机旋转 90°/270°（工件朝向；见下方守卫说明）", []),
-    ("random_crop", "随机裁剪（对齐目标宽高比，旋转算子的兜底）", [
-        ("ratio", 1.0, 0.1, 10.0, False), ("min_cover", 0.7, 0.1, 1.0, False)]),
-    ("random_brightness", "随机调整亮度（±max_delta 内随机偏移）", [
-        ("max_delta", 20, 1, 100, True)]),
+        ("min_scale", 0.8, 0.1, 2.0, False), ("max_scale", 1.2, 0.1, 3.0, False)],
+     "在设定比例区间内随机缩放"),
+    ("random_flip_h", "随机水平翻转", [],
+     "左右镜像，标注同步翻转"),
+    ("random_flip_v", "随机垂直翻转", [],
+     "上下镜像，标注同步翻转"),
+    ("rotate90", "随机旋转 90°/270°", [],
+     "工件朝向增强；长宽比不一致时须配随机裁剪兜底，见下方守卫说明"),
+    ("random_crop", "随机裁剪", [
+        ("ratio", 1.0, 0.1, 10.0, False), ("min_cover", 0.7, 0.1, 1.0, False)],
+     "按目标宽高比裁剪；作为旋转算子的兜底"),
+    ("random_brightness", "随机调整亮度", [
+        ("max_delta", 20, 1, 100, True)],
+     "在 ±max_delta 内随机偏移亮度"),
     ("random_contrast", "随机调整对比度", [
-        ("low", 0.8, 0.1, 3.0, False), ("high", 1.2, 0.1, 3.0, False)]),
-    ("random_hsv_shift", "随机 HSV 色彩扰动（光照/色温变化）", [
+        ("low", 0.8, 0.1, 3.0, False), ("high", 1.2, 0.1, 3.0, False)],
+     "在设定区间内随机缩放对比度"),
+    ("random_hsv_shift", "随机 HSV 扰动", [
         ("h_delta", 6, 1, 90, True), ("s_delta", 0.15, 0.05, 1.0, False),
-        ("v_delta", 0.15, 0.05, 1.0, False)]),
-    ("gaussian_blur", "随机高斯模糊（模拟失焦）", [
-        ("ksize", 3, 1, 15, True), ("sigma", 0.6, 0.1, 5.0, False)]),
-    ("gaussian_noise", "随机高斯噪声（传感器噪声）", [
-        ("sigma", 3, 1, 60, True)]),
-    ("random_erase", "随机矩形擦除（模拟遮挡/反光）", [
-        ("max_ratio", 0.1, 0.05, 0.9, False)]),
+        ("v_delta", 0.15, 0.05, 1.0, False)],
+     "模拟光照与色温变化"),
+    ("gaussian_blur", "随机高斯模糊", [
+        ("ksize", 3, 1, 15, True), ("sigma", 0.6, 0.1, 5.0, False)],
+     "模拟失焦"),
+    ("gaussian_noise", "随机高斯噪声", [
+        ("sigma", 3, 1, 60, True)],
+     "模拟传感器噪声"),
+    ("random_erase", "随机矩形擦除", [
+        ("max_ratio", 0.1, 0.05, 0.9, False)],
+     "模拟遮挡与反光"),
 ]
 
 _CURVE_COLORS = ["#4c8bf5", "#f58518", "#54a24b", "#e45756", "#72b7b2", "#b279a2"]
@@ -636,8 +648,9 @@ class ProjectWindow(QMainWindow):
         grid = QGridLayout(g3)
         self.augment_controls: dict[str, tuple[QCheckBox, dict]] = {}
         self.augment_prob_spins: dict[str, _DoubleSpin] = {}  # 每算子启用概率
-        for r, (op, label, params) in enumerate(AUGMENT_ROWS):
+        for r, (op, label, params, tip) in enumerate(AUGMENT_ROWS):
             check = QCheckBox(label)
+            check.setToolTip(tip)
             spins = {}
             for c, (pname, default, vmin, vmax, is_int) in enumerate(params, start=1):
                 spin = _Spin() if is_int else _DoubleSpin()
@@ -663,17 +676,22 @@ class ProjectWindow(QMainWindow):
             prob.setToolTip("该算子的启用概率：每次取样独立判定是否应用")
             grid.addWidget(prob, r, pc + 1)
             prob.valueChanged.connect(self._collect_augment_ops)
+            prob.valueChanged.connect(lambda _v: self._refresh_augment_preview())
             self.augment_prob_spins[op] = prob
             check.stateChanged.connect(self._collect_augment_ops)
+            check.stateChanged.connect(lambda _s: self._refresh_augment_preview())
+            for sp in spins.values():
+                # 参数变化即重预览：与 resize 行为一致（同源图重新应用）
+                sp.valueChanged.connect(lambda _v: self._refresh_augment_preview())
             grid.addWidget(check, r, 0)
             self.augment_controls[op] = (check, spins)
         resize_check, resize_spins = self.augment_controls["resize"]
         resize_check.stateChanged.connect(self._refresh_input_size_hint)
-        # 注意必须用 lambda 隔离：直接连接会把 stateChanged/valueChanged 的
-        # 整数实参漏进 _refresh_augment_preview(new_image=…) 形参（非 0 即真），
-        # 每次调整尺寸都换成新随机图，"同图对比拉伸"预览效果失效
-        resize_check.stateChanged.connect(
-            lambda _s: self._refresh_augment_preview())
+        # 预览刷新已在上方循环按行接线（V0.7.1 起全算子）；此处只保留
+        # 训练输入尺寸提示。注意接线必须用 lambda 隔离：直接连接会把
+        # stateChanged/valueChanged 的整数实参漏进
+        # _refresh_augment_preview(new_image=…) 形参（非 0 即真），
+        # 每次调整都换成新随机图，"同图对比"预览效果失效
         for sp in resize_spins.values():
             sp.valueChanged.connect(self._refresh_input_size_hint)
             sp.valueChanged.connect(lambda _v: self._refresh_augment_preview())
@@ -767,6 +785,9 @@ class ProjectWindow(QMainWindow):
         self.par_val_ratio.setRange(0.0, 0.9)
         self.par_val_ratio.setSingleStep(0.05)
         self.par_val_ratio.setToolTip("验证集占整体数据的比例（为 0 时验证集复用训练集）")
+        # V0.7.1：训练/验证划分环状图实时贴合这两个参数（改值即重绘）
+        self.par_train_ratio.valueChanged.connect(self._refresh_split_canvas)
+        self.par_val_ratio.valueChanged.connect(self._refresh_split_canvas)
         self.par_multiply = _Spin()
         self.par_multiply.setRange(1, 50)
         self.par_multiply.setToolTip(
@@ -1218,10 +1239,19 @@ class ProjectWindow(QMainWindow):
         self.per_class_table = QTableWidget(0, 9)
         self.per_class_table.setHorizontalHeaderLabels(
             ["类别", "GT 实例", "检出", "TP", "FP", "FN", "精确率", "召回率", "AP@50"])
-        self.per_class_table.horizontalHeader().setStretchLastSection(True)
+        # V0.7.1：取消末列拉伸——全屏后还原窗口时 AP@50 列被异常拉宽；
+        # 列宽按内容自适应，9 列总宽通常小于视口，窄窗口出比例正常的横向滚动条
+        header = self.per_class_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
         self.per_class_table.verticalHeader().setVisible(False)
         self.per_class_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.per_class_table.setMaximumHeight(190)
+        # V0.7.1：横向按像素平滑滚动，滑块拖动手感正常（此前逐格跳变难拖）
+        self.per_class_table.setHorizontalScrollMode(
+            QAbstractItemView.ScrollPerPixel)
+        self.per_class_table.setVerticalScrollMode(
+            QAbstractItemView.ScrollPerPixel)
         self.per_class_table.setToolTip(
             "口径说明：\n"
             "· TP/FP/FN 来自 IoU≥0.5 同类匹配混淆矩阵（训练收尾统计）；\n"
@@ -1505,7 +1535,11 @@ class ProjectWindow(QMainWindow):
         return random.choice(paths) if paths else None
 
     def _refresh_augment_preview(self, new_image: bool = False):
-        """随机抽取数据集图片，按增强策略（等比 resize）自适应显示。"""
+        """随机抽取数据集图片，按当前全部启用增强算子预览（V0.7.1：不再只
+        预览 resize；每算子按启用概率掷硬币，与训练侧 maybe_apply_ops 同口径）。
+
+        预览信息展示原图尺寸、resize 产出与本次实际生效的算子，用户可反复
+        「换一张」观察各算子的视觉效果。"""
         if new_image or getattr(self, "_preview_source", None) is None:
             path = self._random_dataset_image()
             img = imread_unicode(path) if path else None
@@ -1519,13 +1553,11 @@ class ProjectWindow(QMainWindow):
             self._preview_name = path.name
         src = self._preview_source
         src_h, src_w = src.shape[:2]
-        size = self._current_resize()
-        if size:  # 与训练侧一致：拉伸到 宽×高（transforms.resize 默认口径）
-            from ..engine.dataset.transforms import resize as _aug_resize
+        ops = self._collect_augment_ops()      # 同保存口径：勾选的算子才生效
+        probs = dict(getattr(self.project, "augment_probs", None) or {})
+        from ..engine.dataset.transforms import preview_apply_ops
 
-            out, _ = _aug_resize(src, [], size[0], size[1])
-        else:
-            out = src
+        out, applied = preview_apply_ops(src.copy(), ops, probs)
         out_h, out_w = out.shape[:2]
         rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
         qimg = QImage(rgb.data, out_w, out_h, 3 * out_w, QImage.Format_RGB888)
@@ -1534,8 +1566,15 @@ class ProjectWindow(QMainWindow):
         if area.width() > 40 and area.height() > 40:  # 自适应：等比缩放到预览区大小
             pm = pm.scaled(area, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.augment_preview.setPixmap(pm)
-        tag = f"拉伸 → {out_w}×{out_h}" if size else "未启用 resize，显示原图"
-        self.preview_info.setText(f"{getattr(self, '_preview_name', '')}　原始 {src_w}×{src_h}　{tag}")
+        resize_on = "resize" in ops
+        tag = f"拉伸 → {out_w}×{out_h}" if resize_on else "未启用 resize"
+        others = [a for a in applied if a != "resize"]
+        if others:
+            tag += f"　本次生效：{'、'.join(others)}"
+        elif not resize_on:
+            tag = "未启用增强，显示原图"
+        self.preview_info.setText(
+            f"{getattr(self, '_preview_name', '')}　原始 {src_w}×{src_h}　{tag}")
 
     def _refresh_stats(self):
         """数据集统计（A-7①：移后台线程，主线程不再被万图目录卡住）。"""
@@ -1582,10 +1621,22 @@ class ProjectWindow(QMainWindow):
         )
         self.dist_canvas.update_stats(stats)
         # O12（V0.7）：划分环形图（n_ok 含负样本；分类任务 n_ok=0）
+        # V0.7.1：缓存计数供划分参数变动时实时重绘
+        self._split_counts = (stats.n_labeled, getattr(stats, "n_ok", 0))
         self.split_canvas.update_split(
             stats.n_labeled, getattr(stats, "n_ok", 0),
+            float(getattr(self.project, "train_ratio", 0.0) or 0.0),
             float(self.project.val_ratio or 0.0))
 
+    def _refresh_split_canvas(self, *_):
+        """训练集/验证集比例变动 → 环状图按新参数即时重绘（V0.7.1）。"""
+        counts = getattr(self, "_split_counts", None)
+        if not counts or not hasattr(self, "par_train_ratio"):
+            return   # 统计未就绪（项目刚打开）：统计完成后会刷一次
+        self.split_canvas.update_split(
+            counts[0], counts[1],
+            float(self.par_train_ratio.value()),
+            float(self.par_val_ratio.value()))
     def _on_stats_failed(self, msg):
         self.stats_hint.setText("")
         QMessageBox.warning(self, "统计失败", f"读取数据集失败：{msg}")
@@ -2678,8 +2729,8 @@ def rotate_guard_decision(ops: dict, probs: dict, aspects: set) -> tuple | None:
     return ("enable",
             f"已启用「随机旋转 90°/270°」，但数据集图像长宽比不一致"
             f"（{len(aspects)} 种：{shown}）。\n"
-            "旋转后宽高互换会让训练输入比例混乱。请启用「随机裁剪"
-            "（对齐目标宽高比）」作为兜底，或关闭旋转算子。")
+            "旋转后宽高互换会让训练输入比例混乱。请启用「随机裁剪」"
+            "作为兜底，或关闭旋转算子。")
 
 
 class TrainingWindow(QMainWindow):
@@ -2802,7 +2853,13 @@ class TrainingWindow(QMainWindow):
         banner.move((self.width() - banner.width()) // 2, 12)
         banner.show()
         banner.raise_()
+        # V0.7.1 实测：重开平台后点卡片，界面常无任何等待提示——窗口空闲时
+        # 无挂起重绘，processEvents 单轮不一定派发横幅的绘制事件，横幅从未
+        # 上屏就进入 torch 重载的长阻塞。repaint() 强制同步绘制一次保底。
+        banner.repaint()
         QApplication.processEvents()
+        QApplication.processEvents()
+        t0 = time.monotonic()
         self.statusBar().showMessage(f"正在打开项目「{name}」…", 8000)
         QApplication.setOverrideCursor(_Qt.WaitCursor)
         try:
@@ -2814,9 +2871,16 @@ class TrainingWindow(QMainWindow):
             window.show()
         finally:
             QApplication.restoreOverrideCursor()
-            banner.hide()
-            banner.setParent(None)
-            banner.deleteLater()
+            # 等待横幅固定可见 ≥0.7s：构建很快时也给出可感知的反馈，
+            # 避免"一闪而过/根本没出现"的间歇观感（V0.7.1 用户勘误）
+            remain_ms = max(0, int(700 - (time.monotonic() - t0) * 1000))
+
+            def _hide_open_banner():
+                banner.hide()
+                banner.setParent(None)
+                banner.deleteLater()
+
+            QTimer.singleShot(remain_ms, _hide_open_banner)
         self.statusBar().showMessage(f"项目「{name}」已打开", 4000)
         self._project_windows[name] = window
 

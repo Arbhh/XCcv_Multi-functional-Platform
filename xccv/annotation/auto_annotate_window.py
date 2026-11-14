@@ -78,7 +78,7 @@ class AutoAnnotateDialog(QDialog):
         self.iou_spin = QDoubleSpinBox()
         self.iou_spin.setRange(0.1, 0.9)
         self.iou_spin.setSingleStep(0.05)
-        self.iou_spin.setValue(0.45)
+        self.iou_spin.setValue(0.20)
         self.iou_spin.setMinimumWidth(120)
         form.addRow("IOU", self.iou_spin)
         self.eps_spin = QDoubleSpinBox()

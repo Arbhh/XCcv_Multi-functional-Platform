@@ -17,6 +17,9 @@
 
 阈值 t 下的指标（threshold_metrics）：precision=TP/(TP+FP)、
 recall=TP/gt_total、ok_fp_per_img=OK 误检框/OK 图数。
+
+V0.7.1：另收集 dims（O2 扩展多维分布）与 dims_missed（漏检 GT 框的
+面积/短边/长边）——阈值面板"漏检"曲线的数据源。
 """
 
 from __future__ import annotations
@@ -96,18 +99,18 @@ def read_gt_shapes(json_path: Path) -> tuple[list, list]:
     return boxes, labels
 
 
-def match_detections(det_boxes, det_labels, det_scores,
-                     gt_boxes, gt_labels, iou_thr: float = 0.5) -> list[bool]:
-    """逐检出是否命中 GT（同类 IoU≥iou_thr，按分数降序贪心，GT 一对一）。
+def _match_full(det_boxes, det_labels, det_scores,
+                gt_boxes, gt_labels, iou_thr: float) -> tuple:
+    """贪心匹配内部实现 → (检出侧命中列表, GT 侧被命中列表)。
 
-    与 detection_confusion_matrix 同款匹配语义；返回与 det_boxes 等长的
-    matched 列表（True=TP，False=FP）。
+    同类 + IoU≥iou_thr，按分数降序贪心，GT 一对一；与
+    detection_confusion_matrix 同款匹配语义。
     """
     n_det, n_gt = len(det_boxes), len(gt_boxes)
     matched_gt = [False] * n_gt
     out = [False] * n_det
     if n_det == 0 or n_gt == 0:
-        return out
+        return out, matched_gt
     boxes_det = np.asarray(det_boxes, dtype=float).reshape(-1, 4)
     boxes_gt = np.asarray(gt_boxes, dtype=float).reshape(-1, 4)
     ious = iou_matrix(boxes_det, boxes_gt)
@@ -122,7 +125,17 @@ def match_detections(det_boxes, det_labels, det_scores,
         if best >= 0:
             matched_gt[best] = True
             out[int(pi)] = True
-    return out
+    return out, matched_gt
+
+
+def match_detections(det_boxes, det_labels, det_scores,
+                     gt_boxes, gt_labels, iou_thr: float = 0.5) -> list[bool]:
+    """逐检出是否命中 GT（同类 IoU≥iou_thr，按分数降序贪心，GT 一对一）。
+
+    返回与 det_boxes 等长的 matched 列表（True=TP，False=FP）。
+    """
+    return _match_full(det_boxes, det_labels, det_scores,
+                       gt_boxes, gt_labels, iou_thr)[0]
 
 
 def _det_dim_values(det: dict) -> dict:
@@ -163,7 +176,10 @@ def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
              "n_unmatched": 0, "green": [], "red_defect": [], "red_ok": [],
              "per_image": [],
              "dims": {k: {"green": [], "red_defect": [], "red_ok": []}
-                      for k in _DIM_KEYS}}
+                      for k in _DIM_KEYS},
+             # V0.7.1：漏检 GT 框自身的几何维度（面积/短边/长边）——
+             # 阈值面板"漏检"曲线的数据源；分数/灰度类维度 GT 侧无值不收集
+             "dims_missed": {k: [] for k in ("area", "short", "long")}}
 
     def _push(values: dict, bucket: str):
         for k in _DIM_KEYS:
@@ -228,8 +244,17 @@ def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
                     "fp_ok": None, "matched_all": None, "dets": []})
             continue
         seen_gt = True
-        matched = match_detections(det_boxes, det_labels, det_scores,
-                                   gt_boxes, gt_labels, iou_thr)
+        matched, gt_hit = _match_full(det_boxes, det_labels, det_scores,
+                                      gt_boxes, gt_labels, iou_thr)
+        # V0.7.1：漏检 GT 框自身的几何维度（bbox 现算，与检出同口径）
+        for gb, hit in zip(gt_boxes, gt_hit):
+            if hit:
+                continue
+            x1, y1, x2, y2 = (float(v) for v in gb)
+            w, h = max(0.0, x2 - x1), max(0.0, y2 - y1)
+            stats["dims_missed"]["area"].append(w * h)
+            stats["dims_missed"]["short"].append(min(w, h))
+            stats["dims_missed"]["long"].append(max(w, h))
         n_fp = sum(1 for m in matched if not m)
         n_missed = len(gt_boxes) - sum(1 for m in matched if m)
         stats["n_gt_images"] += 1

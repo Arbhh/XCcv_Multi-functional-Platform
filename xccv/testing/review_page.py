@@ -179,7 +179,7 @@ class ProjectReviewPage(QWidget):
 
         # ---- 左列：控制 + 维度阈值 + 复判入口 ----
         left = QWidget()
-        left.setFixedWidth(560)
+        left.setFixedWidth(520)
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
         lv.setSpacing(10)
@@ -210,7 +210,7 @@ class ProjectReviewPage(QWidget):
         self.spin_iou.setDecimals(2)
         self.spin_iou.setRange(0.05, 0.9)
         self.spin_iou.setSingleStep(0.05)
-        self.spin_iou.setValue(0.45)
+        self.spin_iou.setValue(0.20)
         self.btn_start = QPushButton("▶ 开始复盘")
         self.btn_start.clicked.connect(self._start_review)
         f1.addWidget(QLabel("项目"), 0, 0)
@@ -232,7 +232,8 @@ class ProjectReviewPage(QWidget):
         f1.addWidget(self.btn_start, 5, 0, 1, 2)
         lv.addWidget(g1)
 
-        g2 = QGroupBox("维度阈值（拖线后自动重新分组，不重新推理）")
+        g2 = QGroupBox("维度阈值")
+        g2.setToolTip("拖动阈值线或键入阈值后自动重新分组，不重新推理")
         v2 = QVBoxLayout(g2)
         from .threshold_panel import ThresholdPanel
 
@@ -256,9 +257,8 @@ class ProjectReviewPage(QWidget):
         lv.addLayout(row)
 
         self.lbl_hint = QLabel(
-            "复盘 = 对所选数据集（默认训练数据集，可浏览换成生产图文件夹）"
-            "批量推理一次；之后拖维度阈值即时重新分组（不重新推理）。"
-            "OK 图判定与训练平台目录名规则一致；无 GT 图进「未评估」组")
+            "对所选数据集批量推理一次，调阈值即时重新分组；"
+            "OK 判定与训练平台一致，无 GT 图进未评估组")
         self.lbl_hint.setObjectName("hint")
         self.lbl_hint.setWordWrap(True)
         lv.addWidget(self.lbl_hint)
@@ -272,7 +272,8 @@ class ProjectReviewPage(QWidget):
         self.grp_correct = QGroupBox("正确 ✓（0）")
         self.grp_missed = QGroupBox("漏检（0）")
         self.grp_over = QGroupBox("过检（0）")
-        self.grp_unjudged = QGroupBox("未评估 · 无 GT（0）")
+        self.grp_unjudged = QGroupBox("未评估（0）")
+        self.grp_unjudged.setToolTip("无 GT 标注的图：仅展示检出供肉眼确认，不参与判定")
         self.grids = {}
         for g in (self.grp_correct, self.grp_missed, self.grp_over,
                   self.grp_unjudged):
@@ -516,13 +517,16 @@ class ProjectReviewPage(QWidget):
         return QIcon(pm)
 
     def _start_thumbs(self):
-        """懒加载缩略：只解码当前可见条目（LRU 缓存命中即跳过）。"""
+        """懒加载缩略：只解码当前可见条目（LRU 缓存命中即跳过）。
+
+        V0.7.1：缓存命中的条目直接回贴图标（重建列表项后不会经过缩略线程，
+        不回贴会一直显示占位灰块）。"""
         if self._thumb_worker is not None:
             self._thumb_worker.stop()
             self._thumb_worker = None
         todo = [p for p in self._items_by_path if p not in self._icons]
+        self._apply_cached_icons()
         if not todo:
-            self._apply_cached_icons()
             return
         from ..gui_utils import auto_cleanup_thread
 

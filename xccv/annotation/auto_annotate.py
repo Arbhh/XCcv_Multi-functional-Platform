@@ -86,7 +86,7 @@ def write_labelme_json(path: Path, image_path: Path, shapes: list) -> None:
 
 
 def annotate_folder(model_path: str, folder: str, conf: float = 0.25,
-                    iou: float = 0.45, device: str = "auto",
+                    iou: float = 0.20, device: str = "auto",
                     skip_annotated: bool = True, eps_ratio: float = 0.002,
                     progress_cb=None, cancel=None) -> dict:
     """批量预标注主流程（窗口线程调用）。progress_cb(done, total, name)；

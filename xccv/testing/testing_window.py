@@ -557,7 +557,7 @@ class TestingWindow(QMainWindow):
         g3 = QGroupBox("预测参数")
         v3 = QVBoxLayout(g3)
         self.conf_slider = self._make_slider(v3, "置信度阈值", 1, 100, 25)
-        self.iou_slider = self._make_slider(v3, "IOU 阈值", 10, 90, 45)
+        self.iou_slider = self._make_slider(v3, "IOU 阈值", 10, 90, 20)
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
         divider.setStyleSheet("background: #eef2f8; border: none; max-height: 1px;")

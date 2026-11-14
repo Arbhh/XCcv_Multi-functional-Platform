@@ -212,7 +212,7 @@ class ModelOnList(VisionNode):
         "model_path": ParamSpec("model_path", "模型文件", "path", "",
                                 tooltip=".pt 权重（检测/分割/分类均可）"),
         "conf": ParamSpec("conf", "置信度", "float", 0.25, range=(0.0, 1.0)),
-        "iou": ParamSpec("iou", "IOU", "float", 0.45, range=(0.0, 1.0)),
+        "iou": ParamSpec("iou", "IOU", "float", 0.20, range=(0.0, 1.0)),
         "device": ParamSpec("device", "设备", "enum", "auto",
                             options=["auto", "cpu", "gpu"]),
     }
