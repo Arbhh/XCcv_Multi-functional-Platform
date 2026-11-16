@@ -2,7 +2,7 @@
 
 纯逻辑在 batch_review.py（状态持久化/建议/回流计划与执行），本模块只做
 表格展示与按钮接线。非模态窗口，宿主测试窗口持有单实例；offscreen 自动
-化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属真机验证项。
+化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属 UI 验收项。
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from .batch_review import (
     execute_reflow, load_review, plan_reflow, review_stats, save_review,
     suggest_status,
 )
+from ..i18n import tr  # 模块级：动态文案站点直接用（漏导入会 NameError）
 
 _STAT_ORDER = (STATUS_OK, STATUS_MISSED, STATUS_FP, STATUS_UNCERTAIN,
                STATUS_UNJUDGED)
@@ -83,6 +84,9 @@ class BatchReviewDialog(QDialog):
         btns2.addWidget(btn_close)
         lay.addLayout(btns2)
         self._reload_table()
+        from ..i18n import localize_widget_tree
+
+        localize_widget_tree(self)
 
     # ---- 状态模型 ----
     def _effective(self, entry: dict) -> str:
@@ -109,7 +113,8 @@ class BatchReviewDialog(QDialog):
         total = stats["_total"]
         parts = [f"{s} {stats[s]['count']}（{stats[s]['rate']:.0%}）"
                  for s in _STAT_ORDER]
-        self.lbl_stats.setText(f"共 {total} 张：　" + "　".join(parts))
+        self.lbl_stats.setText(
+            f"{tr('共')} {total} {tr('张')}：　" + "　".join(parts))
 
     def _selected_entries(self) -> list[dict]:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
@@ -132,14 +137,16 @@ class BatchReviewDialog(QDialog):
         self._reload_table()
 
     def _reflow_selected(self):
+        from ..i18n import tr
+
         sel = self._selected_entries()
         if not sel:
-            QMessageBox.information(self, "回流", "请先在表格中选中要回流的图片")
+            QMessageBox.information(self, tr("回流"), tr("请先在表格中选中要回流的图片"))
             return
         dataset_dir = self._dataset_dir
         if dataset_dir is None or not Path(dataset_dir).is_dir():
             picked = QFileDialog.getExistingDirectory(
-                self, "选择训练数据集目录（图片将复制到其「待标注」子目录）")
+                self, tr("选择训练数据集目录（图片将复制到其「待标注」子目录）"))
             if not picked:
                 return
             self._dataset_dir = Path(picked)
@@ -147,13 +154,14 @@ class BatchReviewDialog(QDialog):
         actions = [a for a in (plan_reflow(e, e.get("result") or {},
                                            dataset_dir) for e in sel) if a]
         if not actions:
-            QMessageBox.warning(self, "回流", "所选图片不存在或已失效")
+            QMessageBox.warning(self, tr("回流"), tr("所选图片不存在或已失效"))
             return
         copied, errors = execute_reflow(actions)
-        msg = f"已回流 {copied}/{len(actions)} 张 → {dataset_dir / '待标注'}"
+        msg = (f"{tr('已回流')} {copied}/{len(actions)} {tr('张')} → "
+               f"{dataset_dir / '待标注'}")
         if errors:
-            msg += "\n失败：\n" + "\n".join(errors[:5])
-        QMessageBox.information(self, "回流完成", msg)
+            msg += "\n" + tr("失败：") + "\n" + "\n".join(errors[:5])
+        QMessageBox.information(self, tr("回流完成"), msg)
 
 
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402

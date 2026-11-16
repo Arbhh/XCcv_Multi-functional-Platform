@@ -40,11 +40,11 @@ def build_window(dataset=None):
     from PyQt5.QtGui import QIcon
     from ..ui_style import icon_path
     window.setWindowIcon(QIcon(str(icon_path("annotation.png"))))
-    # v0.5.4 状态栏分层：标注平台徽章（labelme 为冻结区，从外部挂）
+    # v0.5.4 状态栏分层：标注平台徽章（labelme 为子目录，从外部挂）
     from ..status_bus import attach_platform_status
 
     attach_platform_status(window, "标注平台", "annotation")
-    # V0.6 T5-4：AI 批量预标注入口（工具菜单；labelme 冻结区从外部挂菜单）
+    # V0.6 T5-4：AI 批量预标注入口（工具菜单；labelme 子目录从外部挂菜单）
     try:
         from PyQt5.QtWidgets import QAction
 

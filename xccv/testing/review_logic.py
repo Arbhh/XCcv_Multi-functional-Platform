@@ -1,4 +1,4 @@
-"""项目复盘分组逻辑（纯逻辑，不依赖 Qt；用户勘误 2026-11-13）。
+"""项目复盘分组逻辑（纯逻辑，不依赖 Qt）。
 
 复盘页在批量推理完成后，把每张图按当前维度阈值划入三组（VIMO「结果
 分析」的过检/漏检口径）：
@@ -54,12 +54,14 @@ def _entry_from_per_image(img: dict, thresholds: dict) -> dict:
         "is_ok": is_ok_image,
     }
     parts = []
+    from ..i18n import tr
+
     if missed:
-        parts.append(f"漏{missed}")
+        parts.append(f"{tr('漏')}{missed}")
     if fp:
-        parts.append(f"过{fp}")
+        parts.append(f"{tr('过')}{fp}")
     if is_ok_image and n_det:
-        parts.append(f"OK误检{n_det}")
+        parts.append(f"{tr('OK误检')}{n_det}")
     entry["badges"] = " ".join(parts)
     return entry
 
@@ -95,17 +97,61 @@ def classify_images(match_stats: dict, thresholds: dict) -> dict:
         else:
             groups["correct"].append(entry)
     groups["unjudged"] = unjudged
+    # 未评估按检出过阈与否分 OK/NG（与切换后曲线同口径）
+    groups["unjudged_ok"] = sum(
+        1 for e in groups["unjudged_list"] if not e.get("fp"))
+    groups["unjudged_ng"] = sum(
+        1 for e in groups["unjudged_list"] if e.get("fp"))
     groups["total"] = (len(groups["correct"]) + len(groups["missed"])
                        + len(groups["over"]) + unjudged)
     return groups
 
 
-def stats_line(groups: dict) -> str:
-    """统计行人话（复盘页底部）。"""
+def sweep_group_counts(match_stats: dict, dim: str, xs,
+                       fixed: dict | None = None) -> dict:
+    """阈值扫描（**图口径**）：曲线读数 = 该阈值下三组的
+    **图数**，与右侧分组/统计行完全同口径（过检 > 漏检 > 正确 优先级）。
+
+    已评估范围（有 GT 图 + OK 图）；未评估生产图不进三类曲线（OK/NG
+    图数曲线走 sweep_unjudged，本就是图口径）。
+    返回 {"xs", "correct", "missed", "over"}（与 xs 等长）。"""
+    imgs = []
+    for img in (match_stats or {}).get("per_image") or []:
+        if img.get("gt") is None and not img.get("gt_available"):
+            continue
+        imgs.append(img)
+    correct, missed, over = [], [], []
+    for x in xs:
+        thr = {**(fixed or {}), dim: float(x)}
+        c = m = o = 0
+        for img in imgs:
+            e = _entry_from_per_image(img, thr)
+            if e["fp"] > 0 or e["fp_ok"] > 0:
+                o += 1
+            elif e["missed"] > 0:
+                m += 1
+            else:
+                c += 1
+        correct.append(c)
+        missed.append(m)
+        over.append(o)
+    return {"xs": list(xs), "correct": correct, "missed": missed,
+            "over": over}
+
+
+def stats_line(groups: dict, scope: str = "evaluated") -> str:
+    """统计行人话（复盘页底部）。scope=unjudged 给 OK/NG 行。"""
+    from ..i18n import tr
+
+    if scope == "unjudged":
+        return (f"OK {groups.get('unjudged_ok', 0)} · "
+                f"NG {groups.get('unjudged_ng', 0)}"
+                f"（{tr('无 GT')}）")
     n_c, n_m, n_o = (len(groups["correct"]), len(groups["missed"]),
                      len(groups["over"]))
     un = groups.get("unjudged", 0)
-    text = f"正确 {n_c} · 漏检 {n_m} · 过检 {n_o}"
+    text = (f"{tr('正确')} {n_c} · {tr('漏检')} {n_m} · "
+            f"{tr('过检')} {n_o}")
     if un:
-        text += f" · 未评估 {un}（无 GT）"
+        text += f" · {tr('未评估')} {un}（{tr('无 GT')}）"
     return text

@@ -1,9 +1,9 @@
-"""V0.7.1 用户勘误修复回归锁（2026-11-12 bug-优化项清单）。
+"""V0.7.1 修复回归锁。
 
 测试平台：
 - 阈值面板：固定坐标轴（score 0~1、几何维 0~max 外扩）、阈值数字输入框、
   前景占比维度移除、平滑散点线（正常/过检/漏检三线）、漏检 GT 几何维度；
-- 全平台 IOU 默认 0.2（UI 控件/生成模板/流程节点默认）；
+- 全平台 IOU 默认 0.2（UI 控件/服务配置/生成模板/流程节点默认）；
 训练平台：
 - 项目卡片等待横幅（repaint 保底 + 最小可见时长，源码锁）；
 - 划分环状图贴合 train_ratio/val_ratio 并实时重绘（split_counts 同口径）；
@@ -48,7 +48,11 @@ def _rect(label: str, box) -> dict:
 # ================= 测试平台：阈值面板（任务 1/2/3） =================
 
 def _panel_stats():
-    return {"gt_available": True, "gt_total": 4, "n_gt_images": 2,
+    """扫描曲线口径：per_image 带逐检出记录（与 dims 汇总一致）。
+
+    语义：img1 两命中（0.9/0.8）；img2 一未命中检出（0.4，GT 1 未命中）；
+    img3 OK 图一误检（0.6）。gt_total=3、n_unmatched=1。"""
+    return {"gt_available": True, "gt_total": 3, "n_gt_images": 2,
             "n_ok_images": 1, "n_unmatched": 1,
             "green": [0.9, 0.8], "red_defect": [0.4], "red_ok": [0.6],
             "dims": {"area": {"green": [9000.0, 400.0], "red_defect": [900.0],
@@ -58,7 +62,18 @@ def _panel_stats():
                      "gray_diff": {"green": [88.0], "red_defect": [3.0],
                                    "red_ok": []}},
             "dims_missed": {"area": [1200.0], "short": [34.0], "long": [35.0]},
-            "per_image": []}
+            "per_image": [
+                {"path": "img1.png", "gt": 2, "gt_available": True,
+                 "missed": 0, "fp": 0, "fp_ok": 0, "matched_all": True,
+                 "dets": [[0.9, True, 9000.0, 95.0, 130.0, None, 88.0],
+                          [0.8, True, 400.0, 20.0, 20.0, None, None]]},
+                {"path": "img2.png", "gt": 1, "gt_available": True,
+                 "missed": 1, "fp": 1, "fp_ok": 0, "matched_all": False,
+                 "dets": [[0.4, False, 900.0, 30.0, 30.0, None, 3.0]]},
+                {"path": "img3.png", "gt": 0, "gt_available": True,
+                 "missed": 0, "fp": 1, "fp_ok": 1, "matched_all": False,
+                 "dets": [[0.6, False, 2500.0, 50.0, 50.0, None, None]]},
+            ]}
 
 
 class AxisPlanTest(unittest.TestCase):
@@ -101,7 +116,7 @@ class AxisPlanTest(unittest.TestCase):
         self.assertEqual((x0, x1), (0.0, 10000.0))
 
     def test_axis_without_data_no_negative(self):
-        """未加载数据时坐标轴不出现负数（用户勘误：conf 出现 -0.2）。"""
+        """未加载数据时坐标轴不出现负数（conf 出现 -0.2 的回归）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -163,7 +178,7 @@ class SpinInputTest(unittest.TestCase):
         self.assertAlmostEqual(float(p.spin_thr.value()), 40.0)
 
     def test_score_never_negative(self):
-        """拖线拖出固定轴（负值）时钳回 0（V0.7.1 既有真机问题）。"""
+        """拖线拖出固定轴（负值）时钳回 0（V0.7.1 已知问题）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -173,7 +188,9 @@ class SpinInputTest(unittest.TestCase):
 
 
 class SmoothLineTest(unittest.TestCase):
-    """平滑散点线（任务 3）：正常/过检/漏检三线，漏检仅几何维度。"""
+    """扫描曲线（用户重设计）：三条曲线=阈值处 正确/过检/漏检 总数。
+
+    score 维也有漏检线（gt_total−正常）；平滑散点直方图已被扫描曲线取代。"""
 
     @classmethod
     def setUpClass(cls):
@@ -181,14 +198,45 @@ class SmoothLineTest(unittest.TestCase):
 
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_smooth_keeps_length_and_softens(self):
-        from xccv.testing.threshold_panel import _smooth
+    def test_sweep_counts_semantics(self):
+        """扫描曲线数值口径：x=阈值处的 正常/过检/漏检 总数（联合过滤）。"""
+        from xccv.engine.metrics.batch_match import sweep_counts
 
-        counts = np.array([0.0, 5.0, 0.0, 0.0, 2.0])
-        out = _smooth(counts)
-        self.assertEqual(out.shape, counts.shape)
-        self.assertLess(out[1], 5.0)      # 峰被削
-        self.assertGreater(out[0], 0.0)   # 谷被填（平滑线观感）
+        stats = _panel_stats()
+        xs = [0.0, 0.5, 0.7, 0.85, 0.95, 1.0]
+        sw = sweep_counts(stats, "score", xs)
+        self.assertEqual(sw["normal"], [2, 2, 2, 1, 0, 0])
+        self.assertEqual(sw["over"], [2, 1, 0, 0, 0, 0])
+        self.assertEqual(sw["missed"], [1, 1, 1, 2, 3, 3])
+        # 一对一匹配不变量：normal + missed = gt_total
+        for n, m in zip(sw["normal"], sw["missed"]):
+            self.assertEqual(n + m, 3)
+
+    def test_sweep_joint_filter(self):
+        """联合过滤口径：area 阈值参与时 score 扫描只数过面积阈的检出。"""
+        from xccv.engine.metrics.batch_match import sweep_metrics
+
+        m = sweep_metrics(_panel_stats(), "score", 0.0,
+                          fixed={"area": 500.0})
+        # 过面积阈：0.9（area9000 命中）、0.4（area900 未命中）、0.6（OK 误检）；
+        # 0.8（area400）被面积阈值筛掉不参与
+        self.assertEqual(m["tp"], 1)
+        self.assertEqual(m["fp"], 2)
+
+    def test_sweep_group_counts_semantics(self):
+        """图口径扫描：曲线读数=该阈值下三组的**图数**，
+        与复盘分组完全同口径（过检>漏检>正确）。"""
+        from xccv.testing.review_logic import sweep_group_counts
+
+        stats = _panel_stats()
+        sw = sweep_group_counts(stats, "score", [0.0, 1.0])
+        # x=0：img1 全命中无 FP→正确；img2 有 FP→过检；img3 OK 误检→过检
+        self.assertEqual(sw["correct"], [1, 1])
+        self.assertEqual(sw["over"], [2, 0])
+        self.assertEqual(sw["missed"], [0, 2])
+        # 恒等式：正确+过检+漏检 = 已评估图数（3）
+        for c, o, m in zip(sw["correct"], sw["over"], sw["missed"]):
+            self.assertEqual(c + o + m, 3)
 
     def test_three_series_on_area(self):
         from xccv.testing.threshold_panel import ThresholdPanel
@@ -199,9 +247,10 @@ class SmoothLineTest(unittest.TestCase):
         p._redraw()
         names = {d.name() for d in p.plot.getPlotItem().listDataItems()
                  if d.name()}
-        self.assertEqual(names, {"正常", "过检", "漏检"})
+        self.assertEqual(names, {"正确", "过检", "漏检"})
 
-    def test_no_missed_line_on_score(self):
+    def test_score_has_missed_line_now(self):
+        """重设计：score 维同样有漏检曲线（旧版仅几何维度可画）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -209,7 +258,7 @@ class SmoothLineTest(unittest.TestCase):
         p._redraw()
         names = {d.name() for d in p.plot.getPlotItem().listDataItems()
                  if d.name()}
-        self.assertEqual(names, {"正常", "过检"})
+        self.assertEqual(names, {"正确", "过检", "漏检"})
 
     def test_fg_ratio_removed_from_panel(self):
         from xccv.testing.threshold_panel import ThresholdPanel
@@ -258,7 +307,7 @@ class MissedDimsTest(unittest.TestCase):
 # ================= 测试平台：IOU 默认 0.2（任务 4） =================
 
 class IouDefaultTest(unittest.TestCase):
-    """全平台 IOU 默认 0.2（用户勘误）；冻结区引擎默认除外。"""
+    """全平台 IOU 默认 0.2；引擎默认值除外。"""
 
     def test_source_locks(self):
         cases = [
@@ -408,7 +457,7 @@ class PerClassTableOffscreenTest(unittest.TestCase):
             encoding="utf-8")
         self.assertNotIn("setStretchLastSection(True)", src)
         # offscreen 不构建 ProjectWindow（matplotlib 重）；以源码锁为准，
-        # 行为断言在真机验收（清单 §九）执行
+        # 行为断言在 UI 验收中执行
 
 
 class PreviewOpsTest(unittest.TestCase):

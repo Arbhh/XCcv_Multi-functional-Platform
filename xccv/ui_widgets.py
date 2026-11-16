@@ -462,6 +462,8 @@ def gradient_tile(icon_file: str, color_from: str = "", color_to: str = "",
 
 def relative_time(value) -> str:
     """把时间戳 / ISO 字符串转「N 分钟前」样式的相对时间。"""
+    from .i18n import tr
+
     if isinstance(value, str):
         try:
             dt = datetime.fromisoformat(value)
@@ -474,13 +476,13 @@ def relative_time(value) -> str:
     delta = datetime.now() - dt
     secs = delta.total_seconds()
     if secs < 60:
-        return "刚刚"
+        return tr("刚刚")
     if secs < 3600:
-        return f"{int(secs // 60)} 分钟前"
+        return f"{int(secs // 60)} {tr('分钟前')}"
     if secs < 86400:
-        return f"{int(secs // 3600)} 小时前"
+        return f"{int(secs // 3600)} {tr('小时前')}"
     if secs < 86400 * 30:
-        return f"{int(secs // 86400)} 天前"
+        return f"{int(secs // 86400)} {tr('天前')}"
     return dt.strftime("%Y-%m-%d")
 
 

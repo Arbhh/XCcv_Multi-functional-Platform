@@ -40,6 +40,7 @@ from ..engine.dataset.base import TaskType
 from ..engine.dataset.reader import scan_classification_dataset, scan_labelme_dataset
 from ..engine.io_utils import imread_unicode
 from ..gui_utils import auto_cleanup_thread, ensure_console_streams
+from ..i18n import tr  # 模块级：动态文案站点直接用（方法级导入保留兼容）
 from .charts import ConfusionMatrixCanvas, DistributionCanvas, SplitDonutCanvas
 from .data_health import LEVEL_WARN, run_health_check
 from .dataset_stats import collect_stats
@@ -357,7 +358,7 @@ class _PlotHover:
         view = vb.mapSceneToView(pos)
         first_xs = series[0][1]
         epoch = min(first_xs, key=lambda x: abs(x - view.x()))
-        lines = [f"第 {self._fmt_epoch(epoch)} 轮"]
+        lines = [f"{tr('第')} {self._fmt_epoch(epoch)} {tr('轮')}"]
         for key, kxs, kys in series:
             j = min(range(len(kxs)), key=lambda i: abs(kxs[i] - epoch))
             if abs(kxs[j] - epoch) <= 0.5 + 1e-9:
@@ -408,11 +409,12 @@ class _ProjectCard(HoverCard):
         head.addWidget(_make_badge(project.task_type))
         lay.addLayout(head)
 
-        updated = QLabel(f"更新于 {relative_time(_project_mtime(project.name))}")
+        updated = QLabel(f"{tr('更新于')} "
+                         f"{relative_time(_project_mtime(project.name))}")
         updated.setObjectName("muted")
-        created = QLabel(f"创建于 {project.created_at or '—'}")
+        created = QLabel(f"{tr('创建于')} {project.created_at or '—'}")
         created.setObjectName("muted")
-        model = QLabel(f"模型：{project.model_name or '未选择'}")
+        model = QLabel(f"{tr('模型：')}{project.model_name or tr('未选择')}")
         model.setObjectName("muted")
         lay.addWidget(updated)
         lay.addWidget(created)
@@ -512,7 +514,7 @@ class ProjectWindow(QMainWindow):
         self._live_timer.setInterval(1000)
         self._live_timer.timeout.connect(self._tick_live)
 
-        self.setWindowTitle(f"{project.name}  -  训练平台")
+        self.setWindowTitle(f"{project.name}  -  {tr('训练平台')}")
         self.setWindowIcon(QIcon(str(icon_path(
             _TASK_MODEL_ICON.get(project.task_type, "training.png")))))
         self.resize(1280, 900)
@@ -523,6 +525,9 @@ class ProjectWindow(QMainWindow):
         QTimer.singleShot(0, self._refresh_stats)  # 窗口先显示，统计后台补齐（避免打开卡顿）
         self._switch_detail(0)
         QTimer.singleShot(0, self._refresh_augment_preview)  # 布局完成后渲染预览
+        from ..i18n import localize_widget_tree  # 动态窗口：英文模式替换层
+
+        localize_widget_tree(self)
 
     # ================= 界面骨架 =================
     def _build_ui(self):
@@ -558,7 +563,7 @@ class ProjectWindow(QMainWindow):
         self.btn_dev = QPushButton("⚙")
         self.btn_dev.setFont(QFont("Segoe UI Symbol", 14))
         self.btn_dev.setFixedSize(48, 36)
-        self.btn_dev.setToolTip("开发者选项：数据体检与训练前预检的阈值标准")
+        self.btn_dev.setToolTip(tr("开发者选项：数据体检与训练前预检的阈值标准"))
         self.btn_dev.clicked.connect(self._open_dev_options)
         head.addWidget(self.btn_dev)
         root.addWidget(header)
@@ -584,17 +589,19 @@ class ProjectWindow(QMainWindow):
         self.info_name = QLineEdit()
         self.info_dataset = QLineEdit()
         btn_ds = QPushButton("浏览…")
-        btn_ds.clicked.connect(lambda: self._browse_into(self.info_dataset, "选择数据集文件夹"))
+        btn_ds.clicked.connect(lambda: self._browse_into(
+            self.info_dataset, tr("选择数据集文件夹")))
         ds_row = QHBoxLayout()
         ds_row.addWidget(self.info_dataset, stretch=1)
         ds_row.addWidget(btn_ds)
         self.info_model_dir = QLineEdit()
         btn_md = QPushButton("浏览…")
-        btn_md.clicked.connect(lambda: self._browse_into(self.info_model_dir, "选择模型储存文件夹"))
+        btn_md.clicked.connect(lambda: self._browse_into(
+            self.info_model_dir, tr("选择模型储存文件夹")))
         md_row = QHBoxLayout()
         md_row.addWidget(self.info_model_dir, stretch=1)
         md_row.addWidget(btn_md)
-        self.info_task = QLabel(self.project.task_type.label)
+        self.info_task = QLabel(tr(self.project.task_type.label))
         self.info_created = QLabel(self.project.created_at)
         btn_save_info = QPushButton("保存修改")
         btn_save_info.clicked.connect(self._save_info)
@@ -673,7 +680,7 @@ class ProjectWindow(QMainWindow):
             prob.setRange(0.05, 1.0)
             prob.setSingleStep(0.05)
             prob.setValue(0.5)
-            prob.setToolTip("该算子的启用概率：每次取样独立判定是否应用")
+            prob.setToolTip(tr("该算子的启用概率：每次取样独立判定是否应用"))
             grid.addWidget(prob, r, pc + 1)
             prob.valueChanged.connect(self._collect_augment_ops)
             prob.valueChanged.connect(lambda _v: self._refresh_augment_preview())
@@ -694,7 +701,6 @@ class ProjectWindow(QMainWindow):
         # 每次调整都换成新随机图，"同图对比"预览效果失效
         for sp in resize_spins.values():
             sp.valueChanged.connect(self._refresh_input_size_hint)
-            sp.valueChanged.connect(lambda _v: self._refresh_augment_preview())
         # 随机裁剪（rotate90 兜底）：勾选时自动对齐 resize 的目标宽高比
         crop_check, crop_spins = self.augment_controls["random_crop"]
 
@@ -744,8 +750,8 @@ class ProjectWindow(QMainWindow):
             b.setCheckable(True)
             b.setCursor(Qt.PointingHandCursor)
         self.btn_mode_quick.setToolTip(
-            "只呈现 6 个核心参数，档位化配置，零经验 30 秒完成")
-        self.btn_mode_expert.setToolTip("展开完整参数表单（数据与验证 / 工业与加速）")
+            tr("只呈现 6 个核心参数，档位化配置，零经验 30 秒完成"))
+        self.btn_mode_expert.setToolTip(tr("展开完整参数表单（数据与验证 / 工业与加速）"))
         self.btn_mode_quick.clicked.connect(self._on_mode_quick)
         self.btn_mode_expert.clicked.connect(self._on_mode_expert)
         mode_row.addWidget(self.btn_mode_quick)
@@ -753,12 +759,12 @@ class ProjectWindow(QMainWindow):
         mode_row.addStretch(1)
         self.btn_recommend = QPushButton("✨ 智能推荐配置")
         self.btn_recommend.setToolTip(
-            "按数据集规模与硬件给出保守建议（冻结骨干 / 工业优化 / 增强概率等）；\n"
-            "应用后写回本表单并在状态栏说明理由，仍可手动调整")
+            tr("按数据集规模与硬件给出保守建议（冻结骨干 / 工业优化 / 增强概率等）；\n"
+               "应用后写回本表单并在状态栏说明理由，仍可手动调整"))
         self.btn_recommend.clicked.connect(self._apply_recommendations)
         mode_row.addWidget(self.btn_recommend)
         self.btn_expand_all = QPushButton("全部展开")
-        self.btn_expand_all.setToolTip("展开/折叠下方全部分区")
+        self.btn_expand_all.setToolTip(tr("展开/折叠下方全部分区"))
         self.btn_expand_all.clicked.connect(self._toggle_all_sections)
         mode_row.addWidget(self.btn_expand_all)
         v4.addLayout(mode_row)
@@ -951,9 +957,8 @@ class ProjectWindow(QMainWindow):
             "仅 R-CNN 家族生效；推理侧请配合测试平台「4K 大图分块推理」\n"
             "或服务 tiled=true（与切图训练 T9-3 配对使用效果最佳）")
         self.par_transfer = QCheckBox("迁移学习（从已有模型权重开始训练）")
-        self.par_transfer.setToolTip("勾选后通过文件选择器指定起始权重（支持 .pt，"
-                                     "含剪枝模型与历史训练记录的 best 权重）；"
-                                     "类别需与当前数据集一致")
+        self.par_transfer.setToolTip(tr("勾选后通过文件选择器指定起始权重；"
+                                        "类别需与当前数据集一致"))
         self.par_transfer.toggled.connect(self._on_transfer_toggled)
         transfer_row = QHBoxLayout()
         self.par_transfer_edit = QLineEdit()
@@ -1126,7 +1131,7 @@ class ProjectWindow(QMainWindow):
                                 " border: none; background: transparent;")
         pv.addWidget(cap)
         self.btn_compare = QPushButton("对比所选")
-        self.btn_compare.setToolTip("按住 Ctrl 点击选择 2~3 条记录后对比（新窗口：参数 / 曲线 / 混淆矩阵）")
+        self.btn_compare.setToolTip(tr("按住 Ctrl 选择 2~3 条记录后对比"))
         self.btn_compare.clicked.connect(self._open_compare)  # 常启用：点击时校验并提示
         pv.addWidget(self.btn_compare)
         self.run_hint = QLabel("")
@@ -1207,19 +1212,19 @@ class ProjectWindow(QMainWindow):
         v1 = QVBoxLayout(g1)
         self.loss_plot = _PagePlot(axisItems={"bottom": _IntAxis(orientation="bottom")})
         _add_legend(self.loss_plot)
-        self.loss_plot.setLabel("bottom", "轮次")
+        self.loss_plot.setLabel("bottom", tr("轮次"))
         self.loss_plot.showGrid(x=True, y=True, alpha=0.3)
         self.loss_plot.setMouseEnabled(x=False, y=False)
         self.loss_plot.hideButtons()
         self.metric_plot = _PagePlot(axisItems={"bottom": _IntAxis(orientation="bottom")})
         _add_legend(self.metric_plot)
-        self.metric_plot.setLabel("bottom", "轮次")
+        self.metric_plot.setLabel("bottom", tr("轮次"))
         self.metric_plot.showGrid(x=True, y=True, alpha=0.3)
         self.metric_plot.setMouseEnabled(x=False, y=False)
         self.metric_plot.hideButtons()
         self.metric_plot.setYRange(0, 1, padding=0)
-        _style_plot(self.loss_plot, "损失曲线")
-        _style_plot(self.metric_plot, "评估指标")
+        _style_plot(self.loss_plot, tr("损失曲线"))
+        _style_plot(self.metric_plot, tr("评估指标"))
         self.metric_hint = QLabel(
             "mAP/mAR：R-CNN 族为 IoU 0.10/0.25/0.50 三档平均；"
             "YOLO 族为 AP@50 与召回率；分类为 Top-1")
@@ -1325,8 +1330,8 @@ class ProjectWindow(QMainWindow):
 
     def _pick_transfer_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择迁移学习起始权重", "",
-            "模型权重 (*.pt);;所有文件 (*)")
+            self, tr("选择迁移学习起始权重"), "",
+            tr("模型权重 (*.pt);;所有文件 (*)"))
         if path:
             self.par_transfer_edit.setText(path)
             self.par_transfer.setChecked(True)
@@ -1339,7 +1344,7 @@ class ProjectWindow(QMainWindow):
         from ..engine.models import list_models  # torch 延迟导入（T1-4）
 
         for m in list_models(p.task):
-            self.par_model.addItem(f"{m['name']}  ({m['desc']})", m["name"])
+            self.par_model.addItem(f"{m['name']}  ({tr(m['desc'])})", m["name"])
         idx = self.par_model.findData(p.model_name)
         if idx < 0 and p.model_name:  # 旧项目记录的是 pruned:/run: 引用 → 回退基准名
             base = (p.model_name.split(":", 1)[-1].split("/", 1)[0])
@@ -1424,14 +1429,14 @@ class ProjectWindow(QMainWindow):
         except ValueError as e:
             QMessageBox.warning(self, "保存失败", str(e))
             return
-        self.setWindowTitle(f"{p.name}  -  训练平台")
+        self.setWindowTitle(f"{p.name}  -  {tr('训练平台')}")
         self.det_title.setText(p.name)
         dg = getattr(self, "data_grid", None)
         if dg is not None:      # O11：数据集路径可能被修改
             dg.set_dataset(p.dataset_dir)
         if self.on_renamed is not None:
             self.on_renamed(old_name, p.name)
-        toast(self, "项目信息已保存", "success")
+        toast(self, tr("项目信息已保存"), "success")
 
     def _save_params(self):
         if not self.quick_panel.isHidden():
@@ -1473,16 +1478,16 @@ class ProjectWindow(QMainWindow):
         if p.train_input > 960:
             # T9-6：opt-in 大输入提示（显存显著上升）
             self.statusBar().showMessage(
-                "⚠ 网络输入尺寸 >960：训练显存占用显著上升，"
-                "请确认显卡预算（或降低该值 / 开启 AMP 与梯度检查点）", 15000)
+                tr("⚠ 网络输入尺寸 >960：训练显存占用显著上升，")
+                + tr("请确认显卡预算（或降低该值 / 开启 AMP 与梯度检查点）"), 15000)
         self._collect_augment_ops()
         p.save()
-        toast(self, "参数已保存", "success")
+        toast(self, tr("参数已保存"), "success")
 
     def _save_augment(self):
         self._collect_augment_ops()
         self.project.save()
-        toast(self, "增强策略已保存", "success")
+        toast(self, tr("增强策略已保存"), "success")
 
     def _on_model_changed(self):
         """切换模型时带入建议学习率。"""
@@ -1503,15 +1508,17 @@ class ProjectWindow(QMainWindow):
     def _refresh_input_size_hint(self):
         size = self._current_resize()
         if size:
-            self.input_size_hint.setText(f"{size[0]} × {size[1]}　（随增强策略 resize 设置）")
+            self.input_size_hint.setText(
+                f"{size[0]} × {size[1]}　{tr('（随增强策略 resize 设置）')}")
         else:
-            self.input_size_hint.setText("模型默认　（未启用 resize，分类将拉伸为方形）")
+            self.input_size_hint.setText(
+                f"{tr('模型默认')}　{tr('（未启用 resize，分类将拉伸为方形）')}")
         name = getattr(getattr(self, "par_model", None), "currentData", lambda: None)() or ""
         p2 = getattr(self, "par_p2", None)
         if (isinstance(name, str) and name.startswith("yolo")
                 and p2 is not None and p2.isChecked()):
             tip = self.input_size_hint.text()
-            self.input_size_hint.setText(tip + "　· P2 小目标头：显存约 ×2，建议减小批量")
+            self.input_size_hint.setText(tip + f"　· {tr('P2 小目标头：显存约 ×2，建议减小批量')}")
         if getattr(self, "q_size", None) is not None:
             self._sync_quick_size()   # Quick 档「输入尺寸」行同步
 
@@ -1567,20 +1574,22 @@ class ProjectWindow(QMainWindow):
             pm = pm.scaled(area, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.augment_preview.setPixmap(pm)
         resize_on = "resize" in ops
-        tag = f"拉伸 → {out_w}×{out_h}" if resize_on else "未启用 resize"
+        tag = (f"{tr('拉伸 → ')} {out_w}×{out_h}" if resize_on
+               else tr("未启用 resize"))
         others = [a for a in applied if a != "resize"]
         if others:
-            tag += f"　本次生效：{'、'.join(others)}"
+            tag += f"　{tr('本次生效：')}{'、'.join(others)}"
         elif not resize_on:
-            tag = "未启用增强，显示原图"
+            tag = tr("未启用增强，显示原图")
         self.preview_info.setText(
-            f"{getattr(self, '_preview_name', '')}　原始 {src_w}×{src_h}　{tag}")
+            f"{getattr(self, '_preview_name', '')}　{tr('原始')} "
+            f"{src_w}×{src_h}　{tag}")
 
     def _refresh_stats(self):
         """数据集统计（A-7①：移后台线程，主线程不再被万图目录卡住）。"""
         if getattr(self, "_stats_thread", None) is not None:
             return  # 统计中，忽略重复触发
-        self.stats_hint.setText("统计中…")
+        self.stats_hint.setText(tr("统计中…"))
         task = self.project.task_type
         dataset_dir = Path(self.project.dataset_dir)
 
@@ -1610,14 +1619,15 @@ class ProjectWindow(QMainWindow):
         ok_part = ""
         if n_ok and total:
             pct = n_ok / total
-            ok_part = f"，OK 负样本 {n_ok} 张（占比 {pct:.0%}）"
+            ok_part = f"，{tr('OK 负样本')} {n_ok} {tr('张')}"
         # O8（V0.7）：忽略区域计数可见（与数据体检提示同口径）
         n_ign = getattr(stats, "n_ignore", 0)
         if n_ign:
-            ok_part += f"，__ignore__ 区域 {n_ign} 个"
+            ok_part += f"，__ignore__ {tr('区域')} {n_ign} {tr('个')}"
         self.stats_hint.setText(
-            f"共 {total} 张图片，已标注 {stats.n_labeled} 张，"
-            f"类别 {len(stats.class_counts)} 个{ok_part}"
+            f"{tr('共')} {total} {tr('张图片')}，{tr('已标注')} "
+            f"{stats.n_labeled} {tr('张')}，"
+            f"{tr('类别')} {len(stats.class_counts)} {tr('个')}{ok_part}"
         )
         self.dist_canvas.update_stats(stats)
         # O12（V0.7）：划分环形图（n_ok 含负样本；分类任务 n_ok=0）
@@ -1639,7 +1649,7 @@ class ProjectWindow(QMainWindow):
             float(self.par_val_ratio.value()))
     def _on_stats_failed(self, msg):
         self.stats_hint.setText("")
-        QMessageBox.warning(self, "统计失败", f"读取数据集失败：{msg}")
+        QMessageBox.warning(self, tr("统计失败"), f"{tr('读取数据集失败：')}{msg}")
 
     # ================= 数据体检 / 预检 / 推荐 / 开发者选项 =================
     def _open_dev_options(self):
@@ -1649,10 +1659,10 @@ class ProjectWindow(QMainWindow):
         """数据体检报告（异步扫描；仅提示/警告两档 + 去标注平台处理闭环）。"""
         worker = getattr(self, "_health_worker", None)
         if worker is not None and worker.isRunning():
-            self.statusBar().showMessage("数据体检正在进行中，请稍候…", 3000)
+            self.statusBar().showMessage(tr("数据体检正在进行中，请稍候…"), 3000)
             return
         self.btn_health.setEnabled(False)
-        self.statusBar().showMessage("数据体检中…（大集合的重复图检测可能稍慢）")
+        self.statusBar().showMessage(tr("数据体检中…（大集合的重复图检测可能稍慢）"))
         self._health_worker = _PreflightWorker(self.project, self)
         self._health_worker.done.connect(self._on_health_done)
         self._health_worker.failed.connect(self._on_health_failed)
@@ -1664,17 +1674,19 @@ class ProjectWindow(QMainWindow):
         self._health_worker = None
         rows = [ReportRow.from_issue(i) for i in result["issues"]]
         dlg = HealthReportDialog(
-            self, "数据体检报告", rows, mode="report",
-            summary=f"共 {result['n_images']} 张样本、{len(result['classes'])} 个类别。"
-                    "结果仅分「提示 / 警告」两档，不会阻止训练；阈值可在 ⚙ 开发者选项调整。",
+            self, tr("数据体检报告"), rows, mode="report",
+            summary=f"{tr('共')} {result['n_images']} {tr('张样本')}、"
+                    f"{len(result['classes'])} {tr('个类别')}。"
+                    + tr("结果仅分「提示 / 警告」两档，不会阻止训练；"
+                         "阈值可在 ⚙ 开发者选项调整。"),
             on_annotate=self._goto_annotation)
         dlg.exec_()
 
     def _on_health_failed(self, message: str):
         self.btn_health.setEnabled(True)
         self._health_worker = None
-        QMessageBox.warning(self, "数据体检失败",
-                            f"读取数据集失败：{message}")
+        QMessageBox.warning(self, tr("数据体检失败"),
+                            f"{tr('读取数据集失败：')}{message}")
 
     def _goto_annotation(self):
         """体检闭环：拉起标注平台并定位到数据集目录（launcher 参数透传）。"""
@@ -1682,7 +1694,7 @@ class ProjectWindow(QMainWindow):
 
         dataset = self.project.dataset_dir or None
         launcher.launch_platform("annotation", dataset)
-        self.statusBar().showMessage("已打开标注平台（定位到数据集目录）", 5000)
+        self.statusBar().showMessage(tr("已打开标注平台（定位到数据集目录）"), 5000)
 
     def _apply_recommendations(self):
         """智能推荐配置：保守规则，应用后在状态栏说明理由（toast 式）。"""
@@ -1690,13 +1702,13 @@ class ProjectWindow(QMainWindow):
         facts = dataset_facts(self._dataset_samples_for_guard())
         recs = recommend_settings(self.project, facts, _cuda_available())
         if not recs:
-            self.statusBar().showMessage("当前配置已符合推荐，未做修改", 5000)
+            self.statusBar().showMessage(tr("当前配置已符合推荐，未做修改"), 5000)
             return
         for key, value, _reason in recs:
             self._apply_recommend_key(key, value)
         self._save_params()
         self.statusBar().showMessage(
-            "已应用推荐（" + "；".join(r for _, _, r in recs) + "）", 15000)
+            tr("已应用推荐（") + "；".join(r for _, _, r in recs) + tr("）"), 15000)
 
     def _apply_recommend_key(self, key, value):
         if key == "freeze_backbone":
@@ -1757,7 +1769,7 @@ class ProjectWindow(QMainWindow):
             top.addWidget(info)
         top.addStretch(1)
         if badge_key:
-            badge = Badge("已推荐", "primary")
+            badge = Badge(tr("已推荐"), "primary")
             badge.hide()
             self._rec_badges[badge_key] = badge
             top.addWidget(badge)
@@ -1944,7 +1956,7 @@ class ProjectWindow(QMainWindow):
     # ================= 训练 =================
     def _check_rotate_guard(self):
         """rotate90 守卫（用户规则）：数据集长宽比不一致时，旋转算子必须配合
-        「随机裁剪（对齐目标宽高比）」且启用概率 100%，否则无法开始训练。
+         「随机裁剪」且启用概率 100%，否则无法开始训练。
 
         返回 None=通过；("enable", 提示文本)=需启用裁剪兜底；
         ("prob", 提示文本)=裁剪已启用但概率不足 100%。
@@ -1985,12 +1997,13 @@ class ProjectWindow(QMainWindow):
         kind, text = guard
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("无法开始训练")
+        box.setWindowTitle(tr("无法开始训练"))
         box.setText(text)
         btn_fix = box.addButton(
-            "启用随机裁剪（100%）并开始" if kind == "enable" else "设为 100% 并开始",
+            tr("启用随机裁剪（100%）并开始") if kind == "enable"
+            else tr("设为 100% 并开始"),
             QMessageBox.AcceptRole)
-        box.addButton("取消", QMessageBox.RejectRole)
+        box.addButton(tr("取消"), QMessageBox.RejectRole)
         box.exec()
         if box.clickedButton() is not btn_fix:
             return False
@@ -2003,7 +2016,8 @@ class ProjectWindow(QMainWindow):
         self._collect_augment_ops()
         self.project.save()
         self.statusBar().showMessage(
-            f"已启用随机裁剪兜底（宽高比 {ratio:g}，概率 100%），继续训练", 5000)
+            f"{tr('已启用随机裁剪兜底（宽高比')} {ratio:g}，{tr('概率 100%）')}，"
+            f"{tr('继续训练')}", 5000)
         return True
 
     def _start_training(self):
@@ -2018,7 +2032,7 @@ class ProjectWindow(QMainWindow):
             self._begin_training()
             return
         self.btn_start.setEnabled(False)
-        self.statusBar().showMessage("训练前预检中（数据体检 + 参数检查）…")
+        self.statusBar().showMessage(tr("训练前预检中（数据体检 + 参数检查）…"))
         self._preflight_worker = _PreflightWorker(self.project, self)
         self._preflight_worker.done.connect(self._on_preflight_done)
         self._preflight_worker.failed.connect(self._on_preflight_failed)
@@ -2053,29 +2067,32 @@ class ProjectWindow(QMainWindow):
         # 两者都不满足（完全干净）时状态栏一句话放行，不打扰。
         opt = load_options()
         if not has_warn and not (opt.preflight_info_popup and rows):
-            self.statusBar().showMessage("预检通过，开始训练…", 5000)
+            self.statusBar().showMessage(tr("预检通过，开始训练…"), 5000)
             self._begin_training()
             return
         dlg = HealthReportDialog(
-            self, "训练前预检", rows, mode="preflight",
-            summary=f"数据集共 {result['n_images']} 张样本、{len(result['classes'])} 个类别。"
-                    "以下为「提示 / 警告」两档建议，不会强制修改；折叠区可查看已应用的参数。",
+            self, tr("训练前预检"), rows, mode="preflight",
+            summary=f"{tr('数据集共')} {result['n_images']} {tr('张样本')}、"
+                    f"{len(result['classes'])} {tr('个类别')}。"
+                    + tr("以下为「提示 / 警告」两档建议，不会强制修改；"
+                         "折叠区可查看已应用的参数。"),
             on_apply=self._apply_preflight_value)
         if dlg.exec_() != QDialog.Accepted:
-            self.statusBar().showMessage("已取消训练", 3000)
+            self.statusBar().showMessage(tr("已取消训练"), 3000)
             return
         self._begin_training()
 
     def _on_preflight_failed(self, message: str):
         self.btn_start.setEnabled(True)
         self._preflight_worker = None
-        box = QMessageBox(QMessageBox.Warning, "预检失败",
-                          f"训练前预检执行失败：{message}\n\n仍要直接开始训练吗？",
+        box = QMessageBox(QMessageBox.Warning, tr("预检失败"),
+                          f"{tr('训练前预检执行失败：')}{message}\n\n"
+                          f"{tr('仍要直接开始训练吗？')}",
                           QMessageBox.Yes | QMessageBox.No, self)
         if box.exec_() == QMessageBox.Yes:
             self._begin_training()
         else:
-            self.statusBar().showMessage("已取消训练", 3000)
+            self.statusBar().showMessage(tr("已取消训练"), 3000)
 
     def _begin_training(self):
         """预检（或其跳过）之后真正启动训练线程。"""
@@ -2100,7 +2117,7 @@ class ProjectWindow(QMainWindow):
         self.final_metrics.setText("")
         self._update_per_class_table(None)  # O1：新训练开始前清空逐类表
         self._build_echo_form(run_dir=run_dir)
-        self.train_status.setText("训练中…")
+        self.train_status.setText(tr("训练中…"))
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(not p.model_name.startswith("yolo"))  # YOLO 训练由引擎控制，不支持中途停止
         self.btn_open_dir.setEnabled(True)
@@ -2121,68 +2138,84 @@ class ProjectWindow(QMainWindow):
         p = self.project
         out_dir = str(run_dir or self._run_dir or "")
         if config is None:  # 实时训练：读当前项目参数
-            aug = "、".join(self._collect_augment_ops()) or "未启用"
-            epoch_w = (f"每轮保存（{Path(p.model_dir) / 'epoch_weights'}）"
-                       if p.save_epoch_weights else "关闭")
+            aug = "、".join(self._collect_augment_ops()) or tr("未启用")
+            epoch_w = (f"{tr('每轮保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
+                       if p.save_epoch_weights else tr("关闭"))
             rows = [
-                ("项目名称", p.name), ("任务类型", p.task_type.label),
-                ("训练模型", p.model_name), ("工业优化", "启用" if p.industrial_opt else "关闭"),
-                ("冻结骨干", "是" if p.freeze_backbone else "否"),
-                ("RPN 候选削减", "是" if p.rpn_reduced else "否"),
-                ("轻量掩码头", "是" if p.mask_head_light else "否"),
-        ("slim 头", "是" if getattr(p, "slim_head", False) else "否"),
-        ("小目标锚框", "是" if getattr(p, "anchor_small", False) else "否"),
-        ("P2 检测头", "是" if getattr(p, "p2_head", False) else "否"),
-                ("AMP 混合精度", "开启" if p.use_amp else "关闭"),
-                ("GPU 提速(TF32)", "开启" if p.tf32 else "关闭"),
-                ("轮次权重", epoch_w),
-                ("早停耐心", f"{p.patience} 轮" if p.patience else "关闭"),
-                ("数据集路径", p.dataset_dir),
-                ("模型储存路径", p.model_dir), ("输出目录", out_dir),
-                ("训练集比例", f"{getattr(p, 'train_ratio', 0):.0%}"),
-                ("验证集比例", f"{p.val_ratio:.0%}"), ("每轮重复学习", f"{p.multiply_factor} 遍"),
-                ("负样本训练", "启用" if getattr(p, "use_negatives", True) else "关闭"),
-                ("颜色模式", "灰度" if getattr(p, "color_mode", "color") == "gray" else "彩色"),
-                ("确定性训练", "开启" if getattr(p, "deterministic", False) else "关闭"),
-                ("增强策略", aug), ("批量大小", str(p.batch_size)),
-                ("训练轮次", str(p.epochs)), ("学习率", f"{p.learning_rate:g}"),
-                ("权重衰减", f"{p.weight_decay:g}"), ("评估间隔", f"每 {p.eval_interval} 轮"),
-                ("训练设备", "自动" if p.device == "auto" else p.device.upper()),
+                (tr("项目名称"), p.name), (tr("任务类型"), tr(p.task_type.label)),
+                (tr("训练模型"), p.model_name),
+                (tr("工业优化"), tr("启用") if p.industrial_opt else tr("关闭")),
+                (tr("冻结骨干"), tr("是") if p.freeze_backbone else tr("否")),
+                (tr("RPN 候选削减"), tr("是") if p.rpn_reduced else tr("否")),
+                (tr("轻量掩码头"), tr("是") if p.mask_head_light else tr("否")),
+        (tr("slim 头"), tr("是") if getattr(p, "slim_head", False) else tr("否")),
+        (tr("小目标锚框"), tr("是") if getattr(p, "anchor_small", False) else tr("否")),
+        (tr("P2 检测头"), tr("是") if getattr(p, "p2_head", False) else tr("否")),
+                (tr("AMP 混合精度"), tr("开启") if p.use_amp else tr("关闭")),
+                (tr("GPU 提速(TF32)"), tr("开启") if p.tf32 else tr("关闭")),
+                (tr("轮次权重"), epoch_w),
+                (tr("早停耐心"),
+                 f"{p.patience} {tr('轮')}" if p.patience else tr("关闭")),
+                (tr("数据集路径"), p.dataset_dir),
+                (tr("模型储存路径"), p.model_dir), (tr("输出目录"), out_dir),
+                (tr("训练集比例"), f"{getattr(p, 'train_ratio', 0):.0%}"),
+                (tr("验证集比例"), f"{p.val_ratio:.0%}"),
+                (tr("每轮重复学习"), f"{p.multiply_factor} {tr('遍')}"),
+                (tr("负样本训练"),
+                 tr("启用") if getattr(p, "use_negatives", True) else tr("关闭")),
+                (tr("颜色模式"),
+                 tr("灰度") if getattr(p, "color_mode", "color") == "gray" else tr("彩色")),
+                (tr("确定性训练"),
+                 tr("开启") if getattr(p, "deterministic", False) else tr("关闭")),
+                (tr("增强策略"), aug), (tr("批量大小"), str(p.batch_size)),
+                (tr("训练轮次"), str(p.epochs)), (tr("学习率"), f"{p.learning_rate:g}"),
+                (tr("权重衰减"), f"{p.weight_decay:g}"),
+                (tr("评估间隔"), f"{tr('每')} {p.eval_interval} {tr('轮')}"),
+                (tr("训练设备"), tr("自动") if p.device == "auto" else p.device.upper()),
             ]
         else:  # 历史记录：读训练时的参数快照
-            aug = "、".join((config.get("augment_ops") or {}).keys()) or "未启用"
+            aug = "、".join((config.get("augment_ops") or {}).keys()) or tr("未启用")
             dev = config.get("device", "auto")
-            epoch_w = (f"每轮保存（{Path(p.model_dir) / 'epoch_weights'}）"
-                       if config.get("save_epoch_weights", True) else "关闭")
+            epoch_w = (f"{tr('每轮保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
+                       if config.get("save_epoch_weights", True) else tr("关闭"))
             rows = [
-                ("项目名称", p.name), ("任务类型", p.task_type.label),
-                ("训练模型", config.get("model_name") or p.model_name),
-                ("工业优化", "启用" if config.get("industrial_opt") else "关闭"),
-                ("冻结骨干", "是" if config.get("freeze_backbone") else "否"),
-                ("RPN 候选削减", "是" if config.get("rpn_reduced") else "否"),
-                ("轻量掩码头", "是" if config.get("mask_head_light") else "否"),
-        ("slim 头", "是" if config.get("slim_head") else "否"),
-        ("小目标锚框", "是" if config.get("anchor_small") else "否"),
-        ("P2 检测头", "是" if config.get("p2_head") else "否"),
-                ("AMP 混合精度", "开启" if config.get("use_amp", True) else "关闭"),
-                ("GPU 提速(TF32)", "开启" if config.get("tf32", True) else "关闭"),
-                ("轮次权重", epoch_w),
-                ("早停耐心", f"{config.get('patience', 0)} 轮" if config.get("patience") else "关闭"),
-                ("数据集路径", p.dataset_dir),
-                ("模型储存路径", p.model_dir), ("输出目录", out_dir),
-                ("训练集比例", f"{config.get('train_ratio', 0) or round(1 - config.get('val_ratio', 0.2), 2):.0%}"),
-                ("验证集比例", f"{config.get('val_ratio', 0):.0%}"),
-                ("每轮重复学习", f"{config.get('multiply_factor', 1)} 遍"),
-                ("负样本训练", "启用" if config.get("use_negatives", True) else "关闭"),
-                ("颜色模式", "灰度" if config.get("color_mode", "color") == "gray" else "彩色"),
-                ("确定性训练", "开启" if config.get("deterministic", False) else "关闭"),
-                ("增强策略", aug),
-                ("批量大小", str(config.get("batch_size", "—"))),
-                ("训练轮次", str(config.get("epochs", "—"))),
-                ("学习率", f"{config.get('learning_rate', 0):g}"),
-                ("权重衰减", f"{config.get('weight_decay', 0):g}"),
-                ("评估间隔", f"每 {config.get('eval_interval', 1)} 轮"),
-                ("训练设备", "自动" if dev == "auto" else str(dev).upper()),
+                (tr("项目名称"), p.name), (tr("任务类型"), tr(p.task_type.label)),
+                (tr("训练模型"), config.get("model_name") or p.model_name),
+                (tr("工业优化"),
+                 tr("启用") if config.get("industrial_opt") else tr("关闭")),
+                (tr("冻结骨干"), tr("是") if config.get("freeze_backbone") else tr("否")),
+                (tr("RPN 候选削减"), tr("是") if config.get("rpn_reduced") else tr("否")),
+                (tr("轻量掩码头"), tr("是") if config.get("mask_head_light") else tr("否")),
+        (tr("slim 头"), tr("是") if config.get("slim_head") else tr("否")),
+        (tr("小目标锚框"), tr("是") if config.get("anchor_small") else tr("否")),
+        (tr("P2 检测头"), tr("是") if config.get("p2_head") else tr("否")),
+                (tr("AMP 混合精度"),
+                 tr("开启") if config.get("use_amp", True) else tr("关闭")),
+                (tr("GPU 提速(TF32)"),
+                 tr("开启") if config.get("tf32", True) else tr("关闭")),
+                (tr("轮次权重"), epoch_w),
+                (tr("早停耐心"),
+                 f"{config.get('patience', 0)} {tr('轮')}"
+                 if config.get("patience") else tr("关闭")),
+                (tr("数据集路径"), p.dataset_dir),
+                (tr("模型储存路径"), p.model_dir), (tr("输出目录"), out_dir),
+                (tr("训练集比例"),
+                 f"{config.get('train_ratio', 0) or round(1 - config.get('val_ratio', 0.2), 2):.0%}"),
+                (tr("验证集比例"), f"{config.get('val_ratio', 0):.0%}"),
+                (tr("每轮重复学习"), f"{config.get('multiply_factor', 1)} {tr('遍')}"),
+                (tr("负样本训练"),
+                 tr("启用") if config.get("use_negatives", True) else tr("关闭")),
+                (tr("颜色模式"),
+                 tr("灰度") if config.get("color_mode", "color") == "gray" else tr("彩色")),
+                (tr("确定性训练"),
+                 tr("开启") if config.get("deterministic", False) else tr("关闭")),
+                (tr("增强策略"), aug),
+                (tr("批量大小"), str(config.get("batch_size", "—"))),
+                (tr("训练轮次"), str(config.get("epochs", "—"))),
+                (tr("学习率"), f"{config.get('learning_rate', 0):g}"),
+                (tr("权重衰减"), f"{config.get('weight_decay', 0):g}"),
+                (tr("评估间隔"), f"{tr('每')} {config.get('eval_interval', 1)} {tr('轮')}"),
+                (tr("训练设备"), tr("自动") if dev == "auto" else str(dev).upper()),
             ]
         while self.echo_form.rowCount():
             self.echo_form.removeRow(0)
@@ -2245,7 +2278,7 @@ class ProjectWindow(QMainWindow):
         if selected is not None:
             self._on_run_selected(selected, None)
         else:
-            self.train_status.setText("尚未开始训练")
+            self.train_status.setText(tr("尚未开始训练"))
             self._history = []
             self._reset_progress()
             self._update_plots()
@@ -2280,17 +2313,18 @@ class ProjectWindow(QMainWindow):
         self._update_plots()
         if live:
             self.train_status.setText(
-                f"训练中… 第 {self._live_history[-1]['epoch']} 轮" if self._live_history else "训练中…")
+                f"{tr('训练中…')} {tr('第')} {self._live_history[-1]['epoch']} {tr('轮')}"
+                if self._live_history else tr("训练中…"))
             self.final_metrics.setText("")
             self.cm_canvas.ax.clear()
             self.cm_canvas.draw()
             self._update_per_class_table(None)  # O1：进行中无逐类指标
             self.btn_delete_run.setEnabled(False)  # 进行中的记录不可删除
         else:
-            self.train_status.setText(f"历史记录：{rec.status_text}")
+            self.train_status.setText(f"{tr('历史记录：')}{rec.status_text}")
             err = m.get("error")
             self.final_metrics.setText(
-                f"失败原因：{err}" if err else self._summarize_metrics(m))
+                f"{tr('失败原因：')}{err}" if err else self._summarize_metrics(m))
             matrix = m.get("confusion_matrix")
             classes = m.get("classes") or []
             self.cm_canvas.ax.clear()
@@ -2304,7 +2338,8 @@ class ProjectWindow(QMainWindow):
     def _update_progress(self, done: int, planned: int):
         pct = int(round(100 * min(done, planned) / planned)) if planned else 0
         self.progress_bar.setValue(pct)
-        self.progress_bar.setFormat(f"%p%　第 {done} / {planned} 轮" if planned else "%p%")
+        self.progress_bar.setFormat(
+            f"%p%　{tr('第')} {done} / {planned} {tr('轮')}" if planned else "%p%")
 
     def _reset_progress(self):
         self.progress_bar.setValue(0)
@@ -2336,7 +2371,7 @@ class ProjectWindow(QMainWindow):
         h = self._history
         xs = [x["epoch"] for x in h]
         out = []
-        for k, label in (("train_loss", "训练损失"), ("val_loss", "验证损失")):
+        for k, label in (("train_loss", tr("训练损失")), ("val_loss", tr("验证损失"))):
             if any(k in x for x in h):
                 out.append((label, xs, [x.get(k) for x in h]))
         return out
@@ -2382,8 +2417,8 @@ class ProjectWindow(QMainWindow):
         if 0.02 <= frac < 1.0 and self._live_start_dt is not None:
             elapsed = (datetime.now() - self._live_start_dt).total_seconds()
             remain_s = elapsed / frac * (1.0 - frac)
-            eta = f"　剩余约 {format_duration(remain_s)}"
-        self.progress_bar.setFormat(f"%p%　第 {done} / {planned} 轮{eta}")
+            eta = f"　{tr('剩余约')} {format_duration(remain_s)}"
+        self.progress_bar.setFormat(f"%p%　{tr('第')} {done} / {planned} {tr('轮')}{eta}")
 
     def _update_gpu_mem(self):
         """训练页顶部实时显示 GPU 显存占用。"""
@@ -2395,7 +2430,7 @@ class ProjectWindow(QMainWindow):
                 return
             free_b, total_b = torch.cuda.mem_get_info()
             used = (total_b - free_b) / 2**30
-            self.gpu_mem.setText(f"GPU 显存 {used:.1f} / {total_b / 2**30:.1f} GB")
+            self.gpu_mem.setText(f"{tr('GPU 显存')} {used:.1f} / {total_b / 2**30:.1f} GB")
         except Exception:
             self.gpu_mem.setText("")
 
@@ -2406,7 +2441,7 @@ class ProjectWindow(QMainWindow):
             self._update_plots()
             self._update_overall_progress()
             self._tick_duration()
-            self.train_status.setText(f"训练中… 第 {epoch} 轮")
+            self.train_status.setText(f"{tr('训练中…')} {tr('第')} {epoch} {tr('轮')}")
 
     def _update_plots(self):
         xs = [h["epoch"] for h in self._history]
@@ -2448,7 +2483,7 @@ class ProjectWindow(QMainWindow):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         if ok:
-            self.train_status.setText("训练完成 ✔")
+            self.train_status.setText(tr("训练完成 ✔"))
             self.final_metrics.setText(self._summarize_metrics(metrics))
             matrix = metrics.get("confusion_matrix")
             classes = metrics.get("classes") or []
@@ -2456,8 +2491,8 @@ class ProjectWindow(QMainWindow):
                 self.cm_canvas.update_matrix(matrix, classes)
             self._update_per_class_table(metrics)  # O1：训练完成即出逐类表
         else:
-            self.train_status.setText("训练失败 ✘")
-            self.final_metrics.setText(f"失败原因：{message}")
+            self.train_status.setText(tr("训练失败 ✘"))
+            self.final_metrics.setText(f"{tr('失败原因：')}{message}")
             self._update_per_class_table(None)
             QMessageBox.critical(self, "训练失败", message)
         # 重扫历史（本次训练目录已有产出），保持选中该记录展示最终详情
@@ -2502,16 +2537,16 @@ class ProjectWindow(QMainWindow):
     def _summarize_metrics(metrics: dict) -> str:
         parts = []
         if metrics.get("final_val_top1") is not None:
-            parts.append(f"最终验证 Top-1：{metrics['final_val_top1']:.1%}")
+            parts.append(f"{tr('最终验证 Top-1')}：{metrics['final_val_top1']:.1%}")
         if metrics.get("best_val_top1") is not None:
-            parts.append(f"最优验证 Top-1：{metrics['best_val_top1']:.1%}")
+            parts.append(f"{tr('最优验证 Top-1')}：{metrics['best_val_top1']:.1%}")
         final = metrics.get("final") or {}
-        for key, label in (("map_loose", "mAP"), ("map50", "mAP@50"),
-                           ("map50_95", "mAP@50-95"), ("mar_loose", "mAR"),
-                           ("precision", "精确率"), ("recall", "召回率"),
-                           ("auroc", "AUROC"), ("ap", "AP"),
-                           ("ok_fp_rate", "OK 误报率"), ("exact_match", "精确匹配"),
-                           ("cer", "CER"), ("char_acc", "字符准确率")):
+        for key, label in (("map_loose", tr("mAP")), ("map50", tr("mAP@50")),
+                           ("map50_95", tr("mAP@50-95")), ("mar_loose", tr("mAR")),
+                           ("precision", tr("精确率")), ("recall", tr("召回率")),
+                           ("auroc", tr("AUROC")), ("ap", tr("AP")),
+                           ("ok_fp_rate", tr("OK 误报率")), ("exact_match", tr("精确匹配")),
+                           ("cer", tr("CER")), ("char_acc", tr("字符准确率"))):
             if key in final and final[key] is not None:
                 parts.append(f"{label}：{final[key]:.3f}")
         # O9（V0.7）：OK 负样本贡献常驻可见（能力已在，让用户看见）
@@ -2519,11 +2554,11 @@ class ProjectWindow(QMainWindow):
         if neg_train:
             neg_val = final.get("neg_val_images")
             fp = final.get("neg_fp_per_img")
-            ok_txt = f"OK 负样本：训练 {neg_train} 张"
+            ok_txt = f"{tr('OK 负样本')}：{tr('训练')} {neg_train} {tr('张')}"
             if neg_val is not None:
-                ok_txt += f" / 验证 {neg_val} 张"
+                ok_txt += f" / {tr('验证')} {neg_val} {tr('张')}"
             if fp is not None:
-                ok_txt += f"，误检 {fp:.2f} 框/张"
+                ok_txt += f"，{tr('误检')} {fp:.2f} {tr('框/张')}"
             parts.append(ok_txt)
         # O3（V0.7）：Loss 曲线自动判读（欠拟合/过拟合/NaN 一句话）
         from .loss_diagnosis import diagnose
@@ -2536,7 +2571,7 @@ class ProjectWindow(QMainWindow):
     def _stop_training(self):
         if self.thread is not None:
             self.thread.stop()
-            self.train_status.setText("正在停止（当前轮结束后保存最优权重）…")
+            self.train_status.setText(tr("正在停止（当前轮结束后保存最优权重）…"))
             self.btn_stop.setEnabled(False)
 
     def _open_output_dir(self):
@@ -2559,7 +2594,7 @@ class ProjectWindow(QMainWindow):
                 if it.data(Qt.UserRole) not in keep:
                     it.setSelected(False)
             self.run_list.blockSignals(False)
-            self.statusBar().showMessage("最多选择 3 条同时对比", 4000)
+            self.statusBar().showMessage(tr("最多选择 3 条同时对比"), 4000)
             items = self.run_list.selectedItems()
         self._prev_selected = list(items)
 
@@ -2575,7 +2610,7 @@ class ProjectWindow(QMainWindow):
     def _open_compare(self):
         recs = self._compare_candidates()
         if not 2 <= len(recs) <= 3:
-            self.statusBar().showMessage("请先选择 2~3 条已完成的训练记录（按住 Ctrl 多选）", 5000)
+            self.statusBar().showMessage(tr("请先选择 2~3 条已完成的训练记录"), 5000)
             return
         from .compare_window import CompareWindow
 
@@ -2589,29 +2624,31 @@ class ProjectWindow(QMainWindow):
         if rec is None:
             return
         if rec.status == "running" and self.thread is not None:
-            QMessageBox.warning(self, "无法删除", "该记录对应的训练正在进行中，无法删除")
+            QMessageBox.warning(self, tr("无法删除"),
+                                tr("该记录对应的训练正在进行中，无法删除"))
             return
         if QMessageBox.question(
-                self, "删除训练记录",
-                f"确定删除该条训练记录吗？\n{rec.run_dir}\n\n"
-                "记录文件夹（含权重、指标、导出数据）将一并删除，且无法恢复。",
+                self, tr("删除训练记录"),
+                f"{tr('确定删除该条训练记录吗？')}\n{rec.run_dir}\n\n"
+                + tr("记录文件夹（含权重、指标、导出数据）将一并删除，且无法恢复。"),
                 ) != QMessageBox.Yes:
             return
         shutil.rmtree(rec.run_dir, ignore_errors=True)
         self._selected_run_dir = None
         self._reload_history()
-        self.statusBar().showMessage("训练记录已删除", 3000)
+        self.statusBar().showMessage(tr("训练记录已删除"), 3000)
 
     def closeEvent(self, event):
         for attr in ("_preflight_worker", "_health_worker"):
             worker = getattr(self, attr, None)
             if worker is not None and worker.isRunning():
-                QMessageBox.warning(self, "后台任务进行中",
-                                    "数据体检 / 训练前预检正在进行，请稍候再关闭窗口")
+                QMessageBox.warning(self, tr("后台任务进行中"),
+                                    tr("数据体检 / 训练前预检正在进行，请稍候再关闭窗口"))
                 event.ignore()
                 return
         if self.thread is not None and self.thread.isRunning():
-            QMessageBox.warning(self, "训练中", "训练正在进行，无法关闭窗口；请先等待完成或停止训练")
+            QMessageBox.warning(self, tr("训练中"),
+                                tr("训练正在进行，无法关闭窗口；请先等待完成或停止训练"))
             event.ignore()
             return
         if self.on_closed is not None:
@@ -2652,7 +2689,7 @@ class CreateProjectDialog(QDialog):
         md_row.addWidget(btn_md)
         self.cmb_task = QComboBox()
         for t in TaskType:
-            self.cmb_task.addItem(t.label, t.value)
+            self.cmb_task.addItem(tr(t.label), t.value)
         self.cmb_task.currentIndexChanged.connect(self._fill_models)
         self.cmb_model = QComboBox()
 
@@ -2669,14 +2706,17 @@ class CreateProjectDialog(QDialog):
         form.addRow("训练模型", self.cmb_model)
         form.addRow(self.buttons)
         self._fill_models()
+        from ..i18n import localize_widget_tree  # 动态对话框：英文模式替换层
+
+        localize_widget_tree(self)
 
     def _browse_dataset(self):
-        path = QFileDialog.getExistingDirectory(self, "选择数据集文件夹")
+        path = QFileDialog.getExistingDirectory(self, tr("选择数据集文件夹"))
         if path:
             self.fld_dataset.setText(path)
 
     def _browse_model_dir(self):
-        path = QFileDialog.getExistingDirectory(self, "选择模型储存文件夹")
+        path = QFileDialog.getExistingDirectory(self, tr("选择模型储存文件夹"))
         if path:
             self.fld_model_dir.setText(path)
 
@@ -2686,7 +2726,7 @@ class CreateProjectDialog(QDialog):
         from ..engine.models import list_models  # torch 延迟导入（T1-4）
 
         for m in list_models(task):
-            self.cmb_model.addItem(f"{m['name']}  ({m['desc']})", m["name"])
+            self.cmb_model.addItem(f"{m['name']}  ({tr(m['desc'])})", m["name"])
 
     def create(self) -> Project:
         """执行创建；失败抛 ValueError（由调用方提示）。"""
@@ -2721,22 +2761,22 @@ def rotate_guard_decision(ops: dict, probs: dict, aspects: set) -> tuple | None:
         if crop_prob >= 0.999:
             return None
         return ("prob",
-                "「随机裁剪」作为旋转兜底时启用概率必须为 100%，\n"
-                "否则部分样本旋转后长宽比不一致，训练输入形状混乱。")
+                tr("「随机裁剪」作为旋转兜底时启用概率必须为 100%，\n"
+                   "否则部分样本旋转后长宽比不一致，训练输入形状混乱。"))
     shown = "、".join(f"{a:g}" for a in sorted(aspects)[:5])
     if len(aspects) > 5:
         shown += "…"
     return ("enable",
-            f"已启用「随机旋转 90°/270°」，但数据集图像长宽比不一致"
-            f"（{len(aspects)} 种：{shown}）。\n"
-            "旋转后宽高互换会让训练输入比例混乱。请启用「随机裁剪」"
-            "作为兜底，或关闭旋转算子。")
+            tr("已启用「随机旋转 90°/270°」，但数据集图像长宽比不一致")
+            + f"（{len(aspects)} {tr('种')}：{shown}）。\n"
+            + tr("旋转后宽高互换会让训练输入比例混乱。请启用「随机裁剪」"
+                 "作为兜底，或关闭旋转算子。"))
 
 
 class TrainingWindow(QMainWindow):
     def __init__(self, open_project: str | None = None):
         super().__init__()
-        self.setWindowTitle("XCcv 训练平台 - 项目列表")
+        self.setWindowTitle(f"{tr('XCcv 训练平台')} - {tr('项目列表')}")
         from PyQt5.QtGui import QIcon
         self.setWindowIcon(QIcon(str(icon_path("training.png"))))
         self.resize(1120, 720)
@@ -2755,11 +2795,11 @@ class TrainingWindow(QMainWindow):
         header.setFixedHeight(66)
         head = QHBoxLayout(header)
         head.setContentsMargins(22, 10, 22, 10)
-        app_title = QLabel("XCcv 训练平台")
+        app_title = QLabel(tr("XCcv 训练平台"))
         app_title.setObjectName("appTitle")
         head.addWidget(app_title)
         head.addStretch(1)
-        btn_create = QPushButton("＋ 新建项目")
+        btn_create = QPushButton(tr("＋ 新建项目"))
         btn_create.setObjectName("accent")
         btn_create.clicked.connect(self._create_project)
         head.addWidget(btn_create)
@@ -2800,8 +2840,8 @@ class TrainingWindow(QMainWindow):
         try:
             self._open_project(name)
         except Exception as e:   # 项目不存在/损坏：回退项目列表 + 人话提示
-            QMessageBox.warning(self, "打开项目失败",
-                                f"项目「{name}」无法打开：{e}")
+            QMessageBox.warning(self, tr("打开项目失败"),
+                                f"{tr('项目')}「{name}」{tr('无法打开')}：{e}")
 
     # ---- 卡片墙 ----
     def _refresh_project_list(self):
@@ -2823,8 +2863,8 @@ class TrainingWindow(QMainWindow):
             from ..ui_widgets import EmptyState
 
             self.cards_grid.addWidget(
-                EmptyState("🗂", "还没有项目",
-                           "点击右上角「＋ 新建项目」，30 秒完成第一个训练项目"),
+                EmptyState("🗂", tr("还没有项目"),
+                           tr("点击右上角「＋ 新建项目」，30 秒完成第一个训练项目")),
                 0, 0)
         self.list_hint.setText("")
 
@@ -2843,7 +2883,7 @@ class TrainingWindow(QMainWindow):
         # 打开项目要加载深度学习组件（渲染卡数秒）——顶部悬浮胶囊提示
         # （U1：对齐标注平台横幅样式，单行/半透明/圆角；颜色与标注平台
         # 的琥珀底作微差取暗暖灰；V0.7）
-        banner = QLabel(f"正在打开项目「{name}」…", self)
+        banner = QLabel(f"{tr('正在打开项目')}「{name}」…", self)
         banner.setObjectName("openProjectBanner")
         banner.setStyleSheet(
             "QLabel#openProjectBanner { background: rgba(58, 46, 34, 224);"
@@ -2860,7 +2900,8 @@ class TrainingWindow(QMainWindow):
         QApplication.processEvents()
         QApplication.processEvents()
         t0 = time.monotonic()
-        self.statusBar().showMessage(f"正在打开项目「{name}」…", 8000)
+        self.statusBar().showMessage(
+            f"{tr('正在打开项目')}「{name}」…", 8000)
         QApplication.setOverrideCursor(_Qt.WaitCursor)
         try:
             window = ProjectWindow(
@@ -2872,7 +2913,7 @@ class TrainingWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
             # 等待横幅固定可见 ≥0.7s：构建很快时也给出可感知的反馈，
-            # 避免"一闪而过/根本没出现"的间歇观感（V0.7.1 用户勘误）
+            # 避免"一闪而过/根本没出现"的间歇观感（V0.7.1 修复）
             remain_ms = max(0, int(700 - (time.monotonic() - t0) * 1000))
 
             def _hide_open_banner():
@@ -2881,7 +2922,7 @@ class TrainingWindow(QMainWindow):
                 banner.deleteLater()
 
             QTimer.singleShot(remain_ms, _hide_open_banner)
-        self.statusBar().showMessage(f"项目「{name}」已打开", 4000)
+        self.statusBar().showMessage(f"{tr('项目')}「{name}」{tr('已打开')}", 4000)
         self._project_windows[name] = window
 
     def on_platform_message(self, args):
@@ -2899,12 +2940,12 @@ class TrainingWindow(QMainWindow):
         try:
             self._open_project(name)
         except Exception as e:   # 项目不存在/损坏：人话提示
-            QMessageBox.warning(self, "打开项目失败",
-                                f"项目「{name}」无法打开：{e}")
+            QMessageBox.warning(self, tr("打开项目失败"),
+                                f"{tr('项目')}「{name}」{tr('无法打开')}：{e}")
 
     def _confirm_delete(self, name: str):
-        if QMessageBox.question(self, "删除项目",
-                                f"确定删除项目「{name}」吗？（不影响已保存的模型文件）"
+        if QMessageBox.question(self, tr("删除项目"),
+                                f"{tr('确定删除项目')}「{name}」{tr('吗？（不影响已保存的模型文件）')}"
                                 ) != QMessageBox.Yes:
             return
         window = self._project_windows.pop(name, None)
@@ -2913,7 +2954,8 @@ class TrainingWindow(QMainWindow):
             # 避免删掉正在使用的项目目录（P93）
             self._project_windows[name] = window
             self.statusBar().showMessage(
-                f"项目「{name}」的窗口正在忙碌（训练中无法关闭），已取消删除", 5000)
+                f"{tr('项目')}「{name}」{tr('的窗口正在忙碌（训练中无法关闭），已取消删除')}",
+                5000)
             return
         delete_project(name)
         self._refresh_project_list()
@@ -2939,7 +2981,7 @@ class TrainingWindow(QMainWindow):
         try:
             project = dialog.create()
         except ValueError as e:
-            QMessageBox.warning(self, "无法创建", str(e))
+            QMessageBox.warning(self, tr("无法创建"), str(e))
             return
         self._refresh_project_list()
         self._open_project(project.name)

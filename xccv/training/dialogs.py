@@ -46,6 +46,9 @@ class CollapsibleSection(QWidget):
         lay.addWidget(self.content)
         self.content.setVisible(expanded)
         self._title = title
+        from ..i18n import localize_widget_tree  # 动态组件：英文替换层
+
+        localize_widget_tree(self)
 
     def toggle(self):
         # 用 isHidden（显式隐藏标志）而非 isVisible——后者依赖父链可见性，
@@ -58,8 +61,10 @@ class CollapsibleSection(QWidget):
         if frozen:
             win.setUpdatesEnabled(False)
         try:
+            from ..i18n import tr
+
             self.content.setVisible(expanded)
-            self.btn.setText(("▾  " if expanded else "▸  ") + self._title)
+            self.btn.setText(("▾  " if expanded else "▸  ") + tr(self._title))
         finally:
             if frozen:
                 win.setUpdatesEnabled(True)
@@ -192,6 +197,9 @@ class HealthReportDialog(QDialog):
             btns.addWidget(btn_close)
         btns.addStretch(1)
         lay.addLayout(btns)
+        from ..i18n import localize_widget_tree  # 动态对话框：英文替换层
+
+        localize_widget_tree(self)
 
     # ---- 构建 ----
     def _build_row(self, r: ReportRow) -> QFrame:
@@ -332,6 +340,9 @@ class DevOptionsDialog(QDialog):
         box.rejected.connect(self.reject)
         btns.addWidget(box)
         form.addRow(btns)
+        from ..i18n import localize_widget_tree  # 动态对话框：英文替换层
+
+        localize_widget_tree(self)
 
     def _reset_defaults(self):
         d = self._defaults

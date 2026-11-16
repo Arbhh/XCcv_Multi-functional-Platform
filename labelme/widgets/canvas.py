@@ -466,7 +466,7 @@ class Canvas(QtWidgets.QWidget):
         # Polygon drawing.
         if self.drawing():
             # V0.6 修复循环 4：brush 同 ai 族以 "points" 落地（白名单无 "brush"，
-            # 原样赋 createMode 会在移动预览时抛 ValueError——真机堆栈定位）
+            # 原样赋 createMode 会在移动预览时抛 ValueError——按现场堆栈定位）
             if self.createMode in ["ai_polygon", "ai_mask", "brush"]:
                 self.line.shape_type = "points"
             else:
@@ -517,7 +517,7 @@ class Canvas(QtWidgets.QWidget):
                 # 批注修复：拖动必须持续追加轨迹点（原实现只记起点——
                 # 松手仅一个点，"无法拖动/作用点位与准星相差甚远"根因；
                 # 2026-11-05 测试批：0 顶点 current 为假值导致每次 move
-                # 都在上面的守卫早退——真机拖动/纯擦除仍只有单点圆，
+                # 都在上面的守卫早退——拖动/纯擦除仍只有单点圆，
                 # 故落笔点入形状 + 守卫放行画笔手势）
                 if self._brush_erasing:
                     if not self._brush_erase_pts or (
@@ -695,7 +695,7 @@ class Canvas(QtWidgets.QWidget):
                 elif not self.outOfPixmap(pos):
                     # Create new shape.
                     # V0.6 修复循环 4：brush 也以 "points" 落地——Shape 白名单
-                    # 不含 "brush"，构造即抛 ValueError（真机画笔必现）
+                    # 不含 "brush"，构造即抛 ValueError（画笔模式必现）
                     self.current = Shape(
                         shape_type="points"
                         if self.createMode in ["ai_polygon", "ai_mask", "brush"]
@@ -1068,7 +1068,7 @@ class Canvas(QtWidgets.QWidget):
             p.save()
             if self._brush_pts:
                 # 宽度必须等比：w×scale（+2 补偿轮廓线）；注意 setPen 后
-                # 再 setWidthF 只改局部对象无效（真机"预览不跟随缩放"根因）
+                # 再 setWidthF 只改局部对象无效（"预览不跟随缩放"问题的根因）
                 pen = QtGui.QPen(QtGui.QColor(0, 200, 255, 110),
                                  max(2.0, float(self._brush_width)
                                      * self.scale + 2.0))

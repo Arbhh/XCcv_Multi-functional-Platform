@@ -241,20 +241,13 @@ def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
                 stats["per_image"].append({
                     "path": str(path), "gt": None, "gt_available": False,
                     "ok_dir": False, "missed": None, "fp": None,
-                    "fp_ok": None, "matched_all": None, "dets": []})
+                    "fp_ok": None, "matched_all": None,
+                    # 未评估图的检出照记——OK/NG 扫描曲线与分组需要
+                    "dets": [_det_record(d, False) for d in kept_dets]})
             continue
         seen_gt = True
         matched, gt_hit = _match_full(det_boxes, det_labels, det_scores,
                                       gt_boxes, gt_labels, iou_thr)
-        # V0.7.1：漏检 GT 框自身的几何维度（bbox 现算，与检出同口径）
-        for gb, hit in zip(gt_boxes, gt_hit):
-            if hit:
-                continue
-            x1, y1, x2, y2 = (float(v) for v in gb)
-            w, h = max(0.0, x2 - x1), max(0.0, y2 - y1)
-            stats["dims_missed"]["area"].append(w * h)
-            stats["dims_missed"]["short"].append(min(w, h))
-            stats["dims_missed"]["long"].append(max(w, h))
         n_fp = sum(1 for m in matched if not m)
         n_missed = len(gt_boxes) - sum(1 for m in matched if m)
         stats["n_gt_images"] += 1
@@ -264,6 +257,15 @@ def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
         stats["red_defect"].extend(s for s, m in zip(det_scores, matched) if not m)
         for d, m in zip(kept_dets, matched):
             _push(_det_dim_values(d), "green" if m else "red_defect")
+        # V0.7.1：漏检 GT 框自身的几何维度（bbox 现算，与检出同口径）
+        for gb, hit in zip(gt_boxes, gt_hit):
+            if hit:
+                continue
+            x1, y1, x2, y2 = (float(v) for v in gb)
+            w, h = max(0.0, x2 - x1), max(0.0, y2 - y1)
+            stats["dims_missed"]["area"].append(w * h)
+            stats["dims_missed"]["short"].append(min(w, h))
+            stats["dims_missed"]["long"].append(max(w, h))
         stats["per_image"].append({
             "path": str(path), "gt": len(gt_boxes), "gt_available": True,
             "ok_dir": any(is_negative_dir_name(p.name) for p in path.parents),
@@ -316,3 +318,137 @@ def threshold_metrics(stats: dict, conf: float) -> dict:
         # per_image 在该阈值的现算（调用方需要时另取），此处给框/张口径
         out["ok_fp_images"] = None
     return out
+
+
+# ---------------------------------------------------------------------------
+# 阈值扫描曲线数据层（用户重设计）。
+# 曲线含义："阈值=x 处 正常/过检/漏检 的总数"（联合过滤口径，与复盘
+# 分组同源）：正常=阈值下命中 GT 的检出数；过检=未命中检出数（含 OK 图
+# 误检）；漏检=gt_total−正常（贪心一对一匹配下被阈值筛掉的命中 + 未命中
+# GT）。未评估范围（无 GT 生产图）另给 OK/NG 图数曲线：NG=有检出通过
+# 阈值的图数。全部从 per_image 逐检出记录现算，零重推理。
+DET_COL = {"score": 0, "matched": 1, "area": 2, "short": 3, "long": 4,
+           "fg_ratio": 5, "gray_diff": 6}
+
+
+def _det_record_value(rec: list, dim: str):
+    col = DET_COL.get(dim)
+    if col is None:
+        return None
+    return rec[col]
+
+
+def _passes_fixed(rec: list, fixed: dict, dim: str) -> bool:
+    """除当前维外，检出是否通过全部固定维度阈值（联合过滤口径）。"""
+    for d, thr in (fixed or {}).items():
+        if d == dim:
+            continue
+        v = _det_record_value(rec, d)
+        if v is None or float(v) < float(thr):
+            return False
+    return True
+
+
+def _is_unjudged(img: dict) -> bool:
+    return img.get("gt") is None and not img.get("gt_available")
+
+
+def _iter_eval_dets(stats: dict, dim: str, fixed: dict | None,
+                    unjudged: bool = False):
+    """遍历（可选范围）检出 → (当前维值, 是否命中)。
+
+    unjudged=False 取已评估范围（有 GT 图 + OK 图）；True 仅取未评估生产图。
+    当前维值缺失（None）或未通过 fixed 维度阈值的检出不返回。
+    """
+    for img in (stats or {}).get("per_image") or []:
+        if _is_unjudged(img) != unjudged:
+            continue
+        for rec in img.get("dets") or []:
+            v = _det_record_value(rec, dim)
+            if v is None or not _passes_fixed(rec, fixed, dim):
+                continue
+            yield float(v), bool(rec[DET_COL["matched"]]), img, rec
+
+
+def sweep_counts(stats: dict, dim: str, xs, fixed: dict | None = None) -> dict:
+    """已评估范围阈值扫描 → {"xs", "normal", "over", "missed"}（与 xs 等长）。
+
+    normal(x)=命中检出且当前维≥x 的数目；over(x)=未命中检出≥x（含 OK 图
+    误检）；missed(x)=gt_total−normal(x)（一对一匹配下未命中的 GT 实例）。
+    """
+    col = DET_COL.get(dim)
+    pairs = list(_iter_eval_dets(stats, dim, fixed)) if col is not None else []
+    tp_vals = sorted(v for v, m, _i, _r in pairs if m)
+    fp_vals = sorted(v for v, m, _i, _r in pairs if not m)
+    gt_total = int((stats or {}).get("gt_total") or 0)
+    normal, over, missed = [], [], []
+    for x in xs:
+        x = float(x)
+        tp = len(tp_vals) - int(np.searchsorted(tp_vals, x, side="left"))
+        fp = len(fp_vals) - int(np.searchsorted(fp_vals, x, side="left"))
+        normal.append(tp)
+        over.append(fp)
+        missed.append(max(0, gt_total - tp))
+    return {"xs": list(xs), "normal": normal, "over": over, "missed": missed}
+
+
+def sweep_unjudged(stats: dict, dim: str, xs,
+                   fixed: dict | None = None) -> dict:
+    """未评估范围阈值扫描 → {"xs", "ok", "ng"}（图数口径，与 xs 等长）。
+
+    ng(x)=有至少一个检出（当前维≥x 且通过 fixed）的生产图数；
+    ok(x)=未评估图总数−ng(x)。
+    """
+    col = DET_COL.get(dim)
+    maxima: list = []
+    total = 0
+    for img in (stats or {}).get("per_image") or []:
+        if not _is_unjudged(img):
+            continue
+        total += 1
+        best = None
+        for rec in img.get("dets") or []:
+            v = _det_record_value(rec, dim) if col is not None else None
+            if v is None or not _passes_fixed(rec, fixed, dim):
+                continue
+            v = float(v)
+            if best is None or v > best:
+                best = v
+        if best is not None:
+            maxima.append(best)
+    maxima = sorted(maxima)
+    ng, ok = [], []
+    for x in xs:
+        g = len(maxima) - int(np.searchsorted(maxima, float(x), side="left"))
+        ng.append(g)
+        ok.append(max(0, total - g))
+    return {"xs": list(xs), "ok": ok, "ng": ng,
+            "unjudged_total": total}
+
+
+def sweep_metrics(stats: dict, dim: str, thr: float,
+                  fixed: dict | None = None) -> dict:
+    """当前维阈值 thr 处指标（联合过滤口径；面板数字行用）。
+
+    返回 tp/fp/fp_ok/precision/recall/ok_fp_per_img（已评估口径）与
+    ng_img/ok_img/unjudged_total（未评估口径）。
+    """
+    tp = fp = fp_ok = 0
+    for v, m, img, _rec in _iter_eval_dets(stats, dim, fixed):
+        if float(v) < float(thr):
+            continue
+        if m:
+            tp += 1
+        else:
+            fp += 1
+            if img.get("gt") == 0 and img.get("gt_available"):
+                fp_ok += 1
+    gt_total = int((stats or {}).get("gt_total") or 0)
+    n_ok = int((stats or {}).get("n_ok_images") or 0)
+    un = sweep_unjudged(stats, dim, [float(thr)], fixed)
+    return {"tp": tp, "fp": fp, "fp_ok": fp_ok,
+            "precision": (round(tp / (tp + fp), 4) if tp + fp else None),
+            "recall": (round(tp / gt_total, 4) if gt_total else None),
+            "ok_fp_per_img": (round(fp_ok / n_ok, 3) if n_ok else None),
+            "ng_img": un["ng"][0], "ok_img": un["ok"][0],
+            "unjudged_total": un["unjudged_total"]}

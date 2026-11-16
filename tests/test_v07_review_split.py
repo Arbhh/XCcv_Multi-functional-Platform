@@ -146,6 +146,29 @@ class ClassifyTest(unittest.TestCase):
         self.assertIn("漏检 1", line)
         self.assertIn("未评估 3", line)
 
+    def test_stats_line_unjudged_scope(self):
+        """未评估范围统计行给 OK/NG 口径（已评估/未评估解耦）。"""
+        g = {"correct": [], "missed": [], "over": [],
+             "unjudged_ok": 5, "unjudged_ng": 3, "unjudged": 8}
+        line = stats_line(g, "unjudged")
+        self.assertIn("OK 5", line)
+        self.assertIn("NG 3", line)
+        self.assertNotIn("正确", line)
+
+    def test_unjudged_ok_ng_counts(self):
+        """未评估按有无过阈检出分 OK/NG 计数（与切换后分组同口径）。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            _write_png(d / "p0.png")
+            _write_png(d / "p1.png")
+            results = [{"path": str(d / "p0.png"), "detections": [
+                            _det("黑点", 0.5, (10, 10, 60, 60))]},
+                       {"path": str(d / "p1.png"), "detections": []}]
+            stats = collect_match_stats(results, iou_thr=0.5)
+            g = classify_images(stats, {"score": 0.25})
+            self.assertEqual(g["unjudged_ok"], 1)
+            self.assertEqual(g["unjudged_ng"], 1)
+
 
 class DetsRecordTest(unittest.TestCase):
 
@@ -264,11 +287,22 @@ class TestingWindowStructureTest(unittest.TestCase):
         # 复盘页核心件
         self.assertTrue(hasattr(w.review_page, "threshold_panel"))
         self.assertTrue(hasattr(w.review_page, "cmb_run"))
-        # 再勘误①④：数据集可浏览 + 四分组（未评估组在列）
+        # 再勘误①④ + V0.7.2③：数据集可浏览 + 五分组（已评估三组 + OK/NG 两组）
         self.assertTrue(hasattr(w.review_page, "btn_browse"))
         self.assertTrue(hasattr(w.review_page, "fld_dataset"))
-        self.assertEqual(len(w.review_page.grids), 4)
-        self.assertIn("未评估", w.review_page.grp_unjudged.title())
+        self.assertEqual(len(w.review_page.grids), 5)
+        self.assertTrue(hasattr(w.review_page, "btn_scope_eval"))
+        self.assertTrue(hasattr(w.review_page, "btn_scope_unjudged"))
+        self.assertTrue(w.review_page.btn_scope_eval.isChecked())
+        self.assertTrue(w.review_page.grp_uok.isHidden())
+        w.review_page._set_scope("unjudged")
+        self.assertTrue(w.review_page.grp_correct.isHidden())
+        self.assertFalse(w.review_page.grp_uok.isHidden())
+        self.assertTrue(w.review_page.grp_ung.isVisible() or
+                        not w.review_page.grp_ung.isHidden())
+        self.assertTrue(w.review_page.threshold_panel._scope == "unjudged")
+        w.review_page._set_scope("evaluated")
+        self.assertFalse(w.review_page.grp_correct.isHidden())
         # 再勘误②：面板为 compact 上下布局（直方图不被表单挤成窄条）
         from xccv.testing.threshold_panel import ThresholdPanel
         self.assertIsInstance(w.review_page.threshold_panel, ThresholdPanel)

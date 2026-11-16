@@ -518,7 +518,7 @@ class _UltralyticsSam:
                             # 首锚点 且 面积显著小于全图掩膜（<50%）→
                             # 用户点的是窗内缺陷，采用窗内结果。原
                             # "窗内 bbox 占比<KEEP 保留"在纹路密集区
-                            # 恒保留全图块（真机"单锚取全图主体"根因）
+                            # 恒保留全图块（"单锚取全图主体"问题的根因）
                             _carea = int(cm.sum())
                             _m0area = int(m0.sum())
                             _fx = min(max(int(points[0][0]) - x1, 0),

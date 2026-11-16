@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..gui_utils import auto_cleanup_thread
+from ..i18n import localize_widget_tree, tr
 
 
 class _AnnotateThread(QThread):
@@ -47,7 +48,7 @@ class AutoAnnotateDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("AI 批量预标注")
+        self.setWindowTitle(tr("AI 批量预标注"))
         self.setMinimumWidth(560)
         self._thread = None
 
@@ -86,10 +87,10 @@ class AutoAnnotateDialog(QDialog):
         self.eps_spin.setSingleStep(0.001)
         self.eps_spin.setDecimals(4)
         self.eps_spin.setValue(0.002)
-        self.eps_spin.setToolTip("掩码转多边形的简化比例（0=不简化，顶点最密）")
+        self.eps_spin.setToolTip(tr("掩码转多边形的简化比例（0=不简化，顶点最密）"))
         self.eps_spin.setMinimumWidth(120)
         form.addRow("多边形简化比例", self.eps_spin)
-        self.skip_check = QCheckBox("跳过已有同名 JSON 的图片")
+        self.skip_check = QCheckBox(tr("跳过已有同名 JSON 的图片"))
         self.skip_check.setChecked(True)
         form.addRow("", self.skip_check)
         try:
@@ -118,16 +119,17 @@ class AutoAnnotateDialog(QDialog):
         self.btn_cancel_run.clicked.connect(self._cancel_run)
         self.btn_close.clicked.connect(self.close)
         v.addWidget(btns)
+        localize_widget_tree(self)
 
     # ---------- 选择 ----------
     def _pick_model(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择模型权重", "", "模型 (*.pt)")
+            self, tr("选择模型权重"), "", tr("模型 (*.pt)"))
         if path:
             self.model_edit.setText(path)
 
     def _pick_folder(self):
-        path = QFileDialog.getExistingDirectory(self, "选择图片文件夹")
+        path = QFileDialog.getExistingDirectory(self, tr("选择图片文件夹"))
         if path:
             self.folder_edit.setText(path)
 
@@ -138,10 +140,10 @@ class AutoAnnotateDialog(QDialog):
         model_path = self.model_edit.text().strip()
         folder = self.folder_edit.text().strip()
         if not model_path or not Path(model_path).is_file():
-            self.status.setText("请选择有效的模型权重文件")
+            self.status.setText(tr("请选择有效的模型权重文件"))
             return
         if not folder:
-            self.status.setText("请选择图片文件夹")
+            self.status.setText(tr("请选择图片文件夹"))
             return
         self.btn_start.setEnabled(False)
         self.btn_cancel_run.setEnabled(True)
@@ -167,7 +169,7 @@ class AutoAnnotateDialog(QDialog):
     def _cancel_run(self):
         if self._thread is not None:
             self._thread.cancel()
-            self.status.setText("取消中…（当前图完成后停止）")
+            self.status.setText(tr("取消中…（当前图完成后停止）"))
 
     def _on_progress(self, done: int, total: int, name: str):
         self.bar.setValue(int(done * 100 / max(total, 1)))
@@ -185,4 +187,4 @@ class AutoAnnotateDialog(QDialog):
     def _on_failed(self, msg: str):
         self.btn_start.setEnabled(True)
         self.btn_cancel_run.setEnabled(False)
-        self.status.setText(f"失败：{msg}")
+        self.status.setText(f"{tr('失败：')}{msg}")

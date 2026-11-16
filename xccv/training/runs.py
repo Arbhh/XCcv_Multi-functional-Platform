@@ -53,7 +53,9 @@ class RunRecord:
 
     @property
     def status_text(self) -> str:
-        return STATUS_TEXT.get(self.status, self.status)
+        from ..i18n import tr
+
+        return tr(STATUS_TEXT.get(self.status, self.status))
 
     @property
     def model_name(self) -> str:

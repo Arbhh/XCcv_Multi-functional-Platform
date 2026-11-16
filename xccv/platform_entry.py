@@ -50,8 +50,10 @@ def _splash_icon(key: str):
 
 def _splash_message(heavy: bool) -> str:
     """加载中文案（early_splash 与 run_platform 共用：一致则接管时不重绘）。"""
-    return ("正在加载深度学习组件…\n首次启动约需 1~2 分钟，请耐心等待"
-            if heavy else "正在加载…")
+    from .i18n import tr
+
+    return tr("正在加载深度学习组件…\n首次启动约需 1~2 分钟，请耐心等待"
+              if heavy else "正在加载…")
 
 
 _EARLY_APP = None  # early_splash 创建的 QApplication（模块级保活，见下）
@@ -71,9 +73,11 @@ def early_splash(key: str, display_name: str, heavy: bool = False) -> None:
     """
     if "--selftest" in sys.argv:
         return
+    from .i18n import tr
     from .taskbar import aumid_for, set_process_app_user_model_id
     from .win_qos import opt_out_power_throttling
 
+    display_name = tr(display_name)   # 闪屏标题双语
     # AUMID 须先于任何窗口（任务栏分组，v0.5.5）；QoS 越早越好
     set_process_app_user_model_id("XCcv.Main" if key == "main" else aumid_for(key))
     opt_out_power_throttling()
@@ -116,6 +120,9 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
 
     set_process_app_user_model_id(aumid_for(key))
     high_qos = opt_out_power_throttling()  # 退出 EcoQoS：后台/未响应时推理不被降频（3.4s→8.8s 实测）
+    from .i18n import tr
+
+    display_name = tr(display_name)   # 闪屏标题双语
     log_path = None
     if enable_logging:
         from .logsetup import setup_logging
@@ -161,9 +168,33 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     except Exception:
         splash.finish()
         raise
+    from .i18n import localize_widget_tree  # 英文模式替换层
+
+    localize_widget_tree(window)
     window.show()
     splash.finish(window)
     register(key, window)
+    # 语言切换免重启：偏好文件变化即同进程重建平台窗口（先建新窗再关旧窗）
+    from .i18n import install_language_watcher
+
+    # watcher 必须跨重建转移到新窗持有（提前析构会撞监视线程销毁竞态）
+    _lang_watcher = install_language_watcher(lambda: None, parent=None)
+
+    def _rebuild_window():
+        nonlocal window
+        new_window = build()
+        localize_widget_tree(new_window)
+        new_window.show()
+        register(key, new_window)
+        if _lang_watcher is not None:
+            setattr(new_window, "_lang_watcher", _lang_watcher)
+        window.close()          # 旧窗走 closeEvent 清理线程/缓存
+        window.deleteLater()
+        window = new_window
+
+    if _lang_watcher is not None:
+        _lang_watcher.set_rebuild(_rebuild_window)
+        setattr(window, "_lang_watcher", _lang_watcher)  # 保活引用
     if log_path is not None:
         import logging
 

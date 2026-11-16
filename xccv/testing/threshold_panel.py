@@ -1,23 +1,26 @@
-"""O2（V0.7）+ V0.7.1 用户勘误：批量分数/维度分布 + 阈值面板。
+"""O2（V0.7）+ V0.7.2 用户重设计：维度阈值扫描曲线面板。
 
-批量完成后，把 GT 匹配统计（engine.metrics.batch_match 的 match_stats）
-画成"带平滑线的散点图"（用户 V0.7.1 设定）：正常 / 过检 / 漏检三条不同
-颜色的曲线。拖动阈值线或在输入框键入数值，即零推理成本实时刷新该阈值
-下的精确率 / 召回率 / OK 误检。
+曲线含义（定稿口径）——**图口径**：每条曲线给出阈值=x 时
+对应**分组的图数**，与右侧分组/统计行完全同口径：
+- 正确：该阈值下全命中且无误检的图数；
+- 过检：存在误检（含 OK 图误检）的图数；
+- 漏检：无过检且有 GT 未命中的图数；
+恒有 正确+过检+漏检 = 已评估图数。未评估范围（无 GT 生产图）：
+OK/NG 两组图数（NG=有检出通过阈值的图数）。
+拖动阈值线或键入数值，三条曲线上的读数即该阈值处的实际分组数量，
+与右侧分组同口径（其他已启用维度按各自阈值联合过滤）。
+「精确率/召回率/OK误检」数字行维持检出/GT 实例口径（与训练评估同源）。
 
-V0.7.1 坐标轴约定（用户规定，固定不随拖动变化）：
-- y 轴 = 检出数，从 0 起，上限随本批数据的最大分箱计数自适应外扩；
+坐标轴约定（用户规定，固定不随拖动变化）：
+- y 轴 = 数量（图数），从 0 起，上限随曲线峰值外扩；
 - x 轴按维度：置信度固定 0~1（两位小数）；面积/短边/长边从 0 到本批
   最大值外扩一部分（整数刻度）；灰度差从 0 到最大值外扩（两位小数）；
-- 散点过多时自动分箱（如面积按区间聚合）后连线，轴上限取整到箱宽整数倍；
-- 三条曲线：正常=命中 GT 的检出（TP）；过检=误检（含 OK 图误检）；
-  漏检=漏检 GT 框自身的几何维度分布（仅面积/短边/长边可画——分数与
-  灰度类维度 GT 侧无值）。
+- 轴规划取全量数据集（已评估+未评估一起），已评估/未评估切换不重排轴；
+- 只有阈值线可拖。已评估/未评估切换由宿主页控制（set_scope）。
 
-多维度阈值（O2 扩展）：每维度独立记忆阈值与"参与过滤"开关；拖线或输入
-自动启用该维度；"生成流程图模板"把启用维度编排成 IR 流程图
-（threshold_flow）落在 <模型目录>/flow/；"应用到检出流程"维持只写 conf 维。
-前景占比维度按用户 V0.7.1 指示从面板移除（流程图节点保留不受影响）。
+多维度阈值：每维度独立记忆阈值与"参与过滤"开关；拖线或输入自动启用
+该维度；"生成流程图模板"把启用维度编排成 IR 流程图（threshold_flow）
+落在 <模型目录>/flow/；"应用到检出流程"维持只写 conf 维。
 
 纯展示组件：数据经 set_stats 注入；applyRequested/generateFlowRequested
 由宿主窗口接线落盘。UI 文案遵循项目总体约定：简短精确、不用括号补充，
@@ -33,12 +36,12 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QLabel, QPushButton,
                              QVBoxLayout, QWidget)
 
-from ..engine.metrics.batch_match import threshold_metrics, threshold_metrics_for
+from ..engine.metrics.batch_match import sweep_metrics, sweep_unjudged
 from ..ui_style import token
 
-_GREEN = "#2E9E5B"   # 正常（TP，命中 GT）
-_RED = "#D64545"     # 过检（FP，含 OK 图误检）
-_BLUE = "#25406B"    # 漏检（漏检 GT 框几何维度）
+_GREEN = "#2E9E5B"   # 正常 / OK
+_RED = "#D64545"     # 过检 / NG
+_BLUE = "#25406B"    # 漏检
 
 # 维度规格：key → (显示名, 小数位, 步长, 无数据时的 x 轴上限)
 # score 走 0~1 固定通道；面积/短边/长边整数、灰度差两位小数（用户口径）
@@ -51,8 +54,6 @@ _DIM_SPECS = {
 }
 _DIM_ORDER = ("score", "area", "short", "long", "gray_diff")
 _DIM_DEFAULTS = {"area": 0.0, "short": 0.0, "long": 0.0, "gray_diff": 15.0}
-# 漏检曲线仅几何维度可画（GT 框没有分数/前景/灰度值）
-_MISSABLE = ("area", "short", "long")
 
 _TICK_TARGET = 6          # x 轴主刻度目标个数
 _Y_PAD = 1.15             # y 轴上限外扩系数
@@ -84,24 +85,16 @@ def _axis_ticks(x_max: float, decimals: int) -> list:
     return [out]   # pyqtgraph setTicks 的层级结构
 
 
-def _smooth(counts: np.ndarray) -> np.ndarray:
-    """分箱计数轻平滑（[1,2,1] 卷积两轮）——平滑折线不丢峰位。"""
-    k = np.array([1.0, 2.0, 1.0])
-    k /= k.sum()
-    out = counts.astype(float)
-    for _ in range(2):
-        pad = np.concatenate(([out[0]], out, [out[-1]]))
-        out = np.convolve(pad, k, mode="valid")
-    return out
-
-
 class ThresholdPanel(QWidget):
-    """分数/维度分布平滑散点线图 + 可拖阈值线 + 阈值输入框 + 实时指标。"""
+    """维度阈值扫描曲线 + 可拖阈值线 + 阈值输入框 + 实时指标。
+
+    曲线读数 = 阈值处 正常/过检/漏检（已评估）或 OK/NG（未评估）总数。
+    """
 
     thresholdChanged = pyqtSignal(float)
     applyRequested = pyqtSignal(float)
     generateFlowRequested = pyqtSignal(dict)
-    # 项目复盘页（用户勘误）：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
+    # 项目复盘页：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
     thresholdsChanged = pyqtSignal(dict)
 
     def __init__(self, parent=None, compact: bool = False):
@@ -114,6 +107,7 @@ class ThresholdPanel(QWidget):
         self._stats: dict = {}
         self._current = "score"
         self._x_max = 1.0     # 当前维度固定 x 轴上限（V0.7.1 坐标轴约定）
+        self._scope = "evaluated"   # evaluated=正常/过检/漏检；unjudged=OK/NG
         # 每维度独立状态：{key: {"thr": float, "enabled": bool}}
         self._dim_state: dict = {"score": {"thr": 0.25, "enabled": True}}
         lay = (QVBoxLayout(self) if compact else QHBoxLayout(self))
@@ -123,7 +117,12 @@ class ThresholdPanel(QWidget):
         self.plot.setBackground(None)
         self.plot.setMouseEnabled(x=False, y=False)
         self.plot.showGrid(x=True, y=True, alpha=0.25)
-        self.plot.setLabel("left", "检出数")
+        from ..i18n import tr
+
+        self.plot.setLabel("left", tr("数量"))
+        self.plot.setToolTip(tr(
+            "曲线=各分组图数随阈值变化（与右侧分组同口径）；"
+            "精确率/召回率=检出与GT实例口径"))
         self.plot.addLegend(offset=(8, 6))
         self._line = pg.InfiniteLine(
             pos=0.25, angle=90, movable=True,
@@ -142,8 +141,10 @@ class ThresholdPanel(QWidget):
             right = QFormLayout()
 
         self.cmb_dim = QComboBox()
+        from ..i18n import tr as _tr
+
         for key in _DIM_ORDER:
-            self.cmb_dim.addItem(_dim_label(key), key)
+            self.cmb_dim.addItem(_tr(_dim_label(key)), key)
         self.cmb_dim.currentIndexChanged.connect(self._on_dim_changed)
         # 阈值数字输入框（V0.7.1 用户追加：拖线之外可直接键入）
         self.spin_thr = QDoubleSpinBox()
@@ -159,16 +160,19 @@ class ThresholdPanel(QWidget):
         self.lbl_ok = QLabel("—")
         if compact:
             # 行1：维度 + 阈值输入 + 参与过滤；行2：三指标；行3：两按钮
+            self.lbl_p_name = QLabel("精确率")
+            self.lbl_r_name = QLabel("召回率")
+            self.lbl_o_name = QLabel("OK误检")
             right.addWidget(QLabel("维度"), 0, 0)
             right.addWidget(self.cmb_dim, 0, 1)
             right.addWidget(QLabel("阈值"), 0, 2)
             right.addWidget(self.spin_thr, 0, 3)
             right.addWidget(self.cb_enable, 0, 4, 1, 2)
-            right.addWidget(QLabel("精确率"), 1, 0)
+            right.addWidget(self.lbl_p_name, 1, 0)
             right.addWidget(self.lbl_precision, 1, 1)
-            right.addWidget(QLabel("召回率"), 1, 2)
+            right.addWidget(self.lbl_r_name, 1, 2)
             right.addWidget(self.lbl_recall, 1, 3)
-            right.addWidget(QLabel("OK误检"), 1, 4)
+            right.addWidget(self.lbl_o_name, 1, 4)
             right.addWidget(self.lbl_ok, 1, 5)
             right.setColumnStretch(6, 1)
         else:
@@ -182,6 +186,7 @@ class ThresholdPanel(QWidget):
                     right.addRow(row, w)
                 else:
                     right.addRow(w)
+            self.lbl_p_name = self.lbl_r_name = self.lbl_o_name = None
         lay.addLayout(right)
 
         self.lbl_hint = QLabel("")
@@ -217,34 +222,48 @@ class ThresholdPanel(QWidget):
         """注入 match_stats；按维度可用性重建下拉（无数据维度不出现）。"""
         self._stats = stats or {}
         self._dim_state = {"score": {"thr": float(conf), "enabled": True}}
-        dims = self._stats.get("dims") or {}
         for key in _DIM_ORDER[1:]:
-            d = dims.get(key) or {}
-            has = any(d.get(b) for b in ("green", "red_defect", "red_ok"))
-            if has:
+            d = (self._stats.get("dims") or {}).get(key) or {}
+            has_dims = any(d.get(b) for b in ("green", "red_defect", "red_ok"))
+            if has_dims or self._axis_values(key):
                 self._dim_state[key] = {
                     "thr": float(_DIM_DEFAULTS.get(key, 0.0)), "enabled": False}
         combo = self.cmb_dim
+        from ..i18n import tr
+
         combo.blockSignals(True)
         combo.clear()
         for key in _DIM_ORDER:
             if key == "score" or key in self._dim_state:
-                combo.addItem(_dim_label(key), key)
+                combo.addItem(tr(_dim_label(key)), key)
         combo.blockSignals(False)
         self._current = "score"
         combo.setCurrentIndex(0)
         self._sync_dim_widgets()
         self._redraw()
+        from ..i18n import tr
+
         if not self._stats.get("gt_available"):
-            self.lbl_hint.setText(
+            self.lbl_hint.setText(tr(
                 "批量目录未找到同名标注 JSON：分布与统计需要真值标注，"
-                "请补标注或改用数据集目录批量。")
+                "请补标注或改用数据集目录批量。"))
             self.btn_apply.setEnabled(True)
             self.btn_flow.setEnabled(True)
             return
         self.lbl_hint.setText("")
         self.btn_apply.setEnabled(True)
         self.btn_flow.setEnabled(True)
+
+    def set_scope(self, scope: str):
+        """评估范围切换：evaluated=正常/过检/漏检；
+        unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化，
+        切换即重绘曲线并同步输入框。"""
+        scope = "unjudged" if scope == "unjudged" else "evaluated"
+        if scope == self._scope:
+            return
+        self._scope = scope
+        self._sync_dim_widgets()
+        self._redraw()
 
     def current_threshold(self) -> float:
         st = self._dim_state.get(self._current)
@@ -266,39 +285,53 @@ class ThresholdPanel(QWidget):
     def _emit_generate_flow(self):
         dims = self.enabled_dims()
         if not dims:
-            self.lbl_hint.setText("请先拖动阈值线或键入阈值启用至少一个维度")
+            from ..i18n import tr
+
+            self.lbl_hint.setText(
+                tr("请先拖动阈值线或键入阈值启用至少一个维度"))
             return
         self.generateFlowRequested.emit(dims)
 
-    def _series_values(self, key: str) -> list:
-        """当前维度的曲线数据 → [(名称, 颜色, 值列表)]。
+    # ---- 数据通道 ----
+    def _axis_values(self, key: str) -> list:
+        """本批数据该维度全部检出值（x 轴规划用，含未过阈值的）。
 
-        score 维取顶层分数表；其余维度取 dims 表；过检合并缺陷图误检与
-        OK 图误检两条来源；漏检线只给几何维度（dims_missed）。
-        """
-        if key == "score":
-            green = list(self._stats.get("green") or [])
-            over = (list(self._stats.get("red_defect") or [])
-                    + list(self._stats.get("red_ok") or []))
-        else:
-            d = (self._stats.get("dims") or {}).get(key) or {}
-            green = list(d.get("green") or [])
-            over = (list(d.get("red_defect") or [])
-                    + list(d.get("red_ok") or []))
-        series = [("正常", _GREEN, green), ("过检", _RED, over)]
-        if key in _MISSABLE:
-            missed = (self._stats.get("dims_missed") or {}).get(key) or []
-            if missed:
-                series.append(("漏检", _BLUE, missed))
-        return series
+        坐标轴按**数据集**规划（用户约定"轴只随数据集变化"），
+        已评估/未评估切换不重排轴——否则阈值线会被切出视图、
+        输入框范围失真。范围只影响曲线口径与计数。
+        per_image 无逐检出记录时回退 dims 汇总表（旧缓存/轻量 stats 兼容）。"""
+        from ..engine.metrics.batch_match import DET_COL
+
+        col = DET_COL.get(key)
+        if col is None:
+            return []
+        vals = []
+        for img in (self._stats.get("per_image") or []):
+            for rec in img.get("dets") or []:
+                v = rec[col]
+                if v is not None:
+                    vals.append(float(v))
+        if vals:
+            return vals
+        d = (self._stats.get("dims") or {}).get(key) or {}
+        out = []
+        for b in ("green", "red_defect", "red_ok"):
+            out.extend(float(v) for v in (d.get(b) or []))
+        return out
+
+    def _sweep_fixed(self) -> dict:
+        """其他已启用维度的阈值（联合过滤口径，与复盘分组同源）。"""
+        return {k: float(v["thr"]) for k, v in self._dim_state.items()
+                if k != self._current and v.get("enabled")
+                and float(v["thr"]) > 0}
 
     def _plan_axis(self, key: str) -> tuple:
-        """固定轴规划 → (x 上限, 分箱边界)。score 恒 [0,1] 按 0.05 分箱；
-        其余维度约 20 箱、箱宽取整档，轴上限=箱宽×箱数（边界不越轴）。"""
+        """固定轴规划 → (x 上限, 扫描点)。score 恒 [0,1] 按 0.05；
+        其余维度约 20 档、档宽取整，轴上限=档宽×档数（边界不越轴）。"""
         min_w = 1.0 if _DIM_SPECS[key][1] == 0 else 0.01
         if key == "score":
             return 1.0, np.linspace(0.0, 1.0, 21)
-        vals = [v for _n, _c, vs in self._series_values(key) for v in vs]
+        vals = self._axis_values(key)
         if not vals:
             x_max = float(_DIM_SPECS[key][3])
             return x_max, np.linspace(0.0, x_max, _N_BINS + 1)
@@ -319,6 +352,8 @@ class ThresholdPanel(QWidget):
 
     def _sync_dim_widgets(self):
         """维度切换后同步输入框（范围/小数位/步长/值）与参与过滤勾选。"""
+        from ..i18n import tr
+
         key = self._current
         st = self._dim_state.get(key)
         self._x_max, _bins = self._plan_axis(key)
@@ -336,7 +371,7 @@ class ThresholdPanel(QWidget):
         self.cb_enable.blockSignals(True)
         self.cb_enable.setChecked(bool(st and st.get("enabled")))
         self.cb_enable.blockSignals(False)
-        self.plot.setLabel("bottom", _dim_label(key))
+        self.plot.setLabel("bottom", tr(_dim_label(key)))
 
     def _on_enable_toggled(self, state: int):
         st = self._dim_state.get(self._current)
@@ -384,32 +419,36 @@ class ThresholdPanel(QWidget):
         if leg is not None:
             leg.clear()   # pg 图例不随 plot.clear() 清空，重绘前手动清
         self.plot.addItem(self._line)
-        stats = self._stats
         key = self._current
-        if not stats.get("gt_available"):
-            self._x_max, _ = self._plan_axis(key)
-            self._apply_fixed_axes(key)
-            self.plot.setYRange(0, 4.0, padding=0)
-            self._refresh_numbers()
-            return
-        series = self._series_values(key)
-        self._x_max, bins = self._plan_axis(key)
+        self._x_max, xs = self._plan_axis(key)
         self._apply_fixed_axes(key)
-        centers = (bins[:-1] + bins[1:]) / 2
-        clip = (lambda v: np.clip(np.asarray(v, dtype=float), 0.0, 1.0)
-                if key == "score" else np.asarray(v, dtype=float))
+        if self._scope == "unjudged":
+            sw = sweep_unjudged(self._stats, key, xs, self._sweep_fixed())
+            series = [("OK", _GREEN, sw["ok"]), ("NG", _RED, sw["ng"])]
+        else:
+            # 曲线=**图口径**——该阈值下三组的图数，
+            # 与右侧分组/统计行完全同口径（正确 31/过检 53 即曲线读数）
+            from .review_logic import sweep_group_counts
+            from ..i18n import tr
+
+            sw = sweep_group_counts(self._stats, key, xs, self._sweep_fixed())
+            series = [(tr("正确"), _GREEN, sw["correct"]),
+                      (tr("过检"), _RED, sw["over"]),
+                      (tr("漏检"), _BLUE, sw["missed"])]
+            if not self._stats.get("gt_available"):
+                # 无 GT：生产图无真值，全在未评估性质——只画有检出过阈图数
+                swu = sweep_unjudged(self._stats, key, xs, self._sweep_fixed())
+                series = [(tr("过检"), _RED, swu["ng"])]
         top = 1
-        for name, color, values in series:
-            if not values:
+        for name, color, ys in series:
+            if not ys or max(ys) <= 0:
                 continue
-            counts, _ = np.histogram(clip(values), bins=bins)
-            if not counts.any():
-                continue
-            top = max(top, int(counts.max()))
-            self.plot.plot(
-                centers, _smooth(counts), pen=pg.mkPen(color, width=2),
-                symbol="o", symbolSize=6, symbolBrush=pg.mkBrush(color),
-                symbolPen=pg.mkPen(None), name=name, antialias=True)
+            top = max(top, int(max(ys)))
+            self.plot.plot(np.asarray(xs, dtype=float), np.asarray(ys, float),
+                           pen=pg.mkPen(color, width=2),
+                           symbol="o", symbolSize=5,
+                           symbolBrush=pg.mkBrush(color),
+                           symbolPen=pg.mkPen(None), name=name, antialias=True)
         y_max = max(_nice_ceil(top * _Y_PAD), 4)
         self.plot.setYRange(0, float(y_max), padding=0)
         self._refresh_numbers()
@@ -419,20 +458,47 @@ class ThresholdPanel(QWidget):
         x_max = self._x_max
         dec = _DIM_SPECS[key][1]
         self.plot.setXRange(0.0, x_max, padding=0)
+        # 注意：底部轴禁止 setWidth——那会钳死轴控件宽度，刻度文字全部
+        # 挤进左端几十像素；左轴保留预留宽度
         self.plot.getAxis("bottom").setTicks(_axis_ticks(x_max, dec))
-        self.plot.getAxis("bottom").setWidth(56)
         self.plot.getAxis("left").setWidth(42)
 
     def _refresh_numbers(self):
         key = self._current
         t = self.current_threshold()
-        if key == "score":
-            m = threshold_metrics(self._stats, t)
+        if self._scope == "unjudged":
+            m = sweep_metrics(self._stats, key, t, self._sweep_fixed())
+            if self.lbl_p_name is not None:
+                self.lbl_p_name.setText("NG")
+                self.lbl_r_name.setText("OK")
+                self.lbl_o_name.setText("")
+            self.lbl_precision.setText(str(m["ng_img"]))
+            self.lbl_recall.setText(str(m["ok_img"]))
+            self.lbl_ok.setText("—")
+            return
+        from ..engine.metrics.batch_match import (threshold_metrics,
+                                                  threshold_metrics_for)
+
+        if not self._has_per_dets():
+            # 无逐检出记录（旧缓存/轻量 stats）：回退 dims 汇总口径
+            m = (threshold_metrics(self._stats, t) if key == "score"
+                 else threshold_metrics_for(self._stats, key, t))
         else:
-            m = threshold_metrics_for(self._stats, key, t)
+            m = sweep_metrics(self._stats, key, t, self._sweep_fixed())
+        if self.lbl_p_name is not None:
+            self.lbl_p_name.setText("精确率")
+            self.lbl_r_name.setText("召回率")
+            self.lbl_o_name.setText("OK误检")
         self.lbl_precision.setText(
             f"{m['precision']:.3f}" if m["precision"] is not None else "—")
         self.lbl_recall.setText(
             f"{m['recall']:.3f}" if m["recall"] is not None else "—")
         self.lbl_ok.setText(
-            f"{m['ok_fp_per_img']:.2f}" if m["ok_fp_per_img"] is not None else "—")
+            f"{m['ok_fp_per_img']:.2f}" if m["ok_fp_per_img"] is not None
+            else "—")
+
+    def _has_per_dets(self) -> bool:
+        from ..engine.metrics.batch_match import _is_unjudged
+
+        return any(not _is_unjudged(img) and img.get("dets")
+                   for img in (self._stats.get("per_image") or []))

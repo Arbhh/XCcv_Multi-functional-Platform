@@ -39,7 +39,9 @@ class LoadingSplash(QWidget):
                             | Qt.WindowStaysOnTopHint)
         self.setFixedSize(460, 176)
         self._name = name
-        self._message = message or "正在加载组件…"
+        from .i18n import tr
+
+        self._message = message or tr("正在加载组件…")
         self._icon = icon  # QPixmap | None
         self._phase = 0.0  # 动画相位（0~1 循环）
 

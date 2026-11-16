@@ -1,14 +1,15 @@
-"""项目复盘页（用户勘误 2026-11-13）：选项目 + 训练记录 → 自动对训练数据集
-批量推理一次 → 三分组缩略网格（正确/漏检/过检）+ 维度阈值复用调整。
+"""项目复盘页：选项目 + 训练记录 → 自动对训练数据集
+批量推理一次 → 分组缩略网格 + 维度阈值复用调整。
 
 与「标准」页的分工（界面解耦勘误）：
 - 本页不可自由选模型/图片，只按 项目 → 训练记录 定位权重，默认批量运行
   该项目的训练数据集；批量参数（conf/iou/检出流程）在控制行暴露可改；
 - 一次加载只推理一次，结果（match_stats）落临时缓存文件；关闭平台或
   重新选择项目/记录时清理；此后拖维度阈值只复用结果重新分组，零重推理；
-- 三分组口径（VIMO 结果分析的过检/漏检）见 review_logic：过检 > 漏检 >
-  正确，无 GT 图计"未评估"不进组；缩略网格样式与训练平台数据网格同源
-  （懒加载 + LRU，双击系统看图打开）。
+- 已评估/未评估解耦：「已评估」显示 正确/漏检/过检 三组
+  （过检 > 漏检 > 正确，见 review_logic），「未评估」显示无标注生产图按
+  检出过阈与否分 OK/NG 两组；左侧阈值曲线随范围同步换口径；
+- 缩略网格样式与训练平台数据网格同源（懒加载 + LRU，双击系统看图打开）。
 """
 
 from __future__ import annotations
@@ -151,7 +152,7 @@ class ReviewThread(QThread):
 
 
 class ProjectReviewPage(QWidget):
-    """复盘页：控制行 + 维度阈值面板 + 三分组缩略网格 + 统计行。"""
+    """复盘页：控制行 + 维度阈值面板 + 范围切换分组缩略网格 + 统计行。"""
 
     openReviewRequested = pyqtSignal()
     openCompareRequested = pyqtSignal()
@@ -195,17 +196,19 @@ class ProjectReviewPage(QWidget):
         # 换成任意文件夹（如新生产图目录）；换目录即清缓存清结果
         self.fld_dataset = QLineEdit()
         self.fld_dataset.setReadOnly(True)
-        self.btn_browse = QPushButton("浏览…")
+        from ..i18n import tr
+
+        self.btn_browse = QPushButton(tr("浏览…"))
         self.btn_browse.setToolTip(
-            "复盘数据集默认为本项目的训练数据集；点此选择其他文件夹"
-            "（如新一批生产图）后点「开始复盘」")
+            tr("复盘数据集默认为本项目的训练数据集；点此选择其他文件夹")
+            + tr("（如新一批生产图）后点「开始复盘」"))
         self.btn_browse.clicked.connect(self._browse_dataset)
         self.spin_conf = QDoubleSpinBox()
         self.spin_conf.setDecimals(2)
         self.spin_conf.setRange(0.01, 1.0)
         self.spin_conf.setSingleStep(0.05)
         self.spin_conf.setValue(0.25)
-        self.spin_conf.setToolTip("批量推理的置信度下限（拖线调整的下限）")
+        self.spin_conf.setToolTip(tr("批量推理的置信度下限（拖线调整的下限）"))
         self.spin_iou = QDoubleSpinBox()
         self.spin_iou.setDecimals(2)
         self.spin_iou.setRange(0.05, 0.9)
@@ -232,8 +235,8 @@ class ProjectReviewPage(QWidget):
         f1.addWidget(self.btn_start, 5, 0, 1, 2)
         lv.addWidget(g1)
 
-        g2 = QGroupBox("维度阈值")
-        g2.setToolTip("拖动阈值线或键入阈值后自动重新分组，不重新推理")
+        g2 = QGroupBox(tr("维度阈值"))
+        g2.setToolTip(tr("拖动阈值线或键入阈值后自动重新分组，不重新推理"))
         v2 = QVBoxLayout(g2)
         from .threshold_panel import ThresholdPanel
 
@@ -246,10 +249,10 @@ class ProjectReviewPage(QWidget):
         lv.addWidget(g2, stretch=1)
 
         row = QHBoxLayout()
-        self.btn_review = QPushButton("复判与回流…")
+        self.btn_review = QPushButton(tr("复判与回流…"))
         self.btn_review.setEnabled(False)
         self.btn_review.clicked.connect(self.openReviewRequested)
-        self.btn_ab = QPushButton("模型 A/B 比对…")
+        self.btn_ab = QPushButton(tr("模型 A/B 比对…"))
         self.btn_ab.setEnabled(False)
         self.btn_ab.clicked.connect(self.openCompareRequested)
         row.addWidget(self.btn_review)
@@ -257,26 +260,45 @@ class ProjectReviewPage(QWidget):
         lv.addLayout(row)
 
         self.lbl_hint = QLabel(
-            "对所选数据集批量推理一次，调阈值即时重新分组；"
-            "OK 判定与训练平台一致，无 GT 图进未评估组")
+            tr("对所选数据集批量推理一次，调阈值即时重新分组"))
         self.lbl_hint.setObjectName("hint")
         self.lbl_hint.setWordWrap(True)
         lv.addWidget(self.lbl_hint)
         root.addWidget(left)
 
-        # ---- 右侧：四分组缩略网格（未评估=无 GT 生产图，再勘误④） ----
+        # ---- 右侧：范围切换 + 分组缩略网格（已评估/未评估解耦） ----
         right = QWidget()
         rv = QVBoxLayout(right)
         rv.setContentsMargins(0, 0, 0, 0)
         rv.setSpacing(8)
+        scope_row = QHBoxLayout()
+        self._scope = "evaluated"
+        self.btn_scope_eval = QPushButton("已评估")
+        self.btn_scope_eval.setObjectName("seg")
+        self.btn_scope_eval.setCheckable(True)
+        self.btn_scope_eval.setChecked(True)
+        self.btn_scope_eval.setToolTip(tr("有 GT 标注或 OK 目录的图"))
+        self.btn_scope_eval.clicked.connect(
+            lambda: self._set_scope("evaluated"))
+        self.btn_scope_unjudged = QPushButton("未评估")
+        self.btn_scope_unjudged.setObjectName("seg")
+        self.btn_scope_unjudged.setCheckable(True)
+        self.btn_scope_unjudged.setToolTip(tr("无标注生产图，按检出分 OK/NG"))
+        self.btn_scope_unjudged.clicked.connect(
+            lambda: self._set_scope("unjudged"))
+        scope_row.addWidget(self.btn_scope_eval)
+        scope_row.addWidget(self.btn_scope_unjudged)
+        scope_row.addStretch(1)
+        rv.addLayout(scope_row)
         self.grp_correct = QGroupBox("正确 ✓（0）")
         self.grp_missed = QGroupBox("漏检（0）")
         self.grp_over = QGroupBox("过检（0）")
-        self.grp_unjudged = QGroupBox("未评估（0）")
-        self.grp_unjudged.setToolTip("无 GT 标注的图：仅展示检出供肉眼确认，不参与判定")
+        self.grp_uok = QGroupBox("OK（0）")
+        self.grp_ung = QGroupBox("NG（0）")
+        self.grp_ung.setToolTip(tr("有检出通过阈值的未评估图，检出供肉眼确认"))
         self.grids = {}
         for g in (self.grp_correct, self.grp_missed, self.grp_over,
-                  self.grp_unjudged):
+                  self.grp_uok, self.grp_ung):
             gv = QVBoxLayout(g)
             gv.setContentsMargins(8, 4, 8, 6)
             lst = QListWidget()
@@ -291,12 +313,35 @@ class ProjectReviewPage(QWidget):
             gv.addWidget(lst)
             self.grids[g] = lst
             rv.addWidget(g, stretch=1)
+        self._set_scope("evaluated", initial=True)
+        # 组标题基名（V0.7.2 i18n：动态改题走 tr，不解析旧标题）
+        self._group_bases = {
+            self.grp_correct: "正确 ✓",
+            self.grp_missed: "漏检",
+            self.grp_over: "过检",
+            self.grp_uok: "OK",
+            self.grp_ung: "NG",
+        }
         self.lbl_stats = QLabel("尚未复盘")
         self.lbl_stats.setObjectName("hint")
         rv.addWidget(self.lbl_stats)
         root.addWidget(right, stretch=1)
 
         self._refresh_projects()
+
+    def _set_scope(self, scope: str, initial: bool = False):
+        """已评估/未评估解耦切换：分组与曲线同步换口径。"""
+        scope = "unjudged" if scope == "unjudged" else "evaluated"
+        self._scope = scope
+        self.btn_scope_eval.setChecked(scope == "evaluated")
+        self.btn_scope_unjudged.setChecked(scope == "unjudged")
+        for g in (self.grp_correct, self.grp_missed, self.grp_over):
+            g.setVisible(scope == "evaluated")
+        for g in (self.grp_uok, self.grp_ung):
+            g.setVisible(scope == "unjudged")
+        self.threshold_panel.set_scope(scope)
+        if not initial:
+            self._regroup(self.threshold_panel.enabled_dims())
 
     # ---------- 项目 / 记录 ----------
     def _refresh_projects(self):
@@ -369,10 +414,12 @@ class ProjectReviewPage(QWidget):
         self.btn_review.setEnabled(False)
         self.btn_ab.setEnabled(False)
 
-    @staticmethod
-    def _set_group_title(group: QGroupBox, n: int):
-        name = group.title().rsplit("（", 1)[0]
-        group.setTitle(f"{name}（{n}）")
+    def _set_group_title(self, group, n: int):
+        """组标题 = tr 基名 + 计数（EN 模式下基名经 i18n 表）。"""
+        from ..i18n import tr
+
+        base = self._group_bases.get(group, group.title())
+        group.setTitle(f"{tr(base)} ({n})")
 
     # ---------- 复盘批量 ----------
     def _start_review(self):
@@ -384,24 +431,25 @@ class ProjectReviewPage(QWidget):
             self.lbl_hint.setText("该项目暂无训练记录；请先在训练平台完成训练")
             return
         from ..training.project import load_project
+        from ..i18n import tr
 
         try:
             p = load_project(self.cmb_project.currentText())
         except Exception as e:  # noqa: BLE001
-            self.lbl_hint.setText(f"项目读取失败：{e}")
+            self.lbl_hint.setText(f"{tr('项目读取失败：')}{e}")
             return
         weights = Path(run_dir) / "best.pt"
         if not weights.is_file():
-            self.lbl_hint.setText("该训练记录没有 best.pt 权重（训练未完成）")
+            self.lbl_hint.setText(tr("该训练记录没有 best.pt 权重"))
             return
         dataset = Path(self.fld_dataset.text().strip() or p.dataset_dir)
         if not dataset.is_dir():
-            self.lbl_hint.setText(f"数据集目录不存在：{dataset}")
+            self.lbl_hint.setText(f"{tr('数据集目录不存在：')}{dataset}")
             return
         self._project_dir = Path(p.model_dir)
         self._clear_results()
         self._clear_cache()
-        self._show_banner(f"正在复盘 {self.cmb_run.currentText()} …")
+        self._show_banner(f"{tr('正在复盘')} {self.cmb_run.currentText()} …")
         self.btn_start.setEnabled(False)
         from ..gui_utils import auto_cleanup_thread
 
@@ -438,31 +486,39 @@ class ProjectReviewPage(QWidget):
 
     def _on_progress(self, done: int, total: int, name: str):
         if self._banner is not None:
-            self._banner.setText(f"复盘批量推理 {done} / {total}　{name}")
+            from ..i18n import tr
+
+            self._banner.setText(
+                f"{tr('复盘批量推理')} {done} / {total}　{name}")
             self._banner.adjustSize()
             self._banner.move((max(1, self.width()) - self._banner.width()) // 2, 12)
 
     def _on_review_failed(self, msg: str):
         self._hide_banner()
         self.btn_start.setEnabled(True)
-        self.lbl_hint.setText(f"复盘失败：{msg}")
-        self.statusMessage.emit("复盘失败")
+        from ..i18n import tr
+
+        self.lbl_hint.setText(f"{tr('复盘失败：')}{msg}")
+        self.statusMessage.emit(tr("复盘失败"))
 
     def _on_review_done(self, results: list, stats: dict, classes: list,
                         weights: str):
         self._hide_banner()
         self.btn_start.setEnabled(True)
+        from ..i18n import tr
+
         self._results = results
         self._stats = stats
         self._classes = classes
         self._weights = weights
         total_det = sum(len(r["detections"]) for r in results)
         self.statusMessage.emit(
-            f"复盘完成：{len(results)} 张图，共检出 {total_det} 个目标；"
-            "调维度阈值不会重新推理")
+            f"{tr('复盘完成')}：{len(results)} {tr('张图')}，"
+            f"{tr('共检出')} {total_det} {tr('个目标')}；"
+            f"{tr('调维度阈值不会重新推理')}")
         self.lbl_hint.setText(
-            f"复盘完成：{len(results)} 张（批量 conf={self.spin_conf.value():.2f} / "
-            f"iou={self.spin_iou.value():.2f}）。调整维度阈值只复用本次结果。")
+            f"{tr('复盘完成')}：{len(results)} {tr('张图')}；"
+            f"{tr('调维度阈值不会重新推理')}。")
         # 维度面板注入（score 维初始=批量 conf）；面板会触发一次 thresholdsChanged
         self.threshold_panel.set_stats(stats, float(self.spin_conf.value()))
         self._regroup(self.threshold_panel.enabled_dims())
@@ -483,14 +539,23 @@ class ProjectReviewPage(QWidget):
             return
         groups = classify_images(self._stats, thresholds)
         self._items_by_path.clear()
-        mapping = [("correct", self.grp_correct, "#2E9E5B"),
-                   ("missed", self.grp_missed, "#B45309"),
-                   ("over", self.grp_over, "#D64545"),
-                   ("unjudged_list", self.grp_unjudged, "#25406B")]
+        if self._scope == "unjudged":
+            # 未评估按有无过阈检出分 NG/OK
+            ok_entries, ng_entries = [], []
+            for e in groups["unjudged_list"]:
+                (ng_entries if e.get("fp") else ok_entries).append(e)
+            mapping = [("uok", self.grp_uok, "#2E9E5B"),
+                       ("ung", self.grp_ung, "#D64545")]
+            bucket = {"uok": ok_entries, "ung": ng_entries}
+        else:
+            mapping = [("correct", self.grp_correct, "#2E9E5B"),
+                       ("missed", self.grp_missed, "#B45309"),
+                       ("over", self.grp_over, "#D64545")]
+            bucket = {key: groups[key] for key, _g, _c in mapping}
         for key, group, color in mapping:
             lst = self.grids[group]
             lst.clear()
-            entries = groups[key]
+            entries = bucket[key]
             for e in entries:
                 text = e["file"] + (("　" + e["badges"]) if e["badges"] else "")
                 tip = e["path"]
@@ -508,7 +573,7 @@ class ProjectReviewPage(QWidget):
                 self._items_by_path[e["path"]] = item
             self._set_group_title(group, len(entries))
         self.lbl_stats.setText(
-            stats_line(groups) + "　（双击图片用系统看图打开）")
+            stats_line(groups, self._scope) + "　（双击图片用系统看图打开）")
         self._start_thumbs()
 
     def _placeholder(self) -> QIcon:

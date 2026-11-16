@@ -20,6 +20,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 from ..engine.dataset.prepare import dataset_fingerprint
+from ..i18n import tr  # 模块级：动态文案站点直接用
 from ..ui_style import ACCENT
 from .project import migrate_history
 from .runs import RunRecord, format_duration
@@ -118,7 +119,7 @@ def history_series(history: list) -> tuple:
     history = migrate_history(history)
     xs = [h["epoch"] for h in history]
     loss = []
-    for key, label in (("train_loss", "训练损失"), ("val_loss", "验证损失")):
+    for key, label in (("train_loss", tr("训练损失")), ("val_loss", tr("验证损失"))):
         if any(key in h for h in history):
             loss.append((label, xs, [h.get(key) for h in history]))
     if any("val_top1" in h for h in history):
@@ -191,14 +192,16 @@ class CompareWindow(QMainWindow):
     def __init__(self, project, records: list):
         super().__init__()
         self.records = list(records)
-        self.setWindowTitle(f"实验对比（{len(self.records)} 条记录） - XCcv 训练平台")
+        self.setWindowTitle(
+            f"{tr('实验对比')}（{len(self.records)} {tr('条记录')}）"
+            f" - {tr('XCcv 训练平台')}")
         self.resize(1200, 860)
 
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.setContentsMargins(16, 12, 16, 12)
         lay.setSpacing(10)
-        title = QLabel("实验对比")
+        title = QLabel(tr("实验对比"))
         title.setStyleSheet("font-size: 19px; font-weight: bold;")
         lay.addWidget(title)
         legend = QLabel("　".join(
@@ -245,6 +248,9 @@ class CompareWindow(QMainWindow):
         scroll.setWidget(host)
         lay.addWidget(scroll, stretch=1)
         self.setCentralWidget(central)
+        from ..i18n import localize_widget_tree  # 动态窗口：英文替换层
+
+        localize_widget_tree(self)
 
     # ---- 构建 ----
     def _make_table(self, title: str, rows: list) -> QFrame:
@@ -298,7 +304,7 @@ class CompareWindow(QMainWindow):
             " border-radius: 10px; }")
         v = QVBoxLayout(box)
         v.setContentsMargins(12, 10, 12, 10)
-        cap = QLabel("曲线对比（左：损失；右：评估指标）")
+        cap = QLabel(tr("曲线对比（左：损失；右：评估指标）"))
         cap.setStyleSheet("font-weight: bold; border: none; background: transparent;")
         v.addWidget(cap)
         fig = Figure(dpi=100)  # 尺寸由 _AdaptiveFigure 随窗口同步
@@ -347,7 +353,7 @@ class CompareWindow(QMainWindow):
             " border-radius: 10px; }")
         v = QVBoxLayout(box)
         v.setContentsMargins(12, 10, 12, 10)
-        cap = QLabel("混淆矩阵并排（归一化）")
+        cap = QLabel(tr("混淆矩阵并排（归一化）"))
         cap.setStyleSheet("font-weight: bold; border: none; background: transparent;")
         v.addWidget(cap)
         n = len(self.records)

@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (
 
 from ..engine.io_utils import imread_unicode
 from ..gui_utils import auto_cleanup_thread, ensure_console_streams
+from ..i18n import tr  # 模块级：动态文案站点直接用（方法级导入保留兼容）
 from ..training.dataset_stats import collect_stats
 from ..training.project import list_projects, load_project
 from ..ui_style import APP_QSS, ACCENT, apply_app_theme, icon_path  # noqa: F401
@@ -299,7 +300,9 @@ class _ImageView(QGraphicsView):
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         self._pixmap_item = None
-        self._hint = QGraphicsTextItem(_EMPTY_HINT)
+        from ..i18n import tr
+
+        self._hint = QGraphicsTextItem(tr(_EMPTY_HINT))
         self._hint.setDefaultTextColor(QColor(170, 170, 170))
         self._scene.addItem(self._hint)
         self._user_zoomed = False
@@ -391,6 +394,9 @@ class TestingWindow(QMainWindow):
         self._infer_timer.setSingleShot(True)
         self._infer_timer.setInterval(250)
         self._infer_timer.timeout.connect(self._infer_current)
+        from ..i18n import localize_widget_tree  # 英文模式整体替换层
+
+        localize_widget_tree(self)
 
     def closeEvent(self, event):
         if self._load_thread is not None and self._load_thread.isRunning():
@@ -631,15 +637,18 @@ class TestingWindow(QMainWindow):
         return panel
 
     def _make_slider(self, layout, title: str, vmin: int, vmax: int, value: int) -> QSlider:
-        label = QLabel(f"{title}：{value / 100:.2f}")
+        from ..i18n import tr
+
+        label = QLabel(f"{tr(title)}：{value / 100:.2f}")
         slider = QSlider(Qt.Horizontal)
         slider.setRange(vmin, vmax)
         slider.setValue(value)
         layout.addWidget(label)
         layout.addWidget(slider)
         slider.valueChanged.connect(
-            lambda v, lb=label, t=title: (lb.setText(f"{t}：{v / 100:.2f}"),
-                                          self._infer_timer.start()))
+            lambda v, lb=label, t=tr(title): (
+                lb.setText(f"{t}：{v / 100:.2f}"),
+                self._infer_timer.start()))
         return slider
 
     # ================= 模型加载 =================
@@ -658,25 +667,33 @@ class TestingWindow(QMainWindow):
         except Exception:
             self.project_hint.setText("")
             return
-        self.project_hint.setText(f"{project.task_type.label} | 输出目录：{project.model_dir}")
+        from ..i18n import tr
+
+        self.project_hint.setText(
+            f"{project.task_type.label} | {tr('输出目录：')}{project.model_dir}")
 
     def _load_project_model(self):
+        from ..i18n import tr
+
         name = self.project_combo.currentText()
         if not name:
-            QMessageBox.information(self, "提示", "请先在下拉框选择一个项目")
+            QMessageBox.information(self, tr("提示"), tr("请先在下拉框选择一个项目"))
             return
         weights = latest_weights(load_project(name).model_dir)
         if weights is None:
-            QMessageBox.warning(self, "未找到模型",
-                                f"项目「{name}」的模型储存目录下没有可加载的模型权重（best.pt），\n"
-                                "请先在训练平台完成训练。")
+            QMessageBox.warning(self, tr("未找到模型"),
+                                f"{tr('项目')}「{name}」"
+                                f"{tr('的模型储存目录下没有可加载的模型权重（best.pt），')}\n"
+                                + tr("请先在训练平台完成训练。"))
             return
         self._load_weights(weights)
 
     def _pick_weights(self):
+        from ..i18n import tr
+
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择权重文件", "",
-            "模型权重 (*.pt);;所有文件 (*)")
+            self, tr("选择权重文件"), "",
+            tr("模型权重 (*.pt);;所有文件 (*)"))
         if not path:
             return
         self._load_weights(Path(path))
@@ -685,12 +702,15 @@ class TestingWindow(QMainWindow):
 
     def _load_weights(self, path: Path):
         """后台线程加载模型：加载期间禁用加载入口并显示进度提示。"""
+        from ..i18n import tr
+
         if self._load_thread is not None and self._load_thread.isRunning():
-            QMessageBox.information(self, "请稍候", "正在加载模型，请等待完成")
+            QMessageBox.information(self, tr("请稍候"), tr("正在加载模型，请等待完成"))
             return
         self.btn_load_project.setEnabled(False)
         self.btn_pick.setEnabled(False)
-        self.model_info.setText(f"正在加载 {path.name} …（网络构建需要数秒）")
+        self.model_info.setText(f"{tr('正在加载')} {path.name} …"
+                                f"{tr('（网络构建需要数秒）')}")
         self.header_model_info.setText("模型加载中…")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self._load_thread = _ModelLoadThread(path, self)
@@ -775,27 +795,35 @@ class TestingWindow(QMainWindow):
         self._load_thread = None
         self.btn_load_project.setEnabled(True)
         self.btn_pick.setEnabled(True)
+        from ..i18n import tr
+
         QApplication.restoreOverrideCursor()
-        self.model_info.setText("未加载模型")
-        self.header_model_info.setText("未加载模型")
-        QMessageBox.critical(self, "加载失败", message)
+        self.model_info.setText(tr("未加载模型"))
+        self.header_model_info.setText(tr("未加载模型"))
+        QMessageBox.critical(self, tr("加载失败"), message)
 
     # ================= 输入 =================
     def _open_image(self):
+        from ..i18n import tr
+
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择图片", "", "图片 (*.jpg *.jpeg *.png *.bmp *.webp)")
+            self, tr("选择图片"), "", tr("图片 (*.jpg *.jpeg *.png *.bmp *.webp)"))
         if path:
             self._set_image_list([Path(path)], root=None)
 
     def _open_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "选择图片文件夹（含子文件夹）")
+        from ..i18n import tr
+
+        folder = QFileDialog.getExistingDirectory(
+            self, tr("选择图片文件夹（含子文件夹）"))
         if not folder:
             return
         files = [p for p in sorted(Path(folder).rglob("*"))
                  if p.is_file() and p.suffix.lower() in IMAGE_EXTS
                  and not any(part.startswith(".") for part in p.relative_to(folder).parts[:-1])]
         if not files:
-            QMessageBox.information(self, "提示", "该文件夹（含子文件夹）中没有图片")
+            QMessageBox.information(self, tr("提示"),
+                                    tr("该文件夹（含子文件夹）中没有图片"))
             return
         self._set_image_list(files, root=Path(folder))
 
@@ -839,13 +867,15 @@ class TestingWindow(QMainWindow):
 
     # ================= 批量运行 =================
     def _batch_run(self):
-        """批量推理：先弹设置（输出目录 / 是否存图等，To3.2），再后台逐张推理。"""
+        """批量推理：先弹设置（输出目录 / 是否存图等），再后台逐张推理。"""
+        from ..i18n import tr
+
         if self.model is None:
-            QMessageBox.information(self, "提示", "请先加载模型，再批量运行")
+            QMessageBox.information(self, tr("提示"), tr("请先加载模型，再批量运行"))
             return
         if getattr(self, "_batch_thread", None) is not None \
                 and self._batch_thread.isRunning():
-            QMessageBox.information(self, "请稍候", "批量推理正在进行中")
+            QMessageBox.information(self, tr("请稍候"), tr("批量推理正在进行中"))
             return
         from .batch_dialog import BatchSettingsDialog
 
@@ -858,19 +888,21 @@ class TestingWindow(QMainWindow):
                  if p.is_file() and p.suffix.lower() in IMAGE_EXTS
                  and not any(part.startswith(".") for part in p.relative_to(folder).parts[:-1])]
         if not files:
-            QMessageBox.information(self, "提示", "该文件夹（含子文件夹）中没有图片")
+            QMessageBox.information(self, tr("提示"),
+                                    tr("该文件夹（含子文件夹）中没有图片"))
             return
         out_dir = Path(settings.out_dir) if settings.out_dir else folder
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            QMessageBox.warning(self, "输出目录无效", f"无法创建输出目录：{e}")
+            QMessageBox.warning(self, tr("输出目录无效"),
+                                f"{tr('无法创建输出目录：')}{e}")
             return
         conf, iou = self._current_params()
         self.btn_batch.setEnabled(False)
         self._batch_settings = settings
         self._batch_out_dir = out_dir
-        self.result_stats.setText(f"批量推理 0 / {len(files)} …")
+        self.result_stats.setText(f"{tr('批量推理')} 0 / {len(files)} …")
         self._batch_thread = _BatchThread(
             self.model, files, conf, iou, self._flow, self.classes or [],
             self.task, out_dir=out_dir, save_json=settings.save_json,
@@ -881,7 +913,7 @@ class TestingWindow(QMainWindow):
             tiled=self.chk_tiled.isChecked())
         self._batch_thread.progress.connect(
             lambda done, total, name: self.result_stats.setText(
-                f"批量推理 {done} / {total}　{name}"))
+                f"{tr('批量推理')} {done} / {total}　{name}"))
         self._batch_thread.finished_ok.connect(self._on_batch_done)
         self._batch_thread.failed.connect(self._on_batch_failed)
         auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3（T2-6）
@@ -895,17 +927,20 @@ class TestingWindow(QMainWindow):
         self._batch_thread = None
         settings = getattr(self, "_batch_settings", None)
         out_dir = getattr(self, "_batch_out_dir", None)
+        from ..i18n import tr
+
         if not results:
-            QMessageBox.information(self, "批量运行", "没有可用的推理结果")
+            QMessageBox.information(self, tr("批量运行"), tr("没有可用的推理结果"))
             return
         total_det = sum(len(r["detections"]) for r in results)
-        lines = [f"批量推理完成：{len(results)} 张图，共检出 {total_det} 个目标"]
+        lines = [f"{tr('批量推理完成：')}{len(results)} {tr('张图')}，"
+                 f"{tr('共检出')} {total_det} {tr('个目标')}"]
         if summary:
             pc = summary.get("per_class") or {}
             if pc:
                 tops = sorted(pc.items(), key=lambda kv: -kv[1]["count"])[:5]
-                lines.append("每类检出：" + "，".join(
-                    f"{k}×{v['count']}（均分 {v['avg_score']:.2f}）"
+                lines.append(tr("每类检出：") + "，".join(
+                    f"{k}×{v['count']}（{tr('均分')} {v['avg_score']:.2f}）"
                     for k, v in tops))
             lat = summary.get("latency_ms")
             if lat:
@@ -933,29 +968,33 @@ class TestingWindow(QMainWindow):
                 pass
             # 摘要 .json 已由批量线程落盘（检出结果/摘要.json）
         if settings is not None and settings.save_json and out_dir is not None:
-            lines.append(f"检出 JSON（每图一个，同名对应）：{out_dir / '检出结果'}")
+            lines.append(f"{tr('检出 JSON（每图一个，同名对应）')}：{out_dir / '检出结果'}")
         if settings is not None and settings.save_images and out_dir is not None:
-            lines.append(f"渲染图：{out_dir / '可视化'}")
+            lines.append(f"{tr('渲染图')}：{out_dir / '可视化'}")
         self.result_stats.setText("\n".join(lines))
-        self.statusBar().showMessage(f"批量运行完成，输出目录：{out_dir}", 10000)
+        self.statusBar().showMessage(
+            f"{tr('批量运行完成，输出目录：')}{out_dir}", 10000)
         # 标准页不再挂分数面板/复判入口——批量统计仅落盘，复盘走「项目复盘」页
         self._last_match_stats = summary.get("match_stats") if summary else None
         self._last_batch_results = results
         from ..ui_widgets import toast
 
         toast(self,
-              f"批量推理完成：{len(results)} 张图，共检出 {total_det} 个目标",
+              f"{tr('批量推理完成：')}{len(results)} {tr('张图')}，"
+              f"{tr('共检出')} {total_det} {tr('个目标')}",
               "success")
 
     # ================= O2/O19/O20（V0.7）：批量评估闭环 =================
     def _generate_threshold_flow(self, dims: dict):
         """O2 扩展：面板启用维度阈值 → 生成流程图模板。"""
+        from ..i18n import tr
+
         w = getattr(self, "_loaded_weights_path", None)
         if not w:
             QMessageBox.information(
-                self, "生成流程图模板",
-                "当前模型未关联权重文件（无法定位模型存放文件夹）；"
-                "请通过「加载模型」选择权重后再生成")
+                self, tr("生成流程图模板"),
+                tr("当前模型未关联权重文件（无法定位模型存放文件夹）；")
+                + tr("请通过「加载模型」选择权重后再生成"))
             return
         weights = Path(w)
         model_dir = weights.parent.parent
@@ -967,14 +1006,15 @@ class TestingWindow(QMainWindow):
                                        str(weights),
                                        task=str(self.task or "detection"))
         except OSError as e:
-            QMessageBox.warning(self, "生成流程图模板", f"写入流程文件失败：{e}")
+            QMessageBox.warning(self, tr("生成流程图模板"),
+                                f"{tr('写入流程文件失败：')}{e}")
             return
         dims_text = "、".join(f"{k}={v:g}" for k, v in sorted(dims.items()))
         self.statusBar().showMessage(
-            f"流程图模板已生成：{path}（启用维度：{dims_text}）", 15000)
+            f"{tr('流程图模板已生成：')}{path}（{tr('启用维度')}：{dims_text}）", 15000)
         from ..ui_widgets import toast
 
-        toast(self, "流程图模板已生成，可在流程图平台打开使用", "success")
+        toast(self, tr("流程图模板已生成，可在流程图平台打开使用"), "success")
 
     def _apply_conf_to_flow(self, conf: float):
         """面板阈值 → 项目「检出流程.json」置信度节点（O2 应用 + O18 留痕）。"""
@@ -983,11 +1023,13 @@ class TestingWindow(QMainWindow):
             w = getattr(self, "_loaded_weights_path", None)
             if w is not None:
                 base = Path(w).parent.parent
+        from ..i18n import tr
+
         if base is None:
             QMessageBox.information(
-                self, "应用阈值",
-                "当前模型未关联训练项目（无法定位检出流程文件）；"
-                "请通过「加载该项目最新模型」或权重所在项目再应用")
+                self, tr("应用阈值"),
+                tr("当前模型未关联训练项目（无法定位检出流程文件）；")
+                + tr("请通过「加载该项目最新模型」或权重所在项目再应用"))
             return
         from ..engine import detection_flow as df
 
@@ -1009,14 +1051,14 @@ class TestingWindow(QMainWindow):
         try:
             df.save_flow(flow_path, flow)
         except OSError as e:
-            QMessageBox.warning(self, "应用阈值", f"写入检出流程失败：{e}")
+            QMessageBox.warning(self, tr("应用阈值"), f"{tr('写入检出流程失败：')}{e}")
             return
         self._flow = flow  # 当前会话立即生效
         self.statusBar().showMessage(
-            f"默认检出阈值已应用：conf={conf:.2f} → {flow_path}", 10000)
+            f"{tr('默认检出阈值已应用：')}conf={conf:.2f} → {flow_path}", 10000)
         from ..ui_widgets import toast
 
-        toast(self, f"已应用为项目默认检出 conf={conf:.2f}", "success")
+        toast(self, f"{tr('已应用为项目默认检出')} conf={conf:.2f}", "success")
 
     def _resolve_dataset_dir(self):
         """权重所属项目的数据集目录（回流默认目标；找不到返回 None）。"""
@@ -1048,9 +1090,11 @@ class TestingWindow(QMainWindow):
         return None
 
     def _open_batch_review(self):
+        from ..i18n import tr
+
         results = getattr(self, "_last_batch_results", None)
         if not results:
-            QMessageBox.information(self, "复判", "请先完成一次批量推理")
+            QMessageBox.information(self, tr("复判"), tr("请先完成一次批量推理"))
             return
         out_dir = getattr(self, "_batch_out_dir", None)
         review_path = (Path(out_dir) / "检出结果" / "复判.json"
@@ -1070,9 +1114,11 @@ class TestingWindow(QMainWindow):
 
     def _open_model_compare(self):
         """O21（V0.7）：模型 A/B 比对窗（非模态；B 模型复推在后台线程）。"""
+        from ..i18n import tr
+
         results = getattr(self, "_last_batch_results", None)
         if not results:
-            QMessageBox.information(self, "A/B 比对", "请先完成一次批量推理")
+            QMessageBox.information(self, tr("A/B 比对"), tr("请先完成一次批量推理"))
             return
         ctx = getattr(self, "_review_ctx", None)
         if ctx:
@@ -1090,17 +1136,23 @@ class TestingWindow(QMainWindow):
             except Exception:  # noqa: BLE001
                 pass
         w = getattr(self, "_loaded_weights_path", None)
+        # 比对结果缓存（同模型/参数/B 权重重开免重推）
+        if not hasattr(self, "_ab_cache"):
+            self._ab_cache = {}
         self._ab_dialog = ModelCompareDialog(
             results, getattr(self, "_batch_out_dir", None), conf, iou,
             self._flow, classes,
-            model_a_name=Path(w).name if w else "", parent=self)
+            model_a_name=Path(w).name if w else "", parent=self,
+            cache=self._ab_cache)
         self._ab_dialog.show()
 
     def _on_batch_failed(self, message: str):
+        from ..i18n import tr
+
         self.btn_batch.setEnabled(True)
         self._batch_thread = None
-        self.result_stats.setText("批量推理失败")
-        QMessageBox.critical(self, "批量运行失败", message)
+        self.result_stats.setText(tr("批量推理失败"))
+        QMessageBox.critical(self, tr("批量运行失败"), message)
 
     def _current_image_path(self) -> Path | None:
         item = self.image_tree.currentItem()
@@ -1132,7 +1184,7 @@ class TestingWindow(QMainWindow):
             return
         image = imread_unicode(path)
         if image is None:
-            self.result_stats.setText(f"无法读取：{path.name}")
+            self.result_stats.setText(f"{tr('无法读取：')}{path.name}")
             return
         conf, iou = self._current_params()
         t0 = time.perf_counter()
@@ -1146,7 +1198,7 @@ class TestingWindow(QMainWindow):
                 prediction = self.model.predict(image, conf=conf, iou=iou)
         except Exception as e:
             log.error("推理失败: %s: %s", type(e).__name__, e, exc_info=True)
-            QMessageBox.critical(self, "推理失败", f"{type(e).__name__}: {e}")
+            QMessageBox.critical(self, tr("推理失败"), f"{type(e).__name__}: {e}")
             return
         if self._flow and self.task != "classification":
             from ..engine.flow.legacy_adapter import apply_flow_safe
@@ -1164,7 +1216,7 @@ class TestingWindow(QMainWindow):
                 self._flow_info = None
                 log.error("检出流程应用失败，已跳过过滤: %s: %s",
                           type(e).__name__, e, exc_info=True)
-                self.result_stats.setText("检出流程应用失败（已跳过过滤），详见日志")
+                self.result_stats.setText(tr("检出流程应用失败（已跳过过滤），详见日志"))
         else:
             self._flow_info = None
         self._last_infer_cost = time.perf_counter() - t0
@@ -1227,7 +1279,8 @@ class TestingWindow(QMainWindow):
                 self._set_canvas_image(image)
             except Exception:
                 pass
-            self.result_stats.setText(f"{name}\n结果可视化失败（已显示原图），详见日志")
+            self.result_stats.setText(
+                f"{name}\n{tr('结果可视化失败（已显示原图），详见日志')}")
             return
         cost_txt = (f"\n推理耗时：{self._fmt_cost(self._last_infer_cost)}"
                     if self._last_infer_cost is not None else "")

@@ -22,17 +22,19 @@ class StatsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("数量统计")
+        from ..i18n import localize_widget_tree, tr
+
+        self.setWindowTitle(tr("数量统计"))
         self.resize(420, 360)
         lay = QVBoxLayout(self)
-        self._lb_img = QLabel("当前图：—")
+        self._lb_img = QLabel(tr("当前图：—"))
         self._lb_img.setAlignment(Qt.AlignLeft)
-        self._lb_folder = QLabel("文件夹：扫描中…")
+        self._lb_folder = QLabel(tr("文件夹：扫描中…"))
         lay.addWidget(self._lb_img)
         lay.addWidget(self._lb_folder)
         self._table = QTableWidget(0, 3)
         self._table.setHorizontalHeaderLabels(
-            ["类别", "当前图", "文件夹"])
+            [tr("类别"), tr("当前图"), tr("文件夹")])
         self._table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(
@@ -67,8 +69,10 @@ class StatsDialog(QDialog):
             self._scan_folder_async(folder, img_counts)
 
     def _scan_folder_async(self, folder, img_counts):
-        prog = QProgressDialog("扫描数据集标注…", "取消", 0, 0, self)
-        prog.setWindowTitle("数量统计")
+        from ..i18n import tr
+
+        prog = QProgressDialog(tr("扫描数据集标注…"), tr("取消"), 0, 0, self)
+        prog.setWindowTitle(tr("数量统计"))
         prog.setWindowModality(Qt.WindowModal)
 
         def _work():

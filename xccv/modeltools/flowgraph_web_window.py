@@ -36,10 +36,27 @@ from PyQt5.QtWidgets import (
 from ..engine.detection_flow import graph_to_chain  # noqa: F401
 from ..engine import detection_flow as df
 from ..engine import flow_package as fp
+from ..i18n import tr
 from ..ui_style import icon_path
 
 log = logging.getLogger(__name__)
 _WEB_DIR = Path(__file__).resolve().parent / "web"
+
+
+def _inject_web_i18n(page):
+    """英文模式：把翻译表注入 web 画布并应用（loadFinished 与握手双保险）。"""
+    from ..i18n import lang
+
+    if lang() != "en":
+        return
+    import json as _json
+
+    from ..i18n_en import TABLE
+
+    page.runJavaScript(
+        "window.__I18N_EN="
+        + _json.dumps(TABLE, ensure_ascii=False)
+        + ";if(window.__applyI18N)window.__applyI18N();")
 
 
 class _Bridge(QObject):
@@ -87,7 +104,7 @@ class _Bridge(QObject):
                 handler(msg)
         except Exception as e:
             log.error("流程图操作失败: %s", e, exc_info=True)
-            self.send({"event": "status", "text": f"操作失败: {e}"})
+            self.send({"event": "status", "text": f"{tr('操作失败')}: {e}"})
 
     # ---- 各操作 ----
     def do_js_ready(self, msg):
@@ -99,6 +116,7 @@ class _Bridge(QObject):
         graph.configure 会遇到未注册类型，渲染成红色 undefined 占位节点。
         """
         self.win._js_ready = True
+        _inject_web_i18n(self.win.page)   # 英文模式：注入翻译表并应用
         pending, self.win._pending_js = self.win._pending_js, []
         from .flow_session import node_library_payload
 
@@ -117,7 +135,8 @@ class _Bridge(QObject):
 
     def do_new(self, msg):
         path, _ = QFileDialog.getSaveFileName(
-            self.win, "新建流程图（选择保存位置并命名）", "flow.json", "流程图 (*.json)")
+            self.win, tr("新建流程图（选择保存位置并命名）"), "flow.json",
+            tr("流程图 (*.json)"))
         if not path:
             return
         empty = {"last_node_id": 0, "last_link_id": 0, "nodes": [], "links": []}
@@ -134,24 +153,25 @@ class _Bridge(QObject):
 
         templates = list_templates()
         if not templates:
-            QMessageBox.information(self.win, "从模板创建", "未找到官方模板文件")
+            QMessageBox.information(self.win, tr("从模板创建"), tr("未找到官方模板文件"))
             return
         titles = [t["title"] for t in templates]
         choice, ok = QInputDialog.getItem(
-            self.win, "从模板创建", "选择官方模板：", titles, 0, False)
+            self.win, tr("从模板创建"), tr("选择官方模板："), titles, 0, False)
         if not ok:
             return
         t = templates[titles.index(choice)]
         self.win.current_path = None
         self.send({"event": "loaded", "flow": t["flow"],
-                   "name": f"{t['title']}（模板）"})
+                   "name": f"{t['title']}{tr('（模板）')}"})
         self.send({"event": "status",
-                   "text": f"已载入模板「{t['title']}」：请在节点属性中填写图片/模型路径"
+                   "text": f"{tr('已载入模板')}「{t['title']}」："
+                           f"{tr('请在节点属性中填写图片/模型路径')}"
                            f"——{t['description']}"})
 
     def do_open(self, msg):
         path, _ = QFileDialog.getOpenFileName(
-            self.win, "打开流程", "", "流程包/流程图 (*.xvap *.json)")
+            self.win, tr("打开流程"), "", tr("流程包/流程图 (*.xvap *.json)"))
         if not path:
             return
         path = Path(path)
@@ -169,13 +189,14 @@ class _Bridge(QObject):
         path = self.win.current_path
         if path is None or path.suffix == ".xvap":
             path, _ = QFileDialog.getSaveFileName(
-                self.win, "保存流程图", "flow.json", "流程图 (*.json)")
+                self.win, tr("保存流程图"), "flow.json", tr("流程图 (*.json)"))
             if not path:
                 return
         Path(path).write_text(json.dumps(flow, ensure_ascii=False, indent=1),
                               encoding="utf-8")
         self.win.current_path = Path(path)
-        self.send({"event": "status", "text": f"已保存 {Path(path).name}"})
+        self.send({"event": "status",
+                   "text": f"{tr('已保存')} {Path(path).name}"})
 
     def do_save_xvap(self, msg):
         flow = msg.get("flow") or {}
@@ -186,12 +207,13 @@ class _Bridge(QObject):
         problems = validate_flow_for_pack(flow)
         if problems:
             _show_pack_problems(self.win, problems)
-            self.send({"event": "status", "text": "打包取消：流程校验未通过（见弹窗清单）"})
+            self.send({"event": "status",
+                       "text": tr("打包取消：流程校验未通过（见弹窗清单）")})
             return
         try:
             models = fp.collect_model_files(flow)
         except FileNotFoundError as e:
-            QMessageBox.information(self.win, "打包 .xvap", str(e))
+            QMessageBox.information(self.win, tr("打包 .xvap"), str(e))
             return
         if not models:
             has_legacy = any(str(n.get("type", "")).startswith(
@@ -199,30 +221,32 @@ class _Bridge(QObject):
                 for n in flow.get("nodes", []))
             if has_legacy:
                 QMessageBox.information(
-                    self.win, "打包 .xvap",
-                    "流程中没有已选择模型文件的模型节点（在节点属性面板中浏览选择）")
+                    self.win, tr("打包 .xvap"),
+                    tr("流程中没有已选择模型文件的模型节点（在节点属性面板中浏览选择）"))
                 return
             # 纯传统算子流程（用户批注 F2）：允许打包为不含模型的 .xvap
         path, _ = QFileDialog.getSaveFileName(
-            self.win, "打包流程", "flow.xvap", "流程包 (*.xvap)")
+            self.win, tr("打包流程"), "flow.xvap", tr("流程包 (*.xvap)"))
         if not path:
             return
         fp.save_xvap(path, flow, models)
-        tip = f"（含 {len(models)} 个模型）" if models else "（纯算子流程，不含模型）"
-        self.send({"event": "status", "text": f"已打包 {Path(path).name}{tip}"})
+        tip = (f"（{tr('含')} {len(models)} {tr('个模型')}）" if models
+               else tr("（纯算子流程，不含模型）"))
+        self.send({"event": "status",
+                   "text": f"{tr('已打包')} {Path(path).name}{tip}"})
 
     def do_pick_model(self, msg):
         path, _ = QFileDialog.getOpenFileName(
-            self.win, "选择模型文件", "",
-            "模型权重 (*.pt);;所有文件 (*)")
+            self.win, tr("选择模型文件"), "",
+            tr("模型权重 (*.pt);;所有文件 (*)"))
         if path:
             self.send({"event": "model_file", "node_id": msg.get("node_id"), "path": path})
 
     def do_pick_param_file(self, msg):
         """schema 面板 path 型参数的文件浏览（path 参数复用同一桥接链路）。"""
         path, _ = QFileDialog.getOpenFileName(
-            self.win, "选择文件", "",
-            "图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;所有文件 (*)")
+            self.win, tr("选择文件"), "",
+            tr("图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;所有文件 (*)"))
         if path:
             self.send({"event": "param_file", "node_id": msg.get("node_id"),
                        "key": msg.get("key"), "path": path})
@@ -230,7 +254,7 @@ class _Bridge(QObject):
     def do_pick_param_folder(self, msg):
         """schema 面板 folder 型参数的目录浏览（用户批注 ToC1：输出目录
         应选文件夹而非文件）。"""
-        path = QFileDialog.getExistingDirectory(self.win, "选择文件夹")
+        path = QFileDialog.getExistingDirectory(self.win, tr("选择文件夹"))
         if path:
             self.send({"event": "param_file", "node_id": msg.get("node_id"),
                        "key": msg.get("key"), "path": path})
@@ -253,11 +277,14 @@ class _Bridge(QObject):
                           if self.win.current_path else None))
         except Exception as e:
             log.error("新引擎运行失败: %s", e, exc_info=True)
-            self.send({"event": "status", "text": f"运行失败：{e}"})
+            self.send({"event": "status",
+                       "text": f"{tr('运行失败：')}{e}"})
             return
         summary["event"] = "run_result"
-        summary["status"] = (f"运行完成：{summary['ok_count']}/{summary['total']} 节点成功"
-                             + (f"，{len(summary['errors'])} 个失败" if summary["errors"] else ""))
+        summary["status"] = (f"{tr('运行完成：')}{summary['ok_count']}/{summary['total']}"
+                             f" {tr('节点成功')}"
+                             + (f"，{len(summary['errors'])} {tr('个失败')}"
+                                if summary["errors"] else ""))
         self.send(summary)
 
     def do_rerun_node(self, msg):
@@ -265,10 +292,10 @@ class _Bridge(QObject):
             summary = self._session().rerun(int(msg.get("node_id")), label="画布")
         except Exception as e:
             log.error("单节点重跑失败: %s", e, exc_info=True)
-            self.send({"event": "status", "text": f"重跑失败：{e}"})
+            self.send({"event": "status", "text": f"{tr('重跑失败：')}{e}"})
             return
         summary["event"] = "run_result"
-        summary["status"] = f"节点 #{msg.get('node_id')} 已重跑"
+        summary["status"] = f"{tr('节点')} #{msg.get('node_id')} {tr('已重跑')}"
         self.send(summary)
 
     def do_get_snapshot(self, msg):
@@ -278,8 +305,8 @@ class _Bridge(QObject):
 
     def do_pick_image(self, msg):
         path, _ = QFileDialog.getOpenFileName(
-            self.win, "选择用于框选区域的图片", "",
-            "图片 (*.jpg *.jpeg *.png *.bmp)")
+            self.win, tr("选择用于框选区域的图片"), "",
+            tr("图片 (*.jpg *.jpeg *.png *.bmp)"))
         if not path:
             return
         import base64
@@ -290,7 +317,7 @@ class _Bridge(QObject):
         try:  # 图片内容经桥接下发（base64），不再依赖页面 file:// 子资源加载
             data = base64.b64encode(Path(path).read_bytes()).decode("ascii")
         except OSError as e:
-            self.send({"event": "status", "text": f"读取图片失败: {e}"})
+            self.send({"event": "status", "text": f"{tr('读取图片失败: ')}{e}"})
             return
         self.send({"event": "image_for_regions", "node_id": msg.get("node_id"),
                    "path": path, "data_url": f"data:image/{mime};base64,{data}"})
@@ -303,18 +330,19 @@ class _Bridge(QObject):
                            if str(n["type"]).startswith(("model/", "xccv/model"))
                            and (n.get("properties") or {}).get("model_file")), None)
         if not model_file:
-            QMessageBox.information(self.win, "运行预览", "请先在模型节点中选择模型文件")
+            QMessageBox.information(self.win, tr("运行预览"),
+                                    tr("请先在模型节点中选择模型文件"))
             return
         if self.win._preview_sample is None:
             path, _ = QFileDialog.getOpenFileName(
-                self.win, "选择预览样图", "", "图片 (*.jpg *.jpeg *.png *.bmp)")
+                self.win, tr("选择预览样图"), "", tr("图片 (*.jpg *.jpeg *.png *.bmp)"))
             if not path:
                 return
             from ..engine.io_utils import imread_unicode
 
             self.win._preview_sample = imread_unicode(path)
             if self.win._preview_sample is None:
-                QMessageBox.information(self.win, "运行预览", "无法读取该图片")
+                QMessageBox.information(self.win, tr("运行预览"), tr("无法读取该图片"))
                 return
         if self.win._preview_model_path != model_file:
             from ..engine.models.registry import load_model
@@ -354,8 +382,9 @@ class _Bridge(QObject):
         import base64
 
         self.send({"event": "preview", "png": base64.b64encode(png.tobytes()).decode(),
-                   "text": f"预览：原始检出 {base_count} → 当前 {len(filt.boxes)}"
-                           f"（数量判定 {info.get('count_check') or '未配置'}）"})
+                   "text": f"{tr('预览：原始检出')} {base_count} → {tr('当前')}"
+                           f" {len(filt.boxes)}（{tr('数量判定')}"
+                           f" {info.get('count_check') or tr('未配置')}）"})
 
 
 def _chain_position(chain: dict, node: dict) -> int | None:
@@ -379,7 +408,7 @@ class FlowGraphWebWindow(QMainWindow):
         from PyQt5.QtGui import QIcon
 
         # v0.5.5追加：流程图编辑器独立图标与平台归属（不再挂模型工具分类）
-        self.setWindowTitle(f"{self.tool_title}  -  XCcv 流程图")
+        self.setWindowTitle(f"{tr(self.tool_title)}  -  {tr('XCcv 流程图')}")
         self.setWindowIcon(QIcon(str(icon_path("flow.png"))))
         self.resize(1240, 800)
         # 按要求不给窗口挂任何 Qt 样式表（QSS）：界面全部由 web 页面自绘，
@@ -416,6 +445,9 @@ class FlowGraphWebWindow(QMainWindow):
         if query:  # 调试开关：nort=禁用连续渲染循环；nolg=不加载 litegraph.js
             url.setQuery("&".join(query))
         self.page.setUrl(url)
+        # 英文模式：页面加载完成即注入翻译表（与握手注入双保险）
+        self.page.loadFinished.connect(
+            lambda _ok: _inject_web_i18n(self.page))
         self.setCentralWidget(view)
 
     def send_json(self, payload: dict):

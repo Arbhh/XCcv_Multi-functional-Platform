@@ -89,15 +89,22 @@ class BatchSettingsDialog(QDialog):
         box.accepted.connect(self._accept)
         box.rejected.connect(self.reject)
         form.addRow(box)
+        from ..i18n import localize_widget_tree
+
+        localize_widget_tree(self)
 
     # ---- 浏览 / 校验 ----
     def _browse_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "选择批量推理的图片文件夹（含子文件夹）")
+        from ..i18n import tr
+
+        d = QFileDialog.getExistingDirectory(self, tr("选择批量推理的图片文件夹（含子文件夹）"))
         if d:
             self.ed_folder.setText(d)
 
     def _browse_out(self):
-        d = QFileDialog.getExistingDirectory(self, "选择输出目录")
+        from ..i18n import tr
+
+        d = QFileDialog.getExistingDirectory(self, tr("选择输出目录"))
         if d:
             self.ed_out.setText(d)
 
@@ -130,7 +137,9 @@ def show_warning(dialog, text: str):
     """设置校验提示（独立函数便于测试打桩）。"""
     from PyQt5.QtWidgets import QMessageBox
 
-    QMessageBox.warning(dialog, "批量运行设置", text)
+    from ..i18n import tr
+
+    QMessageBox.warning(dialog, tr("批量运行设置"), text)
 
 
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----

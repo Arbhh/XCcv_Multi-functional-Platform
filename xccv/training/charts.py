@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 import numpy as np
 from PyQt5.QtWidgets import QSizePolicy
 
+from ..i18n import tr
 from ..ui_style import ACCENT, ACCENT2, BG, FG, GRID, MUTED, PANEL
 
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Arial Unicode MS"]
@@ -56,11 +57,11 @@ class DistributionCanvas(_WheelThroughCanvas):
 
     def _style(self):
         _style_axes(self.ax_bar)
-        self.ax_bar.set_title("类别分布", fontsize=13)
+        self.ax_bar.set_title(tr("类别分布"), fontsize=13)
         _style_axes(self.ax_bubble)
-        self.ax_bubble.set_title("图像尺寸分布（圆大小 = 数量）", fontsize=13)
-        self.ax_bubble.set_xlabel("宽（像素）", fontsize=10)
-        self.ax_bubble.set_ylabel("高（像素）", fontsize=10)
+        self.ax_bubble.set_title(tr("图像尺寸分布（圆大小 = 数量）"), fontsize=13)
+        self.ax_bubble.set_xlabel(tr("宽（像素）"), fontsize=10)
+        self.ax_bubble.set_ylabel(tr("高（像素）"), fontsize=10)
 
     def update_stats(self, stats) -> None:
         # 类别分布（横向条形，类名多时更易读）
@@ -74,7 +75,7 @@ class DistributionCanvas(_WheelThroughCanvas):
         self.ax_bar.set_yticklabels(names, fontsize=10)
         self.ax_bar.invert_yaxis()
         self.ax_bar.set_xlim(0, max(max(counts, default=0) * 1.18, 1))
-        self.ax_bar.set_xlabel("数量", fontsize=10)
+        self.ax_bar.set_xlabel(tr("数量"), fontsize=10)
 
         # 尺寸分布（气泡图：坐标从 0 开始，便于直观比较尺寸差距）
         self.ax_bubble.clear()
@@ -127,7 +128,7 @@ class SplitDonutCanvas(_WheelThroughCanvas):
         self.setMinimumHeight(230)
         self.ax = self.fig.add_subplot(111)
         self.ax.set_facecolor(PANEL)
-        self.ax.text(0.5, 0.5, "暂无数据", ha="center", va="center",
+        self.ax.text(0.5, 0.5, tr("暂无数据"), ha="center", va="center",
                      color=MUTED, fontsize=11)
         self.ax.set_axis_off()
 
@@ -144,9 +145,9 @@ class SplitDonutCanvas(_WheelThroughCanvas):
         for name, n in (("已标", n_labeled), ("OK", n_ok)):
             if not n:
                 continue
-            tr, va = split_counts(int(n), val_ratio, train_ratio)
-            segs.append((f"{name}训练 {tr}", tr))
-            segs.append((f"{name}验证 {va}", va))
+            tr_r, va = split_counts(int(n), val_ratio, train_ratio)
+            segs.append((f"{tr(f'{name}训练')} {tr_r}", tr_r))
+            segs.append((f"{tr(f'{name}验证')} {va}", va))
         if not segs or sum(v for _, v in segs) <= 0:
             self.ax.text(0.5, 0.5, "暂无数据", ha="center", va="center",
                          color=MUTED, fontsize=11)
@@ -158,9 +159,10 @@ class SplitDonutCanvas(_WheelThroughCanvas):
         wedges, _ = self.ax.pie(values, colors=self._COLORS[:len(values)],
                                 startangle=90,
                                 wedgeprops=dict(width=0.42, edgecolor=BG))
-        self.ax.set_title("训练 / 验证划分", fontsize=13, color=FG)
+        self.ax.set_title(tr("训练 / 验证划分"), fontsize=13, color=FG)
         # 环心标注当前参数，划分比例与下方训练参数一致（实时）
-        self.ax.text(0, 0, f"训练 {train_ratio:.0%}\n验证 {val_ratio:.0%}",
+        self.ax.text(0, 0, f"{tr('训练')} {train_ratio:.0%}\n"
+                           f"{tr('验证')} {val_ratio:.0%}",
                      ha="center", va="center", color=FG, fontsize=11,
                      fontweight="bold", linespacing=1.4)
         self.ax.legend(wedges, names, loc="center left",
@@ -192,14 +194,14 @@ class ConfusionMatrixCanvas(_WheelThroughCanvas):
         m = np.asarray(matrix, dtype=int)
         labels = list(classes)
         if m.shape[0] == len(classes) + 1:
-            labels = labels + ["背景"]
+            labels = labels + [tr("背景")]
         im = self.ax.imshow(m, cmap="Blues")
         self.ax.set_xticks(range(len(labels)))
         self.ax.set_yticks(range(len(labels)))
         self.ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=10, color=FG)
         self.ax.set_yticklabels(labels, fontsize=10, color=FG)
-        self.ax.set_xlabel("预测类别", color=FG)
-        self.ax.set_ylabel("真实类别", color=FG)
+        self.ax.set_xlabel(tr("预测类别"), color=FG)
+        self.ax.set_ylabel(tr("真实类别"), color=FG)
         for spine in self.ax.spines.values():
             spine.set_color(GRID)
         self.ax.tick_params(colors=MUTED)

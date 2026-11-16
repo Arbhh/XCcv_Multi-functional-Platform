@@ -103,7 +103,9 @@ class _RecentChip(QFrame):
         self.setObjectName("recentChip")
         self.project_name = name
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip(f"打开项目「{name}」")
+        from .i18n import tr as _tr
+
+        self.setToolTip(f"{_tr('打开项目')}「{name}」")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 10, 16, 9)
         lay.setSpacing(2)
@@ -440,8 +442,10 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 导航切换 ----
     def _on_nav_changed(self, row: int):
+        from .i18n import tr as _tr
+
         key = _NAV_ITEMS[row][0] if 0 <= row < len(_NAV_ITEMS) else ""
-        self.page_title.setText(_PAGE_TITLES.get(key, ""))
+        self.page_title.setText(_tr(_PAGE_TITLES.get(key, "")))
         self.stack.setCurrentIndex(max(0, row))
         if key == "ai":
             self._refresh_recent_projects()   # 回到 AI 平台页即刷新最近项目
@@ -485,21 +489,25 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 平台启动（独立子进程，单实例由平台侧守卫） ----
     def _open_platform(self, key: str):
+        from .i18n import tr
+
         try:
             launcher.launch_platform(key)
         except Exception as e:
             QMessageBox.critical(
-                self, "无法启动平台",
-                f"「{dict((p[0], p[1]) for p in _PLATFORMS).get(key, key)}」启动失败：\n"
+                self, tr("无法启动平台"),
+                f"「{dict((p[0], p[1]) for p in _PLATFORMS).get(key, key)}」{tr('启动失败：')}\n"
                 f"{type(e).__name__}: {e}")
 
     def _open_recent_project(self, name: str):
         """最近项目小卡：直达训练平台并打开该项目（argv 透传）。"""
+        from .i18n import tr
+
         try:
             launcher.launch_platform("training", name)
         except Exception as e:
-            QMessageBox.critical(self, "无法打开项目",
-                                 f"项目「{name}」打开失败：\n"
+            QMessageBox.critical(self, tr("无法打开项目"),
+                                 f"{tr('项目')}「{name}」{tr('打开失败')}：\n"
                                  f"{type(e).__name__}: {e}")
 
     # ---- 系统区 ----
@@ -515,40 +523,55 @@ class HomeWindow(ChromeMainWindow):
             btn.setIcon(nav_icon(kind, ink, 36))
 
     def _show_settings_placeholder(self):
-        """设置对话框：界面主题切换**即时生效**（V0.6 F2-5；此前需重启）+ 版本信息。
+        """设置对话框：界面主题切换**即时生效**（V0.6 F2-5；此前需重启）
+        + 界面语言切换（保存后各窗口自动重建生效）+ 版本信息。
 
-        本进程 set_theme 立即重绘；写入 ui_prefs.json 后，已打开的各平台进程
-        经文件监听（install_theme_watcher）同步切换。
+        主题：本进程 set_theme 立即重绘；写入 ui_prefs.json 后，已打开的各
+        平台进程经文件监听（install_theme_watcher）同步切换。
+        语言：偏好 platform_data/ui_lang.json 全平台共享——主界面经语言
+        监听即时重建，各平台窗口自动重建生效。
         """
+        from .i18n import lang, set_lang, tr
         from .ui_style import ACTIVE_THEME
         from .ui_widgets import load_prefs
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("设置 - XCcv")
+        dialog.setWindowTitle(f"{tr('设置')} - XCcv")
         lay = QVBoxLayout(dialog)
         lay.setSpacing(12)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel("界面主题"))
+        row.addWidget(QLabel(tr("界面主题")))
         combo = QComboBox()
-        combo.addItem("浅色", "light")
-        combo.addItem("暗色", "dark")
+        combo.addItem(tr("浅色"), "light")
+        combo.addItem(tr("暗色"), "dark")
         current = load_prefs().get("theme", ACTIVE_THEME)
         idx = combo.findData(current if current in ("light", "dark") else "light")
         combo.setCurrentIndex(max(idx, 0))
         row.addWidget(combo, stretch=1)
         lay.addLayout(row)
 
-        note = QLabel("保存后立即生效：主界面与已打开的各平台窗口同步切换。")
+        lang_row = QHBoxLayout()
+        lang_row.addWidget(QLabel(tr("界面语言")))
+        self.cmb_lang = QComboBox()
+        self.cmb_lang.addItem("中文", "zh")
+        self.cmb_lang.addItem("English", "en")
+        self.cmb_lang.setCurrentIndex(self.cmb_lang.findData(lang()))
+        lang_row.addWidget(self.cmb_lang, stretch=1)
+        lay.addLayout(lang_row)
+
+        note = QLabel(tr("主题保存后立即生效；语言保存后各窗口自动切换"
+                         "（主界面即时重建，平台窗口自动重建）。"))
         note.setObjectName("hint")
+        note.setWordWrap(True)
         lay.addWidget(note)
 
         btns = QHBoxLayout()
         btns.addStretch(1)
-        ok = QPushButton("保存")
+        ok = QPushButton(tr("保存"))
         ok.setObjectName("accent")
         ok.clicked.connect(dialog.accept)
-        cancel = QPushButton("取消")
+        cancel = QPushButton(tr("取消"))
         cancel.clicked.connect(dialog.reject)
         btns.addWidget(ok)
         btns.addWidget(cancel)
@@ -557,6 +580,18 @@ class HomeWindow(ChromeMainWindow):
         if dialog.exec_() != QDialog.Accepted:
             return
         self.apply_theme_choice(combo.currentData())
+        # 语言：保存偏好即可——各进程的语言文件监听会自动重建窗口
+        self.apply_language_choice(self.cmb_lang.currentData())
+
+    def apply_language_choice(self, lang_code: str) -> bool:
+        """保存语言偏好；返回是否发生变化（变化时由语言监听重建生效）。"""
+        from .i18n import lang, set_lang
+
+        lang_code = "en" if lang_code == "en" else "zh"
+        changed = lang() != lang_code
+        if changed:
+            set_lang(lang_code)
+        return changed
 
     def apply_theme_choice(self, theme: str) -> None:
         """保存主题偏好并即时切换（设置对话框与测试共用）。"""
@@ -571,6 +606,8 @@ class HomeWindow(ChromeMainWindow):
         set_theme(theme)        # 本进程即时生效
 
     def _open_docs(self):
+        from .i18n import tr
+
         doc = app_root() / "docs" / "quickstart.md"
         if doc.is_file():
             try:
@@ -578,16 +615,18 @@ class HomeWindow(ChromeMainWindow):
                 return
             except OSError:
                 pass
-        QMessageBox.information(self, "使用文档",
-                                "未找到本地文档（docs/quickstart.md）。\n"
-                                "请查阅仓库 README 与 docs 目录。")
+        QMessageBox.information(self, tr("使用文档"),
+                                tr("未找到本地文档（docs/quickstart.md）。")
+                                + "\n" + tr("请查阅仓库 README 与 docs 目录。"))
 
     def _show_about(self):
-        QMessageBox.about(self, "关于 XCcv Community",
-                          f"XCcv 视觉模型训练平台（社区版）v{__version__}\n\n"
-                          "零基础工业视觉模型训练平台：\n"
-                          "标注 → 训练 → 测试（另附缺陷样本合成工具）\n\n"
-                          "本版本为社区版，基于 AGPL-3.0 开源。")
+        from .i18n import tr
+
+        QMessageBox.about(self, tr("关于 XCcv Community"),
+                          f"{tr('XCcv 视觉模型训练平台（社区版）')} v{__version__}\n\n"
+                          + tr("零基础工业视觉模型训练平台：")
+                          + "\n" + tr("标注 → 训练 → 测试（另附缺陷样本合成工具）")
+                          + "\n\n" + tr("本版本为社区版，基于 AGPL-3.0 开源。"))
 
 
 def main():
@@ -621,8 +660,32 @@ def main():
     except Exception:
         splash.finish()
         raise
+    from .i18n import localize_widget_tree
+
+    localize_widget_tree(window)   # 英文模式替换层（首次构建也要跑）
     window.show()
     splash.finish(window)
+    # 语言切换免重启：偏好文件变化即同进程重建主界面（先建新窗再关旧窗）
+    if "--selftest" not in sys.argv:
+        from .i18n import install_language_watcher
+
+        # watcher 必须跨重建转移到新窗持有（提前析构会撞监视线程销毁竞态）
+        _lang_watcher = install_language_watcher(lambda: None)
+
+        def _rebuild_home():
+            nonlocal window
+            new_window = HomeWindow()
+            localize_widget_tree(new_window)
+            new_window.show()
+            if _lang_watcher is not None:
+                setattr(new_window, "_lang_watcher", _lang_watcher)
+            window.close()
+            window.deleteLater()
+            window = new_window
+
+        if _lang_watcher is not None:
+            _lang_watcher.set_rebuild(_rebuild_home)
+            setattr(window, "_lang_watcher", _lang_watcher)  # 保活引用
     if "--selftest" in sys.argv:
         app.processEvents()
         print("SELFTEST OK 主界面")

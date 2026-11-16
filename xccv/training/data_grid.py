@@ -237,6 +237,8 @@ def _build_widget_classes():
 
         def __init__(self, parent=None):
             super().__init__(parent)
+            from ..i18n import tr
+
             self._entries: list = []
             self._item_by_path: dict = {}
             self._cache: OrderedDict = OrderedDict()   # path -> QIcon（LRU）
@@ -250,17 +252,17 @@ def _build_widget_classes():
             bar = QGridLayout()
             bar.setHorizontalSpacing(10)
             self.cmb_label = QComboBox()
-            self.cmb_label.addItem("全部标签", "")
+            self.cmb_label.addItem(tr("全部标签"), "")
             self.cmb_label.currentIndexChanged.connect(self._apply_filter)
-            self.cb_ok = QCheckBox("只看 OK")
+            self.cb_ok = QCheckBox(tr("只看 OK"))
             self.cb_ok.stateChanged.connect(self._apply_filter)
-            self.cb_unlabeled = QCheckBox("只看未标注")
+            self.cb_unlabeled = QCheckBox(tr("只看未标注"))
             self.cb_unlabeled.stateChanged.connect(self._apply_filter)
-            self.cb_ignore = QCheckBox("含忽略区域")
+            self.cb_ignore = QCheckBox(tr("含忽略区域"))
             self.cb_ignore.stateChanged.connect(self._apply_filter)
             self.lbl_count = QLabel("")
             self.lbl_count.setObjectName("hint")
-            bar.addWidget(QLabel("标签"), 0, 0)
+            bar.addWidget(QLabel(tr("标签")), 0, 0)
             bar.addWidget(self.cmb_label, 0, 1)
             bar.addWidget(self.cb_ok, 0, 2)
             bar.addWidget(self.cb_unlabeled, 0, 3)
@@ -291,7 +293,9 @@ def _build_widget_classes():
             self.list.clear()
             self._root = Path(dataset_dir) if dataset_dir else None
             if self._root is None or not self._root.is_dir():
-                self.lbl_count.setText("（未设置数据集目录）")
+                from ..i18n import tr
+
+                self.lbl_count.setText(tr("（未设置数据集目录）"))
                 return
             from ..gui_utils import auto_cleanup_thread
 
@@ -314,14 +318,18 @@ def _build_widget_classes():
             self._stop_workers()
 
         def _on_scan_failed(self, msg):
-            self.lbl_count.setText(f"扫描失败：{msg}")
+            from ..i18n import tr
+
+            self.lbl_count.setText(f"{tr('扫描失败：')}{msg}")
 
         def _on_scan_done(self, entries: list):
+            from ..i18n import tr
+
             self._entries = list(entries)
             combo = self.cmb_label
             combo.blockSignals(True)
             combo.clear()
-            combo.addItem("全部标签", "")
+            combo.addItem(tr("全部标签"), "")
             for lab in distinct_labels(self._entries):
                 combo.addItem(lab, lab)
             combo.blockSignals(False)
@@ -329,6 +337,8 @@ def _build_widget_classes():
 
         # ---- 筛选与填充 ----
         def _apply_filter(self, *_):
+            from ..i18n import tr
+
             label = self.cmb_label.currentData() or ""
             visible = filter_grid_entries(
                 self._entries, label=label,
@@ -344,18 +354,19 @@ def _build_widget_classes():
                     text += "  " + badge
                 item = QListWidgetItem(self._ph_icon, text)
                 item.setData(Qt.UserRole, e.path)
-                tip = f"{e.path}\n状态：{_STATE_NAMES[e.state]}"
+                tip = (f"{e.path}\n{tr('状态：')}{tr(_STATE_NAMES[e.state])}")
                 if e.labels:
-                    tip += f"\n标签：{'、'.join(e.labels)}"
+                    tip += f"\n{tr('标签：')}{'、'.join(e.labels)}"
                 if e.n_ignore:
-                    tip += f"\n忽略区域：{e.n_ignore}"
+                    tip += f"\n{tr('忽略区域：')}{e.n_ignore}"
                 item.setToolTip(tip)
                 color = {"labeled": QColor("#25406B"), "clean": QColor("#2E9E5B"),
                          "unlabeled": QColor("#8A8F98")}[e.state]
                 item.setForeground(color)
                 self.list.addItem(item)
                 self._item_by_path[e.path] = item
-            self.lbl_count.setText(f"显示 {len(visible)} / 共 {len(self._entries)} 张")
+            self.lbl_count.setText(
+                f"{tr('显示')} {len(visible)} / {tr('共')} {len(self._entries)} {tr('张')}")
             self._start_thumbs([e.path for e in visible])   # 懒加载：只解码可见项
 
         def _start_thumbs(self, paths):

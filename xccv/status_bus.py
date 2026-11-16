@@ -27,8 +27,9 @@ _hosts = {}   # key -> weakref.ref(QMainWindow)
 
 
 def attach_platform_status(win, label: str, key: str) -> None:
-    """大平台主窗口：状态栏左侧加平台名徽章并注册为消息宿主。"""
-    badge = QLabel(f"  {label}  ")
+    from .i18n import tr
+
+    badge = QLabel(f"  {tr(label)}  ")
     badge.setObjectName("badge")
     win.statusBar().addWidget(badge)
     ref = weakref.ref(win, _make_cleaner(key))

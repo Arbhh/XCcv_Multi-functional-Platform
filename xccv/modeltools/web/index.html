@@ -118,7 +118,7 @@ body{font-family:"Microsoft YaHei",sans-serif;background:#f4f7fb;color:#1e293b;
 </head>
 <body>
 <div id="topbar">
-  <span class="title">流程图画布</span>
+  <span class="title" id="page-title">流程图画布</span>
   <button onclick="act('new')">新建</button>
   <button onclick="act('new_from_template')">从模板创建</button>
   <button onclick="act('open')">打开</button>
@@ -207,7 +207,7 @@ if(window.qt && qt.webChannelTransport){
   });
 }
 function handleEvent(payload){
-  if(payload.event === "loaded"){ loadFlow(payload.flow); setStatus("已打开 " + (payload.name || "")); }
+  if(payload.event === "loaded"){ loadFlow(payload.flow); setStatus(__trTxt("已打开 ") + (payload.name || "")); __applyI18N(); }
   else if(payload.event === "status"){ setStatus(payload.text); }
   else if(payload.event === "node_library"){ applyNodeLibrary(payload); }
   else if(payload.event === "run_result"){ applyRunResult(payload); }
@@ -368,18 +368,19 @@ function applyNodeLibrary(payload){
   }
   for(const c of Object.keys(PORT_COLORS))
     if(LGraphCanvas.link_type_colors) LGraphCanvas.link_type_colors[c] = PORT_COLORS[c];
-  for(const def of (payload.nodes || [])){
+  for(const raw of (payload.nodes || [])){
+    const def = _trDef(raw);   // i18n：目录标题/描述/参数 label/端口名按语言替换
     const type = "xccv2/" + def.name;
     SCHEMA[type] = def;
     registerSchemaNode(type, def);
   }
   buildPalette(document.getElementById("search-box").value.trim());
-  setStatus("已载入算子库：" + (payload.nodes || []).length + " 个算子");
+  setStatus(__trTxt("已载入算子库：") + (payload.nodes || []).length + " " + __trTxt("个算子"));
   // 竞态防线：载入流程时库未就绪被搁置的流程，现在重新载入
   if(_pendingFlow){
     const f = _pendingFlow; _pendingFlow = null;
     loadFlow(f);
-    setStatus("已重新载入流程");
+    setStatus(__trTxt("已重新载入流程"));
   }
 }
 let _pendingFlow = null;
@@ -829,9 +830,11 @@ function loadFlow(flow){
   }
   updateCount();
   fitView();
+  __applyI18N();
 }
 function updateCount(){
-  document.getElementById("nodecount").textContent = "节点 " + graph._nodes.length;
+  document.getElementById("nodecount").textContent =
+      __trTxt("节点 ") + graph._nodes.length;
 }
 graph.onNodeAdded = graph.onNodeRemoved = updateCount;
 
@@ -999,9 +1002,9 @@ function buildPalette(filter){
           d.category === cat && match(t, (d.title || d.name) + (d.desc || "")));
       if(!items.length) continue;
       if(!frag.querySelector("h3")){ const h = document.createElement("h3");
-        h.textContent = sec.title; frag.appendChild(h); }
+        h.textContent = _tr(sec.title); frag.appendChild(h); }
       const sub = document.createElement("div"); sub.className = "subcat";
-      sub.textContent = cat; frag.appendChild(sub);
+      sub.textContent = _tr(cat); frag.appendChild(sub);
       for(const [type, d] of items)
         frag.appendChild(_paletteItem(type, d.title || d.name));
     }
@@ -1009,7 +1012,7 @@ function buildPalette(filter){
   }
   if(!host.childNodes.length){
     const d = document.createElement("div"); d.className = "subcat";
-    d.textContent = "（无匹配算子）"; host.appendChild(d);
+    d.textContent = _tr("（无匹配算子）"); host.appendChild(d);
   }
 }
 function _paletteItem(type, label){
@@ -1525,7 +1528,66 @@ resizeCanvas();
 // 调试开关：?nort=1 时不启动连续渲染循环（二分定位用）
 if(!location.search.includes("nort")) canvas.startRendering();
 canvas.setDirty(true, true);
-setStatus("新建或打开流程后开始编辑");
+setStatus(__trTxt("新建或打开流程后开始编辑"));
+// ---- 双语层：Qt 侧注入 window.__I18N_EN（zh→en 表）后调用 ----
+function __trTxt(s){
+  const T = window.__I18N_EN || {};
+  return (s && T[s]) ? T[s] : s;
+}
+function _tr(s){
+  const T = window.__I18N_EN || {};
+  return (s && T[s]) ? T[s] : s;
+}
+function _trDef(d){
+  const T = window.__I18N_EN || {};
+  if(!T || !Object.keys(T).length) return d;
+  const o = JSON.parse(JSON.stringify(d));
+  o.title = _tr(o.title);
+  o.desc = _tr(o.desc);
+  (o.inputs || []).forEach(pp => { pp.label = _tr(pp.label || pp.name); });
+  (o.outputs || []).forEach(pp => { pp.label = _tr(pp.label || pp.name); });
+  for(const spec of Object.values(o.params || {}))
+    if(spec.label) spec.label = _tr(spec.label);
+  return o;
+}
+function __applyI18N(){
+  const T = window.__I18N_EN || {};
+  if(!Object.keys(T).length) return;
+  const sub = (el) => {
+    const txt = (el.textContent || "").trim();
+    if (txt && T[txt]) el.textContent = T[txt];
+  };
+  document.querySelectorAll("button, span, h4, b").forEach(sub);
+  document.querySelectorAll("div").forEach(el => {
+    if (el.children.length === 0) sub(el);
+  });
+  document.querySelectorAll("input[placeholder]").forEach(el => {
+    const v = T[el.placeholder];
+    if (v) el.placeholder = v;
+  });
+  const dt = (document.title || "").trim();
+  if (T[dt]) document.title = T[dt];
+  const pt = document.getElementById("page-title");
+  if (pt) sub(pt);
+  updateCount();   // 注入可能晚于首绘，计数文案需随注入刷新
+  try {   // 节点目录标题/分类（建库前改写，拖出的新节点即英文）
+    Object.values(SCHEMA || {}).forEach(d => {
+      if (d.title && T[d.title.trim()]) d.title = T[d.title.trim()];
+      if (d.category && T[d.category]) d.category = T[d.category];
+    });
+  } catch(e) {}
+  try {   // 画布已有节点：标题 + 控件标签/占位值
+    (graph._nodes || []).forEach(n => {
+      if (n.title && T[String(n.title).trim()]) n.title = T[String(n.title).trim()];
+      (n.widgets || []).forEach(w => {
+        if (w.label && T[w.label]) w.label = T[w.label];
+        if (typeof w.value === "string" && T[w.value]) w.value = T[w.value];
+      });
+    });
+    canvas.setDirty(true, true);
+  } catch(e) {}
+}
+__applyI18N();
 </script>
 </body>
 </html>

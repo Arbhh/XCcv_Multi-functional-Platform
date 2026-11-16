@@ -37,6 +37,7 @@ from .engine import flow_package as fp
 from .engine.flow.ir import ImageData
 from .engine.io_utils import imread_unicode
 from .gui_utils import auto_cleanup_thread
+from .i18n import localize_widget_tree, tr  # 英文替换层
 from .ui_style import APP_QSS, apply_app_theme, bind_style, icon_path, token  # noqa: F401
 from .modeltools.flow_pack import (
     _EMPTY_FLOW, _materialize_xvap, _write_flow_json,
@@ -467,8 +468,8 @@ class FlowPage(QWidget):
         batch_row.addWidget(self.btn_batch_stop)
         right_lay.addLayout(batch_row)
 
-        self.flow_hint = QLabel("流程以 .json 保存于磁盘；「打包流程」把流程与所选模型一并封入"
-                                "单个 .xvap 文件，便于分发与复用。模型节点需先在画布中选择权重文件。")
+        self.flow_hint = QLabel("「打包流程」把流程与所选模型一并封入"
+                                "单个 .xvap 文件，可在测试平台直接加载。")
         self.flow_hint.setObjectName("hint")
         self.flow_hint.setWordWrap(True)
         right_lay.addWidget(self.flow_hint)
@@ -483,7 +484,7 @@ class FlowPage(QWidget):
 
     # ================= 数据路径 / 树 =================
     def _browse_data_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "选择数据路径")
+        d = QFileDialog.getExistingDirectory(self, tr("选择数据路径"))
         if d:
             self.data_edit.setText(d)
             self._load_data_root()
@@ -491,7 +492,7 @@ class FlowPage(QWidget):
     def _load_data_root(self):
         d = Path(self.data_edit.text().strip())
         if not d.is_dir():
-            self.count_label.setText("图片数量: 路径不存在")
+            self.count_label.setText(f"{tr('图片数量')}: {tr('路径不存在')}")
             return
         self.data_root = d
         self._rebuild_tree()
@@ -502,11 +503,11 @@ class FlowPage(QWidget):
         self._thumb_cache_order.clear()
         if self.data_root is None:
             self._tree_total = 0
-            self.count_label.setText("图片数量: 0/0")
+            self.count_label.setText(f"{tr('图片数量')}: 0/0")
             return
         # T2-3：目录扫描移后台线程（千图目录不再冻结主线程）；
         # 完成后回主线程一次性建树（QTreeWidgetItem 只能在主线程创建）
-        self.count_label.setText("图片数量: 扫描中…")
+        self.count_label.setText(f"{tr('图片数量')}: {tr('扫描中…')}")
         self._scan_gen += 1
         gen = self._scan_gen
         # 无父对象（T2-3）：页面可能在线程运行中被关闭（parented 运行线程
@@ -529,7 +530,7 @@ class FlowPage(QWidget):
         if gen != self._scan_gen:
             return  # 过期扫描（用户已换目录）
         self._tree_total = 0
-        self.count_label.setText(f"图片数量: 扫描失败（{msg}）")
+        self.count_label.setText(f"{tr('图片数量')}: {tr('扫描失败')}（{msg}）")
 
     def _fill_tree(self, rels: list, gen: int):
         if gen != self._scan_gen:
@@ -561,7 +562,7 @@ class FlowPage(QWidget):
             self.tree.setUpdatesEnabled(True)
         self.tree.expandToDepth(0)
         total = len(rels)
-        self.count_label.setText(f"图片数量: {total}/{total}")
+        self.count_label.setText(f"{tr('图片数量')}: {total}/{total}")
         self._tree_total = total
 
     def set_search_query(self, text: str) -> None:
@@ -593,7 +594,7 @@ class FlowPage(QWidget):
             for i in range(root_item.childCount()):
                 root_item.child(i).setHidden(False)
         self.count_label.setText(
-            f"图片数量: {self._tree_total if not text else visible}/{self._tree_total}")
+            f"{tr('图片数量')}: {self._tree_total if not text else visible}/{self._tree_total}")
 
     def _selected_image(self) -> Path | None:
         it = self.tree.currentItem()
@@ -685,7 +686,7 @@ class FlowPage(QWidget):
 
     # ================= 模型目录 / 流程选择 =================
     def _browse_model_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "选择模型目录（流程所在位置）")
+        d = QFileDialog.getExistingDirectory(self, tr("选择模型目录（流程所在位置）"))
         if d:
             self.model_dir_edit.setText(d)
             self._refresh_flow_combo()
@@ -1110,10 +1111,11 @@ def _wrap_window():
     class _Win(QMainWindow):
         def __init__(self):
             super().__init__()
-            self.setWindowTitle("XCcv 流程图平台")
+            self.setWindowTitle(tr("XCcv 流程图平台"))
             self.setWindowIcon(QIcon(str(icon_path("flow.png"))))   # v0.5.5追加 独立图标
             self.resize(1280, 780)
             apply_app_theme(self)
+            localize_widget_tree(self)
             self.setCentralWidget(FlowPage())
 
     return _Win()

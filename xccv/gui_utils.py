@@ -111,7 +111,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
 
     生命周期（坑 P153）：产品入口丢弃返回值——心跳 QTimer 若只被 stop 闭包
     引用会随之被 GC，心跳永停：每次启动只记一条"卡顿开始"、此后永久失明
-    （V0.6 首版真机日志 48 条开始/0 条结束）。故 QTimer 挂 QApplication 为父
+    （V0.6 首版：日志 48 条开始 / 0 条结束）。故 QTimer 挂 QApplication 为父
     并登记模块级保活表。布防：连续 3 次准时心跳（事件循环已稳定运转）后才
     开始判定——启动期窗口构建本就无事件循环（有加载中界面兜底），不计卡顿。
     """
