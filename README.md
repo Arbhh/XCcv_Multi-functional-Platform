@@ -18,11 +18,11 @@ XCcv Community 是一个面向工业视觉场景的**离线桌面端**深度学�
 | 模块 | 能力 |
 |---|---|
 | 标注平台 | 集成 labelme 标注器：矩形 / 多边形、自动保存、类别体系管理；**AI 智能标注**（S 键智能多边形、B 键画笔塑形、L 键单张智能标注、目录批量预标注，基于 SAM / EfficientSAM）；OK/良品目录徽标、标注质量要点、AI 复核疑似漏标 |
-| 训练平台 | 项目制管理；**五类任务 12 种内置模型**（分类 / 检测 / 分割 / 无监督异常检测 PatchCore / OCR CRNN，含 ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN）；快速配置与专家模式双轨参数；工业优化（CBAM/ECA、DCNv2、Focal 系损失等）；训练加速（冻结骨干、AMP、TF32、早停、灰度、确定性复现）；P2 小目标头、负样本训练、切图训练；逐类指标表、数据网格、划分环形图随参数实时重绘、图像增强全算子实时预览、Loss 判读、run_manifest、数据体检、多训练对比 |
-| 测试平台 | 单图 / 批量推理；置信度与 IOU 阈值实时调节；类别筛选；4K 大图分块推理；结果导出为统一 JSON / labelme / COCO；**标准 / 项目复盘双页**（自动对训练集批量；复盘页**已评估 / 未评估解耦**——已评估按 正确 / 漏检 / 过检 三组，未评估生产图按 OK / NG 两组）、维度阈值拖线与键入（置信度/面积/短边/长边/灰度差，扫描曲线给出阈值处各分组的图数、与右侧分组同口径，切换范围曲线随之换口径）、复判回流、模型 A/B 比对（比对结果缓存复用 + 总体优劣比例条）、推理耗时/显存统计 |
+| 训练平台 | 项目制管理；**五类任务 14 种内置模型**（分类 / 检测 / 分割 / 无监督与少样本异常检测 PatchCore、CIF、SubspaceAD / OCR CRNN，含 ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN）；快速配置与专家模式双轨参数；工业优化（CBAM/ECA、DCNv2、Focal 系损失等）；训练加速（冻结骨干、AMP、TF32、早停、灰度、确定性复现）；P2 小目标头、负样本训练、切图训练；逐类指标表、数据网格、划分环形图随参数实时重绘、图像增强全算子实时预览、Loss 判读、run_manifest、数据体检、多训练对比 |
+| 测试平台 | 单图 / 批量推理；置信度与 IOU 阈值实时调节；类别筛选；4K 大图分块推理；结果导出为统一 JSON / labelme / COCO；**标准 / 项目复盘双页**（自动对训练集批量；复盘页**已评估 / 未评估解耦**——已评估按 正确 / 漏检 / 过检 三组，未评估生产图按 OK / NG 两组）、维度阈值拖线与键入（置信度/面积/短边/长边/灰度差，扫描曲线给出阈值处各分组的图数、与右侧分组同口径，切换范围曲线随之换口径）、复判回流、模型 A/B 比对（比对结果缓存复用 + 总体优劣比例条）、推理耗时/显存统计；分数语义随模型声明（置信度 / 分类概率 / 图像分数 z） |
 | 流程图 | 与 AI 平台同级的独立模块：内置 **39 个 AI 与通用算子**（模型推理 / 检出过滤 / 裁图与合并 / 逐图执行 / 结果合并 / 逻辑判定 / 输出）；Web 画布拖拽编排，节点库分「AI 算子 / 通用算子」；支持运行预览、保存 JSON、打包 / 解包 `.xvap`、批量运行；附 4 个模板（AI 过滤、级联裁图合并、检测→分割级联、检测→裁图→分类级联） |
 | 缺陷样本合成 | 把缺陷贴图以泊松融合自然合成到良品图上，扩充稀缺缺陷样本（独立进程，内嵌 Web 界面） |
-| 界面语言 | **中文 / English 一键切换**：主界面「设置」对话框切换后全平台自动生效；常驻界面文案与高频消息同步翻译（详见 [README_EN](README_EN.md)）；部分设置类窗口与缺陷样本合成工具尚未英文化，后续版本补齐 |
+| 界面语言 | **中文 / English 一键切换**：主界面「设置」对话框切换后全平台自动生效；常驻界面文案与高频消息同步翻译（详见 [README_EN](README_EN.md)） |
 
 > 流程图模块支持 AI 与通用算子的可视化编排（39 节点 / 4 模板），覆盖模型推理、检出过滤、
 > 裁图合并、逻辑判定与结果输出等常用产线链路。
@@ -112,7 +112,7 @@ XCcv-Community/
 │   └── assets/          #   图标资源
 ├── labelme/             # vendored labelme 5.8.1（GPLv3，含本地修改，清单见 labelme/MODIFICATIONS.md）
 ├── docs/                # 快速上手 / 项目简介 / 配图
-├── licenses/            # 许可证文本（AGPL-3.0 / labelme GPLv3）
+├── licenses/            # 许可证文本（AGPL-3.0 / labelme GPLv3 / CIF MIT / SubspaceAD Apache-2.0 / BSD-3）
 ├── requirements.txt
 └── run_*.bat            # 各平台启动脚本
 ```
@@ -126,7 +126,11 @@ XCcv-Community/
   许可文本见 [licenses/labelme-LICENSE-GPLv3.txt](licenses/labelme-LICENSE-GPLv3.txt)。
 - 训练链路使用的 ultralytics（YOLO11 / SAM）为 **AGPL-3.0** 许可；如需闭源商用，
   请自行评估其企业许可方案。
-- 第三方依赖清单与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- CIF 后端代码源自 [Sunny5250/CIF](https://github.com/Sunny5250/CIF)（MIT），
+  SubspaceAD 后端代码源自 [CLendering/SubspaceAD](https://github.com/CLendering/SubspaceAD)
+  （Apache-2.0）；修改部分按 AGPL-3.0 授权，许可全文见 `licenses/`。
+- 第三方依赖清单与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
+  论文引用见 [CITATIONS.md](CITATIONS.md)。
 
 ## 免责声明
 

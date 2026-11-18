@@ -174,27 +174,89 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     window.show()
     splash.finish(window)
     register(key, window)
-    # 语言切换免重启：偏好文件变化即同进程重建平台窗口（先建新窗再关旧窗）
-    from .i18n import install_language_watcher
+    # 语言切换免重启：偏好文件变化即同进程重建平台窗口（先建新窗再关旧窗）。
+    # defectgen 不重建：重建会另起 uvicorn 端口，origin 变化导致资产 IndexedDB
+    # 变空；重开窗口生效。
+    if key != "defectgen":
+        from .i18n import install_language_watcher
 
-    # watcher 必须跨重建转移到新窗持有（提前析构会撞监视线程销毁竞态）
-    _lang_watcher = install_language_watcher(lambda: None, parent=None)
+        # watcher 必须跨重建转移持有（挂到新窗）：提前析构会撞 Win32 监视线程
+        # 的销毁竞态。
+        _lang_watcher = install_language_watcher(lambda: None, parent=None)
 
-    def _rebuild_window():
-        nonlocal window
-        new_window = build()
-        localize_widget_tree(new_window)
-        new_window.show()
-        register(key, new_window)
+        def _lang_pending_note(reason: str) -> None:
+            """重建未执行的提示（状态栏优先，兜底弹窗）。"""
+            try:
+                sb = window.statusBar()
+                if sb is not None:
+                    sb.showMessage(tr(reason), 10000)
+                    return
+            except Exception:
+                pass
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+
+                QMessageBox.information(window, tr("界面语言"), tr(reason))
+            except Exception:
+                pass
+
+        def _rebuild_window():
+            nonlocal window
+            # 训练/批量/加载等工作进行中禁止重建——旧窗承载工作线程，重建会
+            # 撕毁其宿主窗口；提示关闭窗口重开后生效。
+            try:
+                block = getattr(window, "i18n_rebuild_blocked", None)
+                if callable(block) and block():
+                    reason = None
+                    get_reason = getattr(window, "i18n_block_reason", None)
+                    if callable(get_reason):
+                        try:
+                            reason = get_reason()
+                        except Exception:
+                            reason = None
+                    _lang_pending_note(
+                        reason or "任务运行中，语言重开窗口后生效")
+                    return
+            except Exception:
+                pass  # 钩子异常不阻塞重建
+            try:
+                new_window = build()
+                localize_widget_tree(new_window)
+                new_window.show()
+                register(key, new_window)
+                if _lang_watcher is not None:
+                    setattr(new_window, "_lang_watcher", _lang_watcher)
+            except Exception:  # 重建失败绝不让进程消亡（保留原窗口）
+                import logging
+
+                logging.getLogger("xccv").warning(
+                    "语言重建失败（保留原窗口，重开生效）", exc_info=True)
+                _lang_pending_note("重建失败，语言重开窗口后生效")
+                return
+            # 宿主重建后子窗跟随：旧宿主经 i18n_transfer_children(new_host)
+            # 转移已打开的业务子窗（如训练项目窗）。
+            try:
+                transfer = getattr(window, "i18n_transfer_children", None)
+                if callable(transfer):
+                    transfer(new_window)
+            except Exception:
+                import logging
+
+                logging.getLogger("xccv").warning(
+                    "子窗转移失败（重开窗口生效）", exc_info=True)
+            try:
+                window.close()      # 旧窗走 closeEvent 清理线程/缓存
+                window.deleteLater()
+            except Exception:
+                import logging
+
+                logging.getLogger("xccv").warning(
+                    "旧窗口关闭失败（保留）", exc_info=True)
+            window = new_window
+
         if _lang_watcher is not None:
-            setattr(new_window, "_lang_watcher", _lang_watcher)
-        window.close()          # 旧窗走 closeEvent 清理线程/缓存
-        window.deleteLater()
-        window = new_window
-
-    if _lang_watcher is not None:
-        _lang_watcher.set_rebuild(_rebuild_window)
-        setattr(window, "_lang_watcher", _lang_watcher)  # 保活引用
+            _lang_watcher.set_rebuild(_rebuild_window)
+            setattr(window, "_lang_watcher", _lang_watcher)  # 保活引用
     if log_path is not None:
         import logging
 

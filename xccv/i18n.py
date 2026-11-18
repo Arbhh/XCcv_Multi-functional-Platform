@@ -1,4 +1,4 @@
-"""平台多语言：中文为源语言，英文走替换层。
+"""平台多语言（V0.7.2 平台总体①）：中文为源语言，英文走替换层。
 
 设计（全平台中文串 3 万+，逐处包裹不现实）：
 - tr(s)：英语言模式查 EN_TABLE，命中返回英文，未命中回退原文（增量覆盖，
@@ -12,7 +12,7 @@
 - 切换 = 保存 + 延时 1.6s 拉起新进程再关旧窗（错峰规避 single_instance
   守卫；一键切换，重启后生效）。
 
-标注平台（labelme 子目录）不接入；流程算子名/参数名是 IR 数据键，
+标注平台（labelme 子目录，上游代码为主）不接入；流程算子名/参数名是 IR 数据键，
 不参与翻译，仅翻译其展示层文案。
 """
 
@@ -167,7 +167,7 @@ class _LangWatcher:
     """语言偏好监听器：偏好文件变化 → 400ms 防抖 → 调 rebuild 重建界面。
 
     QFileSystemWatcher/QTimer 全部挂自身且**应用退出前不析构**——刚处理完
-    文件变化就被销毁会撞 Win32 监视线程的销毁竞态；
+    文件变化就被销毁会撞 Win32 监视线程的销毁竞态（0xC0000005 实测）；
     宿主窗口重建时经 set_rebuild 转移回调、把引用挂到新窗。"""
 
     def __init__(self, rebuild=None, parent=None):
@@ -202,10 +202,20 @@ class _LangWatcher:
         self._debounce.start()
 
     def _fire(self):
-        new_lang = lang()
+        # 偏好文件是跨进程共享状态，lang() 走进程内缓存——非"保存"进程的
+        # 缓存恒为启动值，外部改动后 new_lang == self._lang 恒成立，平台
+        # 窗口不会重建。此处绕过缓存直读文件，并同步进程缓存。
+        global _lang_cache
+        try:
+            new_lang = json.loads(_LANG_FILE.read_text(encoding="utf-8")).get("lang")
+        except Exception:  # noqa: BLE001（坏文件/缺失：放弃本次，防抖再等）
+            return
+        if new_lang not in ("zh", "en"):
+            return
         if new_lang == self._lang or self._rebuild is None:
             return
         self._lang = new_lang
+        _lang_cache = new_lang
         self._rebuild()
 
 

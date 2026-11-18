@@ -181,6 +181,19 @@ class _BatchThread(QThread):
                 result = {"file": p.name, "path": str(p),
                           "width": w, "height": h,
                           "detections": detections}
+                # 图像级口径逐图附加值（batch_match 分支消费）
+                if str(self._task) == "anomaly" and pred.probs:
+                    result["image_score"] = round(float(pred.probs[0]), 4)
+                if str(self._task) == "classification" and pred.labels \
+                        and not pred.boxes:
+                    lid = int(pred.labels[0])
+                    result["classifications"] = [{
+                        "label": (self._classes[lid]
+                                  if self._classes and lid < len(self._classes)
+                                  else str(lid)),
+                        "score": (round(float(pred.scores[0]), 4)
+                                  if pred.scores else 0.0),
+                    }]
                 if self._save_json and self._out_dir is not None:
                     self._save_json_file(p, result, pred)
                 if self._save_images and self._out_dir is not None:
@@ -207,7 +220,9 @@ class _BatchThread(QThread):
                 from ..engine.metrics.batch_match import collect_match_stats
 
                 self.summary["match_stats"] = collect_match_stats(
-                    results, iou_thr=self._iou)
+                    results, iou_thr=self._iou, task=self._task,
+                    score_semantics=getattr(self._model, "score_semantics",
+                                            None))
             except Exception:  # noqa: BLE001  统计失败不影响批量结果
                 log.warning("批量 GT 匹配统计失败", exc_info=True)
             if self._save_json and self._out_dir is not None:
@@ -243,7 +258,9 @@ class _BatchThread(QThread):
                 inference={"conf": self._conf, "iou": self._iou},
                 prediction=pred, classes=self._classes or [],
                 flow_info={"removed": 0, "count_check": None}
-                if self._flow else None)
+                if self._flow else None,
+                score_semantics=getattr(self._model, "score_semantics",
+                                        None))
             out = self._rel_target(path, "检出结果", ".json")
             if self._json_format == "labelme":
                 from ..engine.result_json import to_labelme
@@ -397,6 +414,20 @@ class TestingWindow(QMainWindow):
         from ..i18n import localize_widget_tree  # 英文模式整体替换层
 
         localize_widget_tree(self)
+
+    def i18n_rebuild_blocked(self) -> bool:
+        """语言重建忙时钩子：批量/加载线程存活或已加载模型即禁重建。"""
+        for attr in ("_batch_thread", "_load_thread"):
+            worker = getattr(self, attr, None)
+            if worker is not None and worker.isRunning():
+                return True
+        return self.model is not None
+
+    def i18n_block_reason(self) -> str:
+        """忙因提示语：已加载模型与运行中任务分开说。"""
+        if self.model is not None:
+            return "已加载模型，语言重开窗口后生效"
+        return "任务运行中，语言重开窗口后生效"
 
     def closeEvent(self, event):
         if self._load_thread is not None and self._load_thread.isRunning():
@@ -643,11 +674,13 @@ class TestingWindow(QMainWindow):
         slider = QSlider(Qt.Horizontal)
         slider.setRange(vmin, vmax)
         slider.setValue(value)
+        slider._xccv_label = label      # 模型加载时按分数语义改题
+        slider._xccv_title = tr(title)
         layout.addWidget(label)
         layout.addWidget(slider)
         slider.valueChanged.connect(
-            lambda v, lb=label, t=tr(title): (
-                lb.setText(f"{t}：{v / 100:.2f}"),
+            lambda v, lb=label, sl=slider: (
+                lb.setText(f"{sl._xccv_title}：{v / 100:.2f}"),
                 self._infer_timer.start()))
         return slider
 
@@ -748,10 +781,21 @@ class TestingWindow(QMainWindow):
         )
         is_cls = self.task == "classification"
         is_seg = self.task == "segmentation"
-        is_anomaly = self.task == "anomaly"
         self.conf_slider.setEnabled(not is_cls)
         self.iou_slider.setEnabled(not is_cls)
-        self.show_masks.setVisible(is_seg or is_anomaly)
+        # 滑条名随模型分数语义渲染（ANOMALY=图像分数 z）
+        sem = getattr(model, "score_semantics", None) or {}
+        conf_title = str(sem.get("name") or "置信度阈值")
+        self.conf_slider._xccv_title = conf_title
+        lbl = getattr(self.conf_slider, "_xccv_label", None)
+        if lbl is not None:
+            lbl.setText(f"{conf_title}：{self.conf_slider.value() / 100:.2f}")
+        tip = str(sem.get("higher") or "")
+        if str(self.task) == "anomaly":
+            tip = (tip + "\n" if tip else "") + \
+                "conf→图像分数 z=1/conf−1（0.25→z=3）"
+        self.conf_slider.setToolTip(tip)
+        self.show_masks.setVisible(is_seg)
         self.show_area.setVisible(not is_cls)
         # 类别筛选下拉
         self.class_filter.blockSignals(True)

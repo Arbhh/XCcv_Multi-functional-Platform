@@ -25,7 +25,8 @@
    - 填项目名，选择数据集目录（第 1 步的图片文件夹）与模型输出目录；
    - 选择任务类型：分类 / 目标检测 / 实例分割 / 无监督异常检测 / OCR 字符识别；
 2. 进入项目 → 选模型（检测推荐 `yolo11n`，分割推荐 `yolo11n-seg` 或 `maskrcnn18`，
-   分类推荐 `resnet18`，异常检测 `patchcore`，OCR `crnn`）；
+   分类推荐 `resnet18`，异常检测推荐 `patchcore`（零训练基线）/ `cif`（少样本超图）/
+   `subspacead`（少样本 PCA 子空间），OCR `crnn`）；
 3. 「快速配置」模式会按数据情况推荐参数；需要细调时切换「专家模式」（增强策略、工业优化、
    训练加速、切图训练等）。项目信息页提供数据网格（按标签 / OK 负样本 / 未标注筛选）、
    随训练/验证比例实时重绘的划分环形图与图像增强实时预览；
@@ -75,6 +76,11 @@
 - **首次训练很慢 / 卡在下载**：训练首次会从官方源下载预训练权重（YOLO / torchvision），
   离线环境请提前在有网机器下载并放入 `weights/` 目录（参见 `xccv/engine/offline.py` 注释）；
 - **AI 智能标注按钮提示缺权重**：按 README 把 SAM 权重放到 `weights/sam/`；
+- **CIF / SubspaceAD 提示缺骨干权重**：CIF 需 DINO ViT-B/8 权重
+  `weights/dino/dino_vitbase8_pretrain.pth`（或环境变量 `XCCV_DINO_CKPT`）；
+  SubspaceAD 优先使用 `weights/dinov2/`（或 `XCCV_DINOV2_CKPT`）中的本地权重，
+  本地缺失时 transformers 可能从 Hugging Face 下载标准 DINOv2 权重
+  （可用 `HF_ENDPOINT` 镜像）。权重不随包分发，请按各发布方许可使用；
 - **训练报类别不一致**：迁移学习权重必须与当前数据集类别一致；
 - **显存不足**：调小批量大小（batch_size），或开启「冻结骨干」「轻量掩码头」等加速选项；
 - **切换界面语言**：主界面「设置」→「界面语言」选 English，保存后各窗口自动切换（免重启），

@@ -88,6 +88,11 @@ class ClassifierModel(BaseModel):
         super().__init__(num_classes, device)
         self.arch = arch
         self.task = TaskType.CLASSIFICATION
+        # 分类分数 = softmax 概率（0~1）
+        self.score_semantics = {
+            "key": "prob", "name": "置信度", "range": [0.0, 1.0],
+            "higher": "概率越高越可信",
+        }
         self.industrial = industrial
         self._frozen = False  # fit 中按 cfg.freeze_backbone 重建（保证"先冻结后插入"顺序）
         self.net = self._build(arch, num_classes, use_pretrained, industrial).to(self.device)

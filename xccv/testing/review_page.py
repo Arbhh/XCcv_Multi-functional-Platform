@@ -1,4 +1,4 @@
-"""项目复盘页：选项目 + 训练记录 → 自动对训练数据集
+"""项目复盘页（用户勘误 2026-11-13）：选项目 + 训练记录 → 自动对训练数据集
 批量推理一次 → 分组缩略网格 + 维度阈值复用调整。
 
 与「标准」页的分工（界面解耦勘误）：
@@ -6,7 +6,7 @@
   该项目的训练数据集；批量参数（conf/iou/检出流程）在控制行暴露可改；
 - 一次加载只推理一次，结果（match_stats）落临时缓存文件；关闭平台或
   重新选择项目/记录时清理；此后拖维度阈值只复用结果重新分组，零重推理；
-- 已评估/未评估解耦：「已评估」显示 正确/漏检/过检 三组
+- V0.7.2 任务③：已评估/未评估解耦——「已评估」显示 正确/漏检/过检 三组
   （过检 > 漏检 > 正确，见 review_logic），「未评估」显示无标注生产图按
   检出过阈与否分 OK/NG 两组；左侧阈值曲线随范围同步换口径；
 - 缩略网格样式与训练平台数据网格同源（懒加载 + LRU，双击系统看图打开）。
@@ -67,6 +67,19 @@ class ReviewThread(QThread):
 
             model = load_model(self._weights)
             classes = list(model.classes or [])
+            task = getattr(model, "task", None)
+            task_v = str(getattr(task, "value", task) or "") if task is not None else ""
+            # §二：ANOMALY/分类按数据集目录当弱 GT——类别目录名
+            # 集合由数据集扫描得出（与训练平台 scan_classification_dataset 同源）
+            weak_classes = None
+            if task_v in ("anomaly", "classification"):
+                try:
+                    from ..engine.dataset.reader import scan_classification_dataset
+
+                    _samples, weak_classes = scan_classification_dataset(
+                        self._dataset)
+                except Exception:  # noqa: BLE001  扫描失败退父目录名启发
+                    weak_classes = None
             flow = None
             fp = self._project_dir / "检出流程.json"
             if fp.is_file():
@@ -124,12 +137,29 @@ class ReviewThread(QThread):
 
                     det["_dims"] = box_image_dims(gray, [x1, y1, x2, y2])
                     dets.append(det)
-                results.append({"file": p.name, "path": str(p),
-                                "width": w, "height": h, "detections": dets})
+                entry = {"file": p.name, "path": str(p),
+                         "width": w, "height": h, "detections": dets}
+                # §二：图像级口径逐图附加值（batch_match 分支消费）
+                if task_v == "anomaly" and pred.probs:
+                    entry["image_score"] = round(float(pred.probs[0]), 4)
+                if task_v == "classification" and pred.labels \
+                        and not pred.boxes:
+                    lid = int(pred.labels[0])
+                    entry["classifications"] = [{
+                        "label": (classes[lid]
+                                  if classes and lid < len(classes)
+                                  else str(lid)),
+                        "score": (round(float(pred.scores[0]), 4)
+                                  if pred.scores else 0.0),
+                    }]
+                results.append(entry)
                 costs.append(round((_time.perf_counter() - t0) * 1000, 1))
                 self.progress.emit(i, total, p.name)
 
-            stats = collect_match_stats(results, iou_thr=self._iou)
+            stats = collect_match_stats(
+                results, iou_thr=self._iou, task=task,
+                score_semantics=getattr(model, "score_semantics", None),
+                weak_classes=weak_classes)
             self._save_cache(stats)
             self.finished_ok.emit(results, stats, classes, str(self._weights))
         except Exception as e:  # noqa: BLE001
@@ -168,6 +198,7 @@ class ProjectReviewPage(QWidget):
         self._classes: list = []
         self._weights: str = ""
         self._project_dir: Path | None = None
+        self._task_mode = "detection"   # §二：detection/anomaly/classification
         self._thread = None
         self._thumb_worker = None
         self._icons: OrderedDict = OrderedDict()
@@ -228,9 +259,11 @@ class ProjectReviewPage(QWidget):
         ds_widget = QWidget()
         ds_widget.setLayout(ds_row)
         f1.addWidget(ds_widget, 2, 1)
-        f1.addWidget(QLabel("置信度 conf"), 3, 0)
+        self.lbl_conf = QLabel("置信度 conf")
+        f1.addWidget(self.lbl_conf, 3, 0)
         f1.addWidget(self.spin_conf, 3, 1)
-        f1.addWidget(QLabel("IOU"), 4, 0)
+        self.lbl_iou = QLabel("IOU")
+        f1.addWidget(self.lbl_iou, 4, 0)
         f1.addWidget(self.spin_iou, 4, 1)
         f1.addWidget(self.btn_start, 5, 0, 1, 2)
         lv.addWidget(g1)
@@ -266,7 +299,7 @@ class ProjectReviewPage(QWidget):
         lv.addWidget(self.lbl_hint)
         root.addWidget(left)
 
-        # ---- 右侧：范围切换 + 分组缩略网格（已评估/未评估解耦） ----
+        # ---- 右侧：范围切换 + 分组缩略网格（V0.7.2 任务③解耦） ----
         right = QWidget()
         rv = QVBoxLayout(right)
         rv.setContentsMargins(0, 0, 0, 0)
@@ -330,7 +363,7 @@ class ProjectReviewPage(QWidget):
         self._refresh_projects()
 
     def _set_scope(self, scope: str, initial: bool = False):
-        """已评估/未评估解耦切换：分组与曲线同步换口径。"""
+        """已评估/未评估解耦切换（V0.7.2 任务③）：分组与曲线同步换口径。"""
         scope = "unjudged" if scope == "unjudged" else "evaluated"
         self._scope = scope
         self.btn_scope_eval.setChecked(scope == "evaluated")
@@ -342,6 +375,38 @@ class ProjectReviewPage(QWidget):
         self.threshold_panel.set_scope(scope)
         if not initial:
             self._regroup(self.threshold_panel.enabled_dims())
+
+    def _apply_task_mode(self, mode: str, semantics: dict | None = None):
+        """§二：按模型任务口径调整复盘 UI（组名/行可见性/阈值提示）。
+
+        detection=检测/分割（GT 框口径，默认布局不动）；anomaly=图像级
+        弱 GT（三组语义不变，阈值面板换图像分数轴）；classification=对/
+        错分组（过检组改题"错误"、漏检组隐藏、IOU 行隐藏）。
+        """
+        mode = mode if mode in ("anomaly", "classification") else "detection"
+        self._task_mode = mode
+        from ..i18n import tr
+
+        self._group_bases[self.grp_over] = ("错误" if mode == "classification"
+                                            else "过检")
+        self.grp_missed.setVisible(mode != "classification")
+        for w in (self.lbl_iou, self.spin_iou):
+            w.setVisible(mode == "detection")
+        sem = semantics or {}
+        if mode == "anomaly":
+            self.lbl_conf.setText(tr("阈值 conf"))
+            self.lbl_conf.setToolTip(tr(
+                "conf→图像分数 z=1/conf−1（0.25→z=3）；拖维度阈值面板调分"))
+        elif mode == "classification":
+            self.lbl_conf.setText(tr("置信度 conf"))
+            self.lbl_conf.setToolTip(tr(
+                "批量推理的预测概率下限（拖线调整的下限）"))
+        else:
+            self.lbl_conf.setText(tr("置信度 conf"))
+            self.lbl_conf.setToolTip(tr("批量推理的置信度下限（拖线调整的下限）"))
+        if sem.get("name"):
+            self.spin_conf.setToolTip(
+                f"{tr(str(sem.get('name')))}：{tr(str(sem.get('higher', '')))}")
 
     # ---------- 项目 / 记录 ----------
     def _refresh_projects(self):
@@ -511,6 +576,9 @@ class ProjectReviewPage(QWidget):
         self._stats = stats
         self._classes = classes
         self._weights = weights
+        # §二：按本次模型任务口径调整组名/行可见性（stats.task 为准）
+        self._apply_task_mode(str(stats.get("task") or "detection"),
+                              stats.get("score_semantics"))
         total_det = sum(len(r["detections"]) for r in results)
         self.statusMessage.emit(
             f"{tr('复盘完成')}：{len(results)} {tr('张图')}，"
@@ -540,7 +608,7 @@ class ProjectReviewPage(QWidget):
         groups = classify_images(self._stats, thresholds)
         self._items_by_path.clear()
         if self._scope == "unjudged":
-            # 未评估按有无过阈检出分 NG/OK
+            # V0.7.2 任务③：未评估按有无过阈检出分 NG/OK
             ok_entries, ng_entries = [], []
             for e in groups["unjudged_list"]:
                 (ng_entries if e.get("fp") else ok_entries).append(e)
@@ -573,7 +641,8 @@ class ProjectReviewPage(QWidget):
                 self._items_by_path[e["path"]] = item
             self._set_group_title(group, len(entries))
         self.lbl_stats.setText(
-            stats_line(groups, self._scope) + "　（双击图片用系统看图打开）")
+            stats_line(groups, self._scope, self._task_mode)
+            + "　（双击图片用系统看图打开）")
         self._start_thumbs()
 
     def _placeholder(self) -> QIcon:

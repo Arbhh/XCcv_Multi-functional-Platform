@@ -141,6 +141,12 @@ class AnomalyModel(BaseModel):
     def __init__(self, num_classes: int = 1, device: str = "auto",
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
+        self.task = TaskType.ANOMALY
+        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        self.score_semantics = {
+            "key": "z", "name": "图像分数", "range": [0.0, None],
+            "higher": "分数越高越异常（OK 分布 z 标定）",
+        }
         self.image_size = self.default_image_size
         self.backbone = self._build_backbone(use_pretrained)
         self.backbone.to(self.device).eval()
@@ -251,28 +257,39 @@ class AnomalyModel(BaseModel):
             self.dist_mu, self.dist_sigma = 0.0, 1.0
         # 图像级分数标定：留出 OK 图的 topk 均值分布
         ok_scores = []
-        for s in pool[:min(len(pool), 200)]:
+        _n_cal = min(len(pool), 200)
+        for _ci, s in enumerate(pool[:_n_cal], start=1):
             img = imread_unicode(s.image_path)
             if img is None:
                 continue
             _, sc = self._patch_dists(img)
             ok_scores.append(sc)
+            if reporter is not None:      # 阶段化进度：2=标定
+                reporter.on_train_progress(2, _ci, _n_cal)
         if len(ok_scores) >= 5:
             self.score_mu = float(np.mean(ok_scores))
             self.score_sigma = max(float(np.std(ok_scores)), 1e-6)
 
         # 3) 验证集指标（NG + 留出 OK；全 OK 数据集时无 AUROC）
         scores, labels = [], []
+        _n_val = max(len(val_ng) + len(val_ok), 1)
+        _v_done = 0
         for s in val_ng:
             img = imread_unicode(s.image_path)
             if img is not None:
                 scores.append(self._patch_dists(img)[1])
                 labels.append(1)
+            _v_done += 1
+            if reporter is not None:      # 阶段化进度：3=验证评估
+                reporter.on_train_progress(3, _v_done, _n_val)
         for s in val_ok:
             img = imread_unicode(s.image_path)
             if img is not None:
                 scores.append(self._patch_dists(img)[1])
                 labels.append(0)
+            _v_done += 1
+            if reporter is not None:
+                reporter.on_train_progress(3, _v_done, _n_val)
         auroc = image_auroc(scores, labels)
         ap = image_ap(scores, labels)
         z25 = _z_from_conf(0.25)

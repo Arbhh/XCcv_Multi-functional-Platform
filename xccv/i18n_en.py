@@ -3,7 +3,7 @@
 范围口径（v1）：常驻界面文案（窗口标题/页面标题/组标题/按钮/标签/复选/
 页签/下拉项/表头/占位符）+ 高频动态消息前缀；tooltip、一次性弹窗正文、
 日志与流程算子名暂不翻译（回退中文），后续增量补表即可（tr 未命中回退
-原文，不阻断）。标注平台（labelme 子目录）不接入。
+原文，不阻断）。标注平台（labelme 子目录，上游代码为主）不接入。
 """
 
 TABLE = {
@@ -438,7 +438,7 @@ TABLE = {
     "切换界面语言，重启平台后生效": "Switch UI language (restart to apply)",
     "EN": "EN",
     "中文": "中文",
-    # ---- 双语适配补表（chrome / tooltip / 动态文案） ----
+    # ---- 全量双语适配补表（chrome+tooltip+动态） ----
     # 阈值面板图表
     "置信度": "Confidence",
     "面积": "Area",
@@ -939,7 +939,7 @@ TABLE = {
         "Loading deep learning components…\nFirst start takes 1–2 minutes",
     "正在加载…": "Loading…",
     "正在加载组件…": "Loading components…",
-    # ---- 双语适配（主界面卡片 / 训练项目窗口 / 创建对话框 /
+    # ---- 全量双语适配（主界面卡片/训练项目窗口/创建对话框/
     #      模型工具卡片与窗口/流程图编辑器 web/算子名/任务与模型标签/注释字） ----
     # 主界面卡片页 + 导航 + 设置
     "标注平台": "Annotation",
@@ -1671,7 +1671,6 @@ TABLE = {
     "种样本": " ratio(s)",
     "说明：模型只在服务进程内解密，接口永不返回权重；每个已加载模型/流程是一个可并行的 API（按 id 寻址）。流程包内嵌的 AI 模型在首次推理时自动加载并常驻复用。输出为统一检出 JSON（schema_version=1）。": "Note: models decrypt only inside the service process; the API never returns weights. Each loaded model/flow is a parallel API addressed by id. AI models embedded in flow packages auto-load on first inference and stay resident. Output is unified detection JSON (schema_version=1).",
     "图片数量": "Images",
-    "测量与判定": "Measurement & Verdict",
     "扫描失败": "scan failed",
     "未保存：": "Not saved: ",
     "已保存并注册：": "Saved and registered: ",
@@ -1915,9 +1914,46 @@ TABLE = {
     "高斯核边长（奇数，越大越模糊）": "Gaussian kernel edge (odd; larger = blurrier)",
     "高斯模糊：抑制高频噪声（核数越大越平滑）。": "Gaussian blur: suppresses high-frequency noise (larger kernel = smoother).",
     "节点 0": "Nodes: 0",
-
-
-    # ---- 社区版补充（社区版特有文案） ----
+    "CIF 异常检测（少样本超图，DINO 特征）": "CIF anomaly (few-shot hypergraph, DINO features)",
+    "正常": "OK",
+    "未判": "Unjudged",
+    "存疑": "Uncertain",
+    "标记正常": "Mark OK",
+    "标记漏检": "Mark missed",
+    "标记过检": "Mark false-positive",
+    "标记存疑": "Mark uncertain",
+    "清除标记": "Clear marks",
+    "服务已就绪：": "Service ready: ",
+    "（关闭窗口即停止）": " (closes with the window)",
+    "保存文件": "Save file",
+    # ---- 语言切换重建提示 ----
+    "任务运行中，语言重开窗口后生效":
+        "Task running; reopen the window to switch language.",
+    "重建失败，语言重开窗口后生效":
+        "Rebuild failed; reopen the window to switch language.",
+    # ---- 新范式适配 ----
+    "错误": "Wrong",
+    "错": "W",
+    "阶段": "Stage",
+    "特征抽取与建库": "feature & memory",
+    "标定": "calibration",
+    "验证评估": "validation",
+    "支持集张数": "Support images",
+    "增强样本数": "Augment count",
+    "免训练范式无损失曲线；下方指标曲线为 AUROC":
+        "Training-free paradigm has no loss curve; AUROC shown below",
+    "免训练范式（单遍完成）": "Training-free (single pass)",
+    "阈值 conf": "Threshold conf",
+    "图像分数": "Image score",
+    "分数越高越异常（OK 分布 z 标定）":
+        "higher = more anomalous (z-calibrated on OK distribution)",
+    "SubspaceAD 异常检测（少样本 PCA 子空间）":
+        "SubspaceAD anomaly (few-shot PCA subspace)",
+    # ---- 忙因细化/项目窗跟随 ----
+    "已加载模型，语言重开窗口后生效":
+        "Model loaded; reopen the window to switch language.",
+    # ---- 社区版补充 ----
+    "测量与判定": "Measurement & Verdict",
     "XCcv 视觉模型训练平台（社区版）": "XCcv Vision Training Platform (Community)",
     "标注 → 训练 → 测试，三步完成模型落地（另附缺陷样本合成工具）": "Annotate → Train → Test (plus a defect sample synthesis tool)",
     "缺陷样本合成工具：把缺陷贴图自然融合到良品图，扩充训练样本": "Defect Sample Synthesis: blend defect patches onto good-part images to expand training data",
@@ -1958,4 +1994,6 @@ TABLE = {
     "mAR": "mAR",
     "图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;所有文件 (*)": "Images/Models/Flows (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;All files (*)",
     "「打包流程」把流程与所选模型一并封入单个 .xvap 文件，可在测试平台直接加载。": "\"Pack Flow\" bundles the flow and the selected model into one .xvap file that the testing platform can load directly.",
+    "conf→图像分数 z=1/conf−1（0.25→z=3）；拖维度阈值面板调分": "conf→image score z=1/conf−1 (0.25→z=3); drag the threshold panel to adjust",
+    "批量推理的预测概率下限（拖线调整的下限）": "Lower bound of the predicted probability for batch inference (adjustable by dragging)",
 }

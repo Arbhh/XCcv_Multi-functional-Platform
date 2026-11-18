@@ -24,6 +24,8 @@ from PyQt5.QtCore import QTimer, QUrl  # noqa: E402
 from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineView  # noqa: E402,E501
 from PyQt5.QtWidgets import QLabel, QMainWindow  # noqa: E402
 
+from ..i18n import lang, localize_widget_tree, tr  # 壳层双语（web 层走 URL ?lang=en）
+
 
 class _Page(QWebEnginePage):
     """页面：JS 报错进日志（内嵌浏览器无开发者工具，否则前端异常无从排查）。"""
@@ -128,7 +130,7 @@ class DefectGenWindow(QMainWindow):
 
         from ..ui_style import icon_path
 
-        self.setWindowTitle(f"{self.tool_title}  -  XCcv DefectAugmentStudio")
+        self.setWindowTitle(f"{tr(self.tool_title)}  -  XCcv DefectAugmentStudio")
         self.setWindowIcon(QIcon(str(icon_path("defectgen.png"))))
         self.resize(1360, 860)
 
@@ -143,7 +145,7 @@ class DefectGenWindow(QMainWindow):
         view.setContextMenuPolicy(_Qt.NoContextMenu)
         self.setCentralWidget(view)
 
-        self.status = QLabel("正在启动缺陷生成服务…")
+        self.status = QLabel(tr("正在启动缺陷生成服务…"))
         self.status.setStyleSheet("padding:4px 10px; color:#64748b;")
         self.statusBar().addWidget(self.status, 1)
 
@@ -151,6 +153,7 @@ class DefectGenWindow(QMainWindow):
         self._poll = QTimer(self)
         self._poll.timeout.connect(self._poll_port)
         self._poll.start(200)
+        localize_widget_tree(self)  # 独立进程窗口自本地化
 
     # ---------- 端口回填 ----------
     def _poll_port(self):
@@ -159,8 +162,11 @@ class DefectGenWindow(QMainWindow):
             return
         self._poll.stop()
         self.port = port
-        self.status.setText(f"服务已就绪：127.0.0.1:{port}（关闭窗口即停止）")
-        self.page.setUrl(QUrl(f"http://127.0.0.1:{port}/"))
+        self.status.setText(
+            f"{tr('服务已就绪：')}127.0.0.1:{port}{tr('（关闭窗口即停止）')}")
+        # EN 模式经 URL 参数传语言（web 层脚本加载期即生效，早于 ES 模块）
+        lang_q = "?lang=en" if lang() == "en" else ""
+        self.page.setUrl(QUrl(f"http://127.0.0.1:{port}/{lang_q}"))
 
     # ---------- 导出保存 ----------
     def _on_download(self, item):
@@ -168,13 +174,13 @@ class DefectGenWindow(QMainWindow):
             return
         from PyQt5.QtWidgets import QFileDialog
 
-        path, _ = QFileDialog.getSaveFileName(self, "保存文件", item.path())
+        path, _ = QFileDialog.getSaveFileName(self, tr("保存文件"), item.path())
         if not path:
             item.cancel()
             return
         item.setPath(path)
         item.accept()
-        self.status.setText(f"已保存：{path}")
+        self.status.setText(f"{tr('已保存：')}{path}")
 
     # ---------- 生命周期 ----------
     def closeEvent(self, ev):

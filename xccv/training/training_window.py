@@ -29,12 +29,11 @@ from PyQt5.QtGui import QBrush, QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QAbstractItemView, QCheckBox, QComboBox, QDialog,
     QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
-    QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QProgressBar, QPushButton,
-    QScrollArea, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
+    QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
-
 from ..engine.dataset import IMAGE_EXTS
 from ..engine.dataset.base import TaskType
 from ..engine.dataset.reader import scan_classification_dataset, scan_labelme_dataset
@@ -48,7 +47,7 @@ from .dialogs import CollapsibleSection, DevOptionsDialog, HealthReportDialog, R
 from .dev_options import load_options
 from .preflight import dataset_facts, param_findings, recommend_settings
 from .project import (
-    Project, create_project, delete_project, list_projects,
+    Project, create_project, delete_project, list_pruned_models, list_projects,
     load_project, save_project,
 )
 from .runs import RunRecord, format_duration, scan_runs, STATUS_COLOR
@@ -88,7 +87,8 @@ DEFAULT_LR = {
     "fasterrcnn": 0.005, "maskrcnn": 0.005, "maskrcnn18": 0.005,
 }
 
-# 图像增强策略行：(算子名, 中文名, [(参数名, 默认值, 最小, 最大, 是否整数)])
+# 图像增强策略行：(算子名, 中文名, [(参数名, 默认值, 最小, 最大, 是否整数)], 提示)
+# UI 文案约定（2026-11-12）：界面文字简短精确、不用括号补充，详细说明放 tooltip
 AUGMENT_ROWS = [
     ("resize", "调整图像大小", [
         ("width", 640, 2, 8192, True), ("height", 640, 2, 8192, True)],
@@ -144,7 +144,7 @@ def _safe_run_tag(model_name: str) -> str:
 
     模型引用形如 "pruned:xxx.pt" / "run:记录/best.pt"，其中的冒号、斜杠
     在 Windows 目录名中非法（曾导致训练无法启动）；这里统一替换并去掉
-    权重后缀。
+    加密后缀。
     """
     tag = _ILLEGAL_NAME_CHARS.sub("_", model_name or "model")
     for suffix in (".pt",):
@@ -409,6 +409,8 @@ class _ProjectCard(HoverCard):
         head.addWidget(_make_badge(project.task_type))
         lay.addLayout(head)
 
+        from ..i18n import tr
+
         updated = QLabel(f"{tr('更新于')} "
                          f"{relative_time(_project_mtime(project.name))}")
         updated.setObjectName("muted")
@@ -456,7 +458,8 @@ class _PreflightWorker(QThread):
             opt = load_options()
             task = TaskType(p.task)
             d = Path(p.dataset_dir)
-            if task is TaskType.CLASSIFICATION:
+            if task in (TaskType.CLASSIFICATION, TaskType.ANOMALY):
+                # P252：异常检测数据集=OK/NG 子目录纯图，与体检 is_anomaly 同口径
                 samples, classes = scan_classification_dataset(d)
                 scan = (samples, classes)
             else:
@@ -514,6 +517,8 @@ class ProjectWindow(QMainWindow):
         self._live_timer.setInterval(1000)
         self._live_timer.timeout.connect(self._tick_live)
 
+        from ..i18n import tr
+
         self.setWindowTitle(f"{project.name}  -  {tr('训练平台')}")
         self.setWindowIcon(QIcon(str(icon_path(
             _TASK_MODEL_ICON.get(project.task_type, "training.png")))))
@@ -531,6 +536,8 @@ class ProjectWindow(QMainWindow):
 
     # ================= 界面骨架 =================
     def _build_ui(self):
+        from ..i18n import tr
+
         central = QWidget()
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
@@ -601,6 +608,8 @@ class ProjectWindow(QMainWindow):
         md_row = QHBoxLayout()
         md_row.addWidget(self.info_model_dir, stretch=1)
         md_row.addWidget(btn_md)
+        from ..i18n import tr
+
         self.info_task = QLabel(tr(self.project.task_type.label))
         self.info_created = QLabel(self.project.created_at)
         btn_save_info = QPushButton("保存修改")
@@ -821,6 +830,21 @@ class ProjectWindow(QMainWindow):
         self.par_wd = _DoubleSpin()
         self.par_wd.setDecimals(6)
         self.par_wd.setRange(0.0, 1.0)
+        # §四：免训练范式自有参数（仅声明 support_k_shot 的模型显示）
+        self.par_kshot = _Spin()
+        self.par_kshot.setRange(1, 12)
+        self.par_kshot.setValue(4)
+        self.par_kshot.setToolTip(
+            "支持集张数 k-shot：用多少张 OK 图建正常子空间（1~12，上限防止"
+            "脱离免训练范畴）；仅 SubspaceAD 使用")
+        self.lbl_kshot = QLabel("支持集张数")
+        self.par_augcount = _Spin()
+        self.par_augcount.setRange(0, 60)
+        self.par_augcount.setValue(30)
+        self.par_augcount.setToolTip(
+            "增强样本数：每张支持图生成的随机旋转增强张数（0=关闭）；"
+            "仅 SubspaceAD 使用")
+        self.lbl_augcount = QLabel("增强样本数")
         self.par_eval_interval = _Spin()
         self.par_eval_interval.setRange(1, 100)
         self.par_eval_interval.setToolTip("每多少轮验证一次（YOLO 家族每轮都会验证）")
@@ -907,7 +931,7 @@ class ProjectWindow(QMainWindow):
         self.par_epoch_w.setToolTip(
             "每次训练共用「模型储存路径\\epoch_weights」文件夹，逐轮保存权重：\n"
             "训练开始时清空旧训练的轮次权重（覆盖式，只占最近一次训练的空间）；\n"
-            ""
+            "权重落盘为 best.pt（平台明文容器）；\n"
             "轮次权重可在测试平台直接加载对比")
         self.par_patience = _Spin()
         self.par_patience.setRange(0, 200)
@@ -957,8 +981,8 @@ class ProjectWindow(QMainWindow):
             "仅 R-CNN 家族生效；推理侧请配合测试平台「4K 大图分块推理」\n"
             "或服务 tiled=true（与切图训练 T9-3 配对使用效果最佳）")
         self.par_transfer = QCheckBox("迁移学习（从已有模型权重开始训练）")
-        self.par_transfer.setToolTip(tr("勾选后通过文件选择器指定起始权重；"
-                                        "类别需与当前数据集一致"))
+        self.par_transfer.setToolTip("勾选后通过文件选择器指定起始权重；"
+                                     "类别需与当前数据集一致")
         self.par_transfer.toggled.connect(self._on_transfer_toggled)
         transfer_row = QHBoxLayout()
         self.par_transfer_edit = QLineEdit()
@@ -988,9 +1012,10 @@ class ProjectWindow(QMainWindow):
         self._preset_values: dict = {}
 
         # 分区一：基础配置（默认展开）
-        self.sec_basic = CollapsibleSection("基础配置", expanded=True)
+        self.sec_basic = CollapsibleSection(tr("基础配置"), expanded=True)
         fb = QFormLayout()
         fb.setContentsMargins(0, 0, 0, 0)
+        self._form_basic = fb                     # §四：free 行隐藏用
         fb.addRow("训练模型", self.par_model)
         fb.addRow(self.par_transfer)
         fb.addRow("模型文件", transfer_row)
@@ -999,6 +1024,8 @@ class ProjectWindow(QMainWindow):
         fb.addRow("学习率", self.par_lr)
         fb.addRow("权重衰减", self.par_wd)
         fb.addRow("训练设备", self.par_device)
+        fb.addRow(self.lbl_kshot, self.par_kshot)     # §四：仅 SubspaceAD 显示
+        fb.addRow(self.lbl_augcount, self.par_augcount)
         self.sec_basic.add_layout(fb)
         v4.addWidget(self.sec_basic)
 
@@ -1006,6 +1033,7 @@ class ProjectWindow(QMainWindow):
         self.sec_data = CollapsibleSection("数据与验证", expanded=False)
         fd = QFormLayout()
         fd.setContentsMargins(0, 0, 0, 0)
+        self._form_data = fd                      # §四：free 行隐藏用
         fd.addRow("训练输入尺寸", self.input_size_hint)
         fd.addRow("网络输入尺寸（可选）", self.par_train_input)
         fd.addRow(self.par_tiling)
@@ -1024,6 +1052,7 @@ class ProjectWindow(QMainWindow):
         self.sec_adv = CollapsibleSection("工业与加速优化", expanded=False)
         fa = QFormLayout()
         fa.setContentsMargins(0, 0, 0, 0)
+        self._form_adv = fa                       # §四：free 整区隐藏
         fa.addRow(self.par_industrial)
         fa.addRow(self.par_freeze)
         fa.addRow(self.par_rpn)
@@ -1131,7 +1160,7 @@ class ProjectWindow(QMainWindow):
                                 " border: none; background: transparent;")
         pv.addWidget(cap)
         self.btn_compare = QPushButton("对比所选")
-        self.btn_compare.setToolTip(tr("按住 Ctrl 选择 2~3 条记录后对比"))
+        self.btn_compare.setToolTip("按住 Ctrl 选择 2~3 条记录后对比")
         self.btn_compare.clicked.connect(self._open_compare)  # 常启用：点击时校验并提示
         pv.addWidget(self.btn_compare)
         self.run_hint = QLabel("")
@@ -1230,6 +1259,12 @@ class ProjectWindow(QMainWindow):
             "YOLO 族为 AP@50 与召回率；分类为 Top-1")
         self.metric_hint.setObjectName("hint")
         v1.addWidget(self.metric_hint)
+        # §四：免训练范式 Loss 区口径提示（无损失曲线语义）
+        self.loss_free_hint = QLabel(
+            tr("免训练范式无损失曲线；下方指标曲线为 AUROC"))
+        self.loss_free_hint.setObjectName("hint")
+        self.loss_free_hint.setVisible(False)
+        v1.addWidget(self.loss_free_hint)
         v1.addWidget(self.loss_plot)
         v1.addWidget(self.metric_plot)
         lay2.addWidget(g1)
@@ -1330,8 +1365,8 @@ class ProjectWindow(QMainWindow):
 
     def _pick_transfer_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, tr("选择迁移学习起始权重"), "",
-            tr("模型权重 (*.pt);;所有文件 (*)"))
+            self, "选择迁移学习起始权重", "",
+            "模型权重 (*.pt);;所有文件 (*)")
         if path:
             self.par_transfer_edit.setText(path)
             self.par_transfer.setChecked(True)
@@ -1344,7 +1379,10 @@ class ProjectWindow(QMainWindow):
         from ..engine.models import list_models  # torch 延迟导入（T1-4）
 
         for m in list_models(p.task):
-            self.par_model.addItem(f"{m['name']}  ({tr(m['desc'])})", m["name"])
+            from ..i18n import tr
+
+            self.par_model.addItem(
+                f"{m['name']}  ({tr(m['desc'])})", m["name"])
         idx = self.par_model.findData(p.model_name)
         if idx < 0 and p.model_name:  # 旧项目记录的是 pruned:/run: 引用 → 回退基准名
             base = (p.model_name.split(":", 1)[-1].split("/", 1)[0])
@@ -1381,6 +1419,8 @@ class ProjectWindow(QMainWindow):
         self.par_tf32.setChecked(getattr(p, "tf32", True))
         self.par_epoch_w.setChecked(getattr(p, "save_epoch_weights", True))
         self.par_patience.setValue(getattr(p, "patience", 10))
+        self.par_kshot.setValue(int(getattr(p, "k_shot", 4) or 4))
+        self.par_augcount.setValue(int(getattr(p, "aug_count", 30) or 30))
         self.par_train_input.setValue(getattr(p, "train_input", 0))
         self.par_tiling.setChecked(getattr(p, "tiling", False))
         self.par_tile_size.setValue(getattr(p, "tile_size", 640))
@@ -1397,6 +1437,7 @@ class ProjectWindow(QMainWindow):
             "device": self.par_device.currentData(),
         }
         self._clear_recommended()
+        self._apply_train_mode_ui()   # §四：按项目模型形态调整参数区
 
     def _switch_detail(self, index: int):
         self.detail_stack.setCurrentIndex(index)
@@ -1419,6 +1460,8 @@ class ProjectWindow(QMainWindow):
         return ops
 
     def _save_info(self):
+        from ..i18n import tr
+
         p = self.project
         old_name = p.name
         p.name = self.info_name.text().strip()
@@ -1475,6 +1518,9 @@ class ProjectWindow(QMainWindow):
         p.use_negatives = self.par_neg.isChecked()
         p.color_mode = "gray" if self.par_gray.isChecked() else "color"
         p.deterministic = self.par_det.isChecked()
+        # §四：免训练范式自有参数（k-shot 上限 12，用户口径）
+        p.k_shot = int(self.par_kshot.value())
+        p.aug_count = int(self.par_augcount.value())
         if p.train_input > 960:
             # T9-6：opt-in 大输入提示（显存显著上升）
             self.statusBar().showMessage(
@@ -1496,6 +1542,66 @@ class ProjectWindow(QMainWindow):
             self.par_lr.setValue(DEFAULT_LR[name])
         if hasattr(self, "augment_controls"):
             self._refresh_input_size_hint()   # P2 显存提示只对 YOLO 模型显示
+        self._apply_train_mode_ui()
+
+    # ---- §四：免训练范式 UI 适配 ----
+    def _train_mode_of(self, name) -> str:
+        """模型训练形态：free（免训练）/ epoch（默认轮次式）。"""
+        try:
+            from ..engine.models.registry import MODEL_META
+
+            return str(MODEL_META.get(name or "", {}).get("train_mode")
+                       or "epoch")
+        except Exception:  # noqa: BLE001  元数据不可得按轮次式
+            return "epoch"
+
+    def _support_k_shot(self, name) -> bool:
+        try:
+            from ..engine.models.registry import MODEL_META
+
+            return bool(MODEL_META.get(name or "", {}).get("support_k_shot",
+                                                           False))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _set_form_row_visible(self, form, widget, visible: bool):
+        """QFormLayout 行整体显隐（控件 + 行标签；直接加 checkBox 行无标签）。"""
+        widget.setVisible(visible)
+        try:
+            lbl = form.labelForField(widget)
+        except Exception:  # noqa: BLE001
+            lbl = None
+        if lbl is not None:
+            lbl.setVisible(visible)
+
+    def _apply_train_mode_ui(self):
+        """按所选模型的 train_mode 调整参数区（§四 用户指令：免训练范式
+        不再展示轮次类参数，避免"进度按 50 轮爬行/Loss 判读 6 轮"式歧义）。
+
+        free：隐藏 批量/轮次/学习率/权重衰减 与 倍增/早停/评估间隔/逐轮
+        权重，整区隐藏 工业与加速优化；k-shot 模型显示 支持集张数/增强
+        样本数；Quick 档强制切专家档（快速档 6 参数行对 free 无意义）。
+        """
+        name = getattr(getattr(self, "par_model", None), "currentData",
+                       lambda: None)()
+        free = self._train_mode_of(name) == "free"
+        self._train_mode = "free" if free else "epoch"
+        if not hasattr(self, "_form_basic"):
+            return
+        for w in (self.par_batch, self.par_epochs, self.par_lr, self.par_wd):
+            self._set_form_row_visible(self._form_basic, w, not free)
+        for w in (self.par_multiply, self.par_patience, self.par_eval_interval,
+                  self.par_epoch_w):
+            self._set_form_row_visible(self._form_data, w, not free)
+        self.sec_adv.setVisible(not free)
+        kshot = free and self._support_k_shot(name)
+        for w in (self.lbl_kshot, self.par_kshot, self.lbl_augcount,
+                  self.par_augcount):
+            w.setVisible(kshot)
+        # Quick 档对免训练范式无意义：强制专家档（不写偏好，避免污染用户设置）
+        if free and getattr(self, "quick_panel", None) is not None \
+                and self.quick_panel.isVisible():
+            self._set_param_mode(False, save=False)
 
     # ---- 训练输入尺寸（与增强 resize 统一） ----
     def _current_resize(self) -> tuple[int, int] | None:
@@ -1506,10 +1612,13 @@ class ProjectWindow(QMainWindow):
         return int(spins["width"].value()), int(spins["height"].value())
 
     def _refresh_input_size_hint(self):
+        from ..i18n import tr
+
         size = self._current_resize()
         if size:
             self.input_size_hint.setText(
-                f"{size[0]} × {size[1]}　{tr('（随增强策略 resize 设置）')}")
+            f"{size[0]} × {size[1]}　"
+            f"{tr('（随增强策略 resize 设置）')}")
         else:
             self.input_size_hint.setText(
                 f"{tr('模型默认')}　{tr('（未启用 resize，分类将拉伸为方形）')}")
@@ -1553,7 +1662,7 @@ class ProjectWindow(QMainWindow):
             if img is None:
                 self._preview_source = None
                 self.augment_preview.setPixmap(QPixmap())
-                self.augment_preview.setText("数据集中没有可预览的图片")
+                self.augment_preview.setText(tr("数据集中没有可预览的图片"))
                 self.preview_info.setText("")
                 return
             self._preview_source = img
@@ -1589,6 +1698,8 @@ class ProjectWindow(QMainWindow):
         """数据集统计（A-7①：移后台线程，主线程不再被万图目录卡住）。"""
         if getattr(self, "_stats_thread", None) is not None:
             return  # 统计中，忽略重复触发
+        from ..i18n import tr
+
         self.stats_hint.setText(tr("统计中…"))
         task = self.project.task_type
         dataset_dir = Path(self.project.dataset_dir)
@@ -1614,6 +1725,8 @@ class ProjectWindow(QMainWindow):
         th.start()
 
     def _on_stats_done(self, stats):
+        from ..i18n import tr
+
         n_ok = getattr(stats, "n_ok", 0)
         total = stats.n_images + n_ok
         ok_part = ""
@@ -1647,7 +1760,10 @@ class ProjectWindow(QMainWindow):
             counts[0], counts[1],
             float(self.par_train_ratio.value()),
             float(self.par_val_ratio.value()))
+
     def _on_stats_failed(self, msg):
+        from ..i18n import tr
+
         self.stats_hint.setText("")
         QMessageBox.warning(self, tr("统计失败"), f"{tr('读取数据集失败：')}{msg}")
 
@@ -1657,6 +1773,8 @@ class ProjectWindow(QMainWindow):
 
     def _run_health_report(self):
         """数据体检报告（异步扫描；仅提示/警告两档 + 去标注平台处理闭环）。"""
+        from ..i18n import tr
+
         worker = getattr(self, "_health_worker", None)
         if worker is not None and worker.isRunning():
             self.statusBar().showMessage(tr("数据体检正在进行中，请稍候…"), 3000)
@@ -1670,6 +1788,8 @@ class ProjectWindow(QMainWindow):
         self._health_worker.start()
 
     def _on_health_done(self, result: dict):
+        from ..i18n import tr
+
         self.btn_health.setEnabled(True)
         self._health_worker = None
         rows = [ReportRow.from_issue(i) for i in result["issues"]]
@@ -1683,6 +1803,8 @@ class ProjectWindow(QMainWindow):
         dlg.exec_()
 
     def _on_health_failed(self, message: str):
+        from ..i18n import tr
+
         self.btn_health.setEnabled(True)
         self._health_worker = None
         QMessageBox.warning(self, tr("数据体检失败"),
@@ -1980,7 +2102,9 @@ class ProjectWindow(QMainWindow):
         if not d.is_dir():
             return []
         try:
-            if TaskType(self.project.task) is TaskType.CLASSIFICATION:
+            if TaskType(self.project.task) in (TaskType.CLASSIFICATION,
+                                               TaskType.ANOMALY):
+                # P252：异常检测同分类式目录扫描（OK/NG 纯图）
                 samples, _ = scan_classification_dataset(d)
                 return samples
             samples, _, _ = scan_labelme_dataset(d)
@@ -1995,6 +2119,8 @@ class ProjectWindow(QMainWindow):
         置 100%，写回项目后同步界面控件。
         """
         kind, text = guard
+        from ..i18n import tr
+
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
         box.setWindowTitle(tr("无法开始训练"))
@@ -2021,6 +2147,8 @@ class ProjectWindow(QMainWindow):
         return True
 
     def _start_training(self):
+        from ..i18n import tr
+
         self._save_params()
         guard = self._check_rotate_guard()
         if guard and not self._resolve_rotate_guard(guard):
@@ -2058,6 +2186,8 @@ class ProjectWindow(QMainWindow):
             spins["height"].setValue(int(value[1]))
 
     def _on_preflight_done(self, result: dict):
+        from ..i18n import tr
+
         self.btn_start.setEnabled(True)
         self._preflight_worker = None
         rows = [ReportRow.from_issue(i) for i in result["issues"]]
@@ -2083,6 +2213,8 @@ class ProjectWindow(QMainWindow):
         self._begin_training()
 
     def _on_preflight_failed(self, message: str):
+        from ..i18n import tr
+
         self.btn_start.setEnabled(True)
         self._preflight_worker = None
         box = QMessageBox(QMessageBox.Warning, tr("预检失败"),
@@ -2096,6 +2228,8 @@ class ProjectWindow(QMainWindow):
 
     def _begin_training(self):
         """预检（或其跳过）之后真正启动训练线程。"""
+        from ..i18n import tr
+
         self._save_params()
         p = self.project
         # 数据集校验移入训练线程（大集合扫描不阻塞界面，失败弹窗提示）
@@ -2119,7 +2253,11 @@ class ProjectWindow(QMainWindow):
         self._build_echo_form(run_dir=run_dir)
         self.train_status.setText(tr("训练中…"))
         self.btn_start.setEnabled(False)
-        self.btn_stop.setEnabled(not p.model_name.startswith("yolo"))  # YOLO 训练由引擎控制，不支持中途停止
+        # YOLO 训练由引擎控制，不支持中途停止；§四 免训练范式无轮次概念
+        # （stop_requested 仅分类/R-CNN 检查），停止键置灰防误导
+        self.btn_stop.setEnabled(not p.model_name.startswith("yolo")
+                                 and getattr(self, "_train_mode", "epoch")
+                                 != "free")
         self.btn_open_dir.setEnabled(True)
 
         self._run_dir = run_dir
@@ -2135,11 +2273,13 @@ class ProjectWindow(QMainWindow):
 
     def _build_echo_form(self, config: dict | None = None, run_dir=None):
         """把训练设置展示在训练可视化页底部；config 为历史记录里的参数快照。"""
+        from ..i18n import tr
+
         p = self.project
         out_dir = str(run_dir or self._run_dir or "")
         if config is None:  # 实时训练：读当前项目参数
             aug = "、".join(self._collect_augment_ops()) or tr("未启用")
-            epoch_w = (f"{tr('每轮保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
+            epoch_w = (f"{tr('每轮加密保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
                        if p.save_epoch_weights else tr("关闭"))
             rows = [
                 (tr("项目名称"), p.name), (tr("任务类型"), tr(p.task_type.label)),
@@ -2176,7 +2316,7 @@ class ProjectWindow(QMainWindow):
         else:  # 历史记录：读训练时的参数快照
             aug = "、".join((config.get("augment_ops") or {}).keys()) or tr("未启用")
             dev = config.get("device", "auto")
-            epoch_w = (f"{tr('每轮保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
+            epoch_w = (f"{tr('每轮加密保存')}（{Path(p.model_dir) / 'epoch_weights'}）"
                        if config.get("save_epoch_weights", True) else tr("关闭"))
             rows = [
                 (tr("项目名称"), p.name), (tr("任务类型"), tr(p.task_type.label)),
@@ -2306,15 +2446,19 @@ class ProjectWindow(QMainWindow):
         else:
             self._history = list(m.get("history") or [])
             self._build_echo_form(config=m.get("config"), run_dir=rec.run_dir)
-            self._update_progress(rec.epochs_done, rec.epochs_planned)
+            if getattr(self, "_train_mode", "epoch") == "free":
+                # §四：免训练范式历史记录不走轮次口径
+                self.progress_bar.setValue(100)
+                self.progress_bar.setFormat(tr("免训练范式（单遍完成）"))
+            else:
+                self._update_progress(rec.epochs_done, rec.epochs_planned)
             self.run_start.setText(rec.start_time or "—")
             self.run_end.setText(rec.end_time or "—")
             self.run_duration.setText(format_duration(rec.duration_sec))
         self._update_plots()
         if live:
             self.train_status.setText(
-                f"{tr('训练中…')} {tr('第')} {self._live_history[-1]['epoch']} {tr('轮')}"
-                if self._live_history else tr("训练中…"))
+                f"训练中… 第 {self._live_history[-1]['epoch']} 轮" if self._live_history else "训练中…")
             self.final_metrics.setText("")
             self.cm_canvas.ax.clear()
             self.cm_canvas.draw()
@@ -2367,7 +2511,12 @@ class ProjectWindow(QMainWindow):
 
     # ================= 曲线绘制 =================
     def _loss_series(self):
-        """损失曲线数据：训练损失与验证损失（逐轮）。"""
+        """损失曲线数据：训练损失与验证损失（逐轮）。
+
+        §四：免训练范式无损失语义（历史里的 0.0 占位不画），Loss 区
+        由 loss_free_hint 文案接管。"""
+        if getattr(self, "_train_mode", "epoch") == "free":
+            return []
         h = self._history
         xs = [x["epoch"] for x in h]
         out = []
@@ -2382,12 +2531,15 @@ class ProjectWindow(QMainWindow):
         R-CNN 族逐轮产出宽松口径 map_loose/mar_loose（IoU {0.10,0.25,0.50}
         三档平均），直接绘制；YOLO 族无该口径，用 map50（AP@50）与 recall
         （IoU@0.5 召回）充当同位曲线。map50_95 / mask_* 等其余键不再进曲线
-        （数值仍保留在 metrics.json 与最终指标摘要中）。分类只有 val_top1。
+        （数值仍保留在 metrics.json 与最终指标摘要中）。分类只有 val_top1；
+        §四：免训练范式（ANOMALY）为 auroc。
         """
         xs = [h["epoch"] for h in self._history]
         h = self._history
         if any("val_top1" in x for x in h):
             pairs = (("val_top1", "Top-1"),)
+        elif any("auroc" in x for x in h):
+            pairs = (("auroc", "AUROC"),)
         elif any("map_loose" in x for x in h):
             pairs = (("map_loose", "mAP"), ("mar_loose", "mAR"))
         elif any("map50" in x for x in h):
@@ -2402,7 +2554,22 @@ class ProjectWindow(QMainWindow):
         self._latest_progress = (epoch, batch_index, batch_total)
 
     def _update_overall_progress(self):
-        """总体进度 =（已完成轮次 + 当前轮内批次比例）/ 总轮次，比纯轮次计数准确。"""
+        """总体进度：轮次式 =（已完成轮次 + 当前轮内批次比例）/ 总轮次；
+        §四 免训练范式 = 阶段化（1 特征抽取与建库 / 2 标定 / 3 验证评估）。"""
+        if getattr(self, "_train_mode", "epoch") == "free":
+            e, bi, nb = (self._latest_progress or (1, 0, 1))
+            frac = ((max(int(e), 1) - 1) + (bi / nb if nb else 1.0)) / 3.0
+            self.progress_bar.setValue(int(round(100 * min(frac, 1.0))))
+            stage_names = {1: "特征抽取与建库", 2: "标定", 3: "验证评估"}
+            sname = stage_names.get(int(e), "")
+            eta = ""
+            if 0.02 <= frac < 1.0 and self._live_start_dt is not None:
+                elapsed = (datetime.now() - self._live_start_dt).total_seconds()
+                remain_s = elapsed / frac * (1.0 - frac)
+                eta = f"　{tr('剩余约')} {format_duration(remain_s)}"
+            self.progress_bar.setFormat(
+                f"%p%　{tr('阶段')} {e} / 3 {tr(sname)}　{bi}/{nb}{eta}")
+            return
         planned = self.project.epochs
         if not planned:
             return
@@ -2441,11 +2608,21 @@ class ProjectWindow(QMainWindow):
             self._update_plots()
             self._update_overall_progress()
             self._tick_duration()
-            self.train_status.setText(f"{tr('训练中…')} {tr('第')} {epoch} {tr('轮')}")
+            if getattr(self, "_train_mode", "epoch") == "free":
+                # §四：免训练范式的 on_epoch = 阶段级回调（1/2/3）
+                self.train_status.setText(
+                    f"{tr('训练中…')} {tr('阶段')} {epoch} / 3")
+            else:
+                self.train_status.setText(
+                    f"{tr('训练中…')} {tr('第')} {epoch} {tr('轮')}")
 
     def _update_plots(self):
         xs = [h["epoch"] for h in self._history]
         width = 3  # 曲线加粗，长时观看更醒目
+        # §四：免训练范式 Loss 区提示可见、轮次轴改"阶段"
+        if hasattr(self, "loss_free_hint"):
+            self.loss_free_hint.setVisible(
+                getattr(self, "_train_mode", "epoch") == "free")
         # 损失曲线：训练损失 + 验证损失；每个轮次叠加空心点标注数据位置
         self.loss_plot.clear()
         for i, (key, sx, ys) in enumerate(self._loss_series()):
@@ -2483,7 +2660,7 @@ class ProjectWindow(QMainWindow):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         if ok:
-            self.train_status.setText(tr("训练完成 ✔"))
+            self.train_status.setText("训练完成 ✔")
             self.final_metrics.setText(self._summarize_metrics(metrics))
             matrix = metrics.get("confusion_matrix")
             classes = metrics.get("classes") or []
@@ -2541,13 +2718,10 @@ class ProjectWindow(QMainWindow):
         if metrics.get("best_val_top1") is not None:
             parts.append(f"{tr('最优验证 Top-1')}：{metrics['best_val_top1']:.1%}")
         final = metrics.get("final") or {}
-        for key, label in (("map_loose", tr("mAP")), ("map50", tr("mAP@50")),
-                           ("map50_95", tr("mAP@50-95")), ("mar_loose", tr("mAR")),
-                           ("precision", tr("精确率")), ("recall", tr("召回率")),
-                           ("auroc", tr("AUROC")), ("ap", tr("AP")),
-                           ("ok_fp_rate", tr("OK 误报率")), ("exact_match", tr("精确匹配")),
-                           ("cer", tr("CER")), ("char_acc", tr("字符准确率"))):
-            if key in final and final[key] is not None:
+        for key, label in (("map_loose", "mAP"), ("map50", "mAP@50"),
+                           ("map50_95", "mAP@50-95"), ("mar_loose", "mAR"),
+                           ("precision", tr("精确率")), ("recall", tr("召回率"))):
+            if key in final:
                 parts.append(f"{label}：{final[key]:.3f}")
         # O9（V0.7）：OK 负样本贡献常驻可见（能力已在，让用户看见）
         neg_train = metrics.get("neg_train_images")
@@ -2561,11 +2735,23 @@ class ProjectWindow(QMainWindow):
                 ok_txt += f"，{tr('误检')} {fp:.2f} {tr('框/张')}"
             parts.append(ok_txt)
         # O3（V0.7）：Loss 曲线自动判读（欠拟合/过拟合/NaN 一句话）
-        from .loss_diagnosis import diagnose
+        # §四：免训练范式无损失语义，跳过判读（"轮次不足 6 轮"无意义；
+        # 本方法为 staticmethod，按 metrics.config.model_name 查 META）
+        free = False
+        try:
+            from ..engine.models.registry import MODEL_META
 
-        d = diagnose(metrics.get("history") or [])
-        if d.get("text"):
-            parts.append(d["text"])
+            free = (MODEL_META.get(
+                (metrics.get("config") or {}).get("model_name") or "",
+                {}).get("train_mode") == "free")
+        except Exception:  # noqa: BLE001  元数据不可得按轮次式
+            free = False
+        if not free:
+            from .loss_diagnosis import diagnose
+
+            d = diagnose(metrics.get("history") or [])
+            if d.get("text"):
+                parts.append(d["text"])
         return "　|　".join(parts)
 
     def _stop_training(self):
@@ -2624,8 +2810,7 @@ class ProjectWindow(QMainWindow):
         if rec is None:
             return
         if rec.status == "running" and self.thread is not None:
-            QMessageBox.warning(self, tr("无法删除"),
-                                tr("该记录对应的训练正在进行中，无法删除"))
+            QMessageBox.warning(self, tr("无法删除"), tr("该记录对应的训练正在进行中，无法删除"))
             return
         if QMessageBox.question(
                 self, tr("删除训练记录"),
@@ -2637,6 +2822,15 @@ class ProjectWindow(QMainWindow):
         self._selected_run_dir = None
         self._reload_history()
         self.statusBar().showMessage(tr("训练记录已删除"), 3000)
+
+    def i18n_rebuild_blocked(self) -> bool:
+        """P253：语言重建忙时钩子——训练/预检等线程存活即禁重建。"""
+        for attr in ("thread", "_preflight_worker", "_health_worker",
+                     "_stats_thread"):
+            worker = getattr(self, attr, None)
+            if worker is not None and worker.isRunning():
+                return True
+        return False
 
     def closeEvent(self, event):
         for attr in ("_preflight_worker", "_health_worker"):
@@ -2688,6 +2882,8 @@ class CreateProjectDialog(QDialog):
         md_row.addWidget(self.fld_model_dir, stretch=1)
         md_row.addWidget(btn_md)
         self.cmb_task = QComboBox()
+        from ..i18n import tr
+
         for t in TaskType:
             self.cmb_task.addItem(tr(t.label), t.value)
         self.cmb_task.currentIndexChanged.connect(self._fill_models)
@@ -2726,6 +2922,8 @@ class CreateProjectDialog(QDialog):
         from ..engine.models import list_models  # torch 延迟导入（T1-4）
 
         for m in list_models(task):
+            from ..i18n import tr
+
             self.cmb_model.addItem(f"{m['name']}  ({tr(m['desc'])})", m["name"])
 
     def create(self) -> Project:
@@ -2883,6 +3081,8 @@ class TrainingWindow(QMainWindow):
         # 打开项目要加载深度学习组件（渲染卡数秒）——顶部悬浮胶囊提示
         # （U1：对齐标注平台横幅样式，单行/半透明/圆角；颜色与标注平台
         # 的琥珀底作微差取暗暖灰；V0.7）
+        from ..i18n import tr
+
         banner = QLabel(f"{tr('正在打开项目')}「{name}」…", self)
         banner.setObjectName("openProjectBanner")
         banner.setStyleSheet(
@@ -2913,7 +3113,7 @@ class TrainingWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
             # 等待横幅固定可见 ≥0.7s：构建很快时也给出可感知的反馈，
-            # 避免"一闪而过/根本没出现"的间歇观感（V0.7.1 修复）
+            # 避免"一闪而过/根本没出现"的间歇观感（V0.7.1 用户勘误）
             remain_ms = max(0, int(700 - (time.monotonic() - t0) * 1000))
 
             def _hide_open_banner():
@@ -2972,6 +3172,49 @@ class TrainingWindow(QMainWindow):
     def open_project_windows(self) -> dict:
         """已打开的项目窗口（测试用）。"""
         return dict(self._project_windows)
+
+    def i18n_transfer_children(self, new_host: "TrainingWindow") -> None:
+        """P261：语言重建时项目窗跟随换语言（平台宿主重建路径调用）。
+
+        空闲项目窗：原地重建（watcher 已把进程缓存切到新语言，此时构建
+        即新语言）→ 转移到新列表窗 → 关旧窗；忙碌项目窗（训练/预检中）
+        原样过户到新列表窗（保持旧语言，重开窗口生效）。
+        过户/重建一律重绑 on_renamed/on_closed——旧列表窗即将销毁，
+        回调不能指向它（否则关闭项目窗时撞已删 C++ 对象）。"""
+        for name, old in list(self._project_windows.items()):
+            self._project_windows.pop(name, None)
+            if not old.isVisible():
+                continue  # 已隐藏/关闭：不转移
+            busy = False
+            try:
+                busy = bool(old.i18n_rebuild_blocked())
+            except Exception:  # noqa: BLE001（钩子异常按空闲处理）
+                pass
+            if busy:
+                old.on_renamed = new_host._on_project_renamed
+                old.on_closed = new_host._on_project_closed
+                new_host._project_windows[name] = old
+                try:
+                    old.statusBar().showMessage(
+                        tr("任务运行中，语言重开窗口后生效"), 10000)
+                except Exception:  # noqa: BLE001（无状态栏不提示）
+                    pass
+                continue
+            try:
+                new_pw = ProjectWindow(
+                    load_project(name),
+                    on_renamed=new_host._on_project_renamed,
+                    on_closed=new_host._on_project_closed,
+                )
+                new_pw.show()
+                new_host._project_windows[name] = new_pw
+                old.on_closed = None  # 旧窗关闭不再回调（项目窗已在册）
+                old.close()
+                old.deleteLater()
+            except Exception:  # noqa: BLE001（重建失败保旧窗，对齐宿主语义）
+                old.on_renamed = new_host._on_project_renamed
+                old.on_closed = new_host._on_project_closed
+                new_host._project_windows[name] = old
 
     # ---- 创建 ----
     def _create_project(self):

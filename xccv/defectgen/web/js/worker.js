@@ -36,6 +36,10 @@ self.onmessage = (e) => {
     case 'init':
       canvas = m.canvas; ctx = canvas.getContext('2d'); dpr = m.dpr || 1;
       break;
+    case 'i18n':                       // 主线程下发词典（EN 模式画布标签）
+      self.__dgDict = m.dict || null;
+      self.__dgT = self.__dgDict ? (s) => (self.__dgDict[s.trim()] || s) : null;
+      break;
     case 'resize':
       vw = m.w; vh = m.h; dpr = m.dpr || 1;
       if (canvas) { canvas.width = Math.max(1, Math.round(vw * dpr)); canvas.height = Math.max(1, Math.round(vh * dpr)); }
@@ -897,8 +901,9 @@ function drawSplit(f, bgImg) {
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(8, 8, 76, 22); ctx.fillRect(vw - 92, 8, 84, 22);
   ctx.fillStyle = '#fff';
-  ctx.fillText('◀ 原始', 16, 23);
-  ctx.fillText('合成 ▶', vw - 84, 23);
+  const _T = (s) => (self.__dgT ? self.__dgT(s) : s);
+  ctx.fillText(_T('◀ 原始'), 16, 23);
+  ctx.fillText(_T('合成 ▶'), vw - 84, 23);
   ctx.restore();
 }
 

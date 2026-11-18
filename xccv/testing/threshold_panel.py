@@ -1,6 +1,6 @@
 """O2（V0.7）+ V0.7.2 用户重设计：维度阈值扫描曲线面板。
 
-曲线含义（定稿口径）——**图口径**：每条曲线给出阈值=x 时
+曲线含义（V0.7.2 真机勘误定稿）——**图口径**：每条曲线给出阈值=x 时
 对应**分组的图数**，与右侧分组/统计行完全同口径：
 - 正确：该阈值下全命中且无误检的图数；
 - 过检：存在误检（含 OK 图误检）的图数；
@@ -11,7 +11,7 @@ OK/NG 两组图数（NG=有检出通过阈值的图数）。
 与右侧分组同口径（其他已启用维度按各自阈值联合过滤）。
 「精确率/召回率/OK误检」数字行维持检出/GT 实例口径（与训练评估同源）。
 
-坐标轴约定（用户规定，固定不随拖动变化）：
+坐标轴约定（V0.7.1，固定不随拖动变化）：
 - y 轴 = 数量（图数），从 0 起，上限随曲线峰值外扩；
 - x 轴按维度：置信度固定 0~1（两位小数）；面积/短边/长边从 0 到本批
   最大值外扩一部分（整数刻度）；灰度差从 0 到最大值外扩（两位小数）；
@@ -94,7 +94,7 @@ class ThresholdPanel(QWidget):
     thresholdChanged = pyqtSignal(float)
     applyRequested = pyqtSignal(float)
     generateFlowRequested = pyqtSignal(dict)
-    # 项目复盘页：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
+    # 项目复盘页（用户勘误）：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
     thresholdsChanged = pyqtSignal(dict)
 
     def __init__(self, parent=None, compact: bool = False):
@@ -210,18 +210,42 @@ class ThresholdPanel(QWidget):
         btn_row.addStretch(1)
         lay.addLayout(btn_row)
 
-        # 上线提示：阈值仅对本批数据有效，换产线需复验
+        # O18 上线检查单（VIMO 产线过漏杀五因；详细说明见操作手册）
         self.lbl_warn = QLabel(
             "⚠ 阈值仅对本批数据有效，上线前请用新产线图复验")
         self.lbl_warn.setWordWrap(True)
         self.lbl_warn.setStyleSheet(f"color: {token('warn')};")
         lay.addWidget(self.lbl_warn)
 
+    # ---- 分数语义：conf/prob 固定 0~1 轴；z 无上界动态轴 ----
+    def _score_unbounded(self) -> bool:
+        rng = (self._stats.get("score_semantics") or {}).get("range") or [0.0, 1.0]
+        return len(rng) > 1 and rng[1] is None
+
+    def _score_label(self) -> str:
+        from ..i18n import tr
+
+        sem = self._stats.get("score_semantics") or {}
+        return str(tr(sem.get("name") or _DIM_SPECS["score"][0]))
+
+    def _score_spec(self) -> tuple:
+        """score 维规格 (显示名, 小数位, 步长, 默认轴上限)，随语义切换。"""
+        if self._score_unbounded():
+            return (self._score_label(), 2, 0.5, 10.0)
+        return (_DIM_SPECS["score"][0],) + _DIM_SPECS["score"][1:]
+
+    def _initial_score_thr(self, conf: float) -> float:
+        """score 维初始阈值：z 语义按 conf→z=1/conf−1 换算（与预测同式）。"""
+        if not self._score_unbounded():
+            return float(conf)
+        return 1.0 / min(max(float(conf), 1e-3), 1.0) - 1.0
+
     # ---- 数据注入与刷新 ----
     def set_stats(self, stats: dict, conf: float):
         """注入 match_stats；按维度可用性重建下拉（无数据维度不出现）。"""
         self._stats = stats or {}
-        self._dim_state = {"score": {"thr": float(conf), "enabled": True}}
+        self._dim_state = {"score": {"thr": self._initial_score_thr(conf),
+                                     "enabled": True}}
         for key in _DIM_ORDER[1:]:
             d = (self._stats.get("dims") or {}).get(key) or {}
             has_dims = any(d.get(b) for b in ("green", "red_defect", "red_ok"))
@@ -235,7 +259,8 @@ class ThresholdPanel(QWidget):
         combo.clear()
         for key in _DIM_ORDER:
             if key == "score" or key in self._dim_state:
-                combo.addItem(tr(_dim_label(key)), key)
+                combo.addItem(tr(self._score_label() if key == "score"
+                                 else _dim_label(key)), key)
         combo.blockSignals(False)
         self._current = "score"
         combo.setCurrentIndex(0)
@@ -255,8 +280,8 @@ class ThresholdPanel(QWidget):
         self.btn_flow.setEnabled(True)
 
     def set_scope(self, scope: str):
-        """评估范围切换：evaluated=正常/过检/漏检；
-        unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化，
+        """评估范围切换（V0.7.2 任务③）：evaluated=正常/过检/漏检；
+        unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化（真机勘误），
         切换即重绘曲线并同步输入框。"""
         scope = "unjudged" if scope == "unjudged" else "evaluated"
         if scope == self._scope:
@@ -296,9 +321,9 @@ class ThresholdPanel(QWidget):
     def _axis_values(self, key: str) -> list:
         """本批数据该维度全部检出值（x 轴规划用，含未过阈值的）。
 
-        坐标轴按**数据集**规划（用户约定"轴只随数据集变化"），
-        已评估/未评估切换不重排轴——否则阈值线会被切出视图、
-        输入框范围失真。范围只影响曲线口径与计数。
+        V0.7.2 真机勘误：坐标轴按**数据集**规划（用户 V0.7.1 约定"轴只随
+        数据集变化"），已评估/未评估切换不重排轴——否则阈值线会被切出
+        视图、输入框范围失真。已评估/未评估只影响曲线口径与计数。
         per_image 无逐检出记录时回退 dims 汇总表（旧缓存/轻量 stats 兼容）。"""
         from ..engine.metrics.batch_match import DET_COL
 
@@ -326,11 +351,23 @@ class ThresholdPanel(QWidget):
                 and float(v["thr"]) > 0}
 
     def _plan_axis(self, key: str) -> tuple:
-        """固定轴规划 → (x 上限, 扫描点)。score 恒 [0,1] 按 0.05；
-        其余维度约 20 档、档宽取整，轴上限=档宽×档数（边界不越轴）。"""
-        min_w = 1.0 if _DIM_SPECS[key][1] == 0 else 0.01
+        """固定轴规划 → (x 上限, 扫描点)。score 的 conf/prob 语义恒 [0,1]
+        按 0.05；z 语义（§三）与其余维度一样按数据动态规划（约 20 档、
+        档宽取整，轴上限=档宽×档数，边界不越轴；无数据退默认上限）。"""
         if key == "score":
-            return 1.0, np.linspace(0.0, 1.0, 21)
+            _name, _dec, _step, default_max = self._score_spec()
+            if not self._score_unbounded():
+                return 1.0, np.linspace(0.0, 1.0, 21)
+            vals = self._axis_values(key)
+            if not vals:
+                return float(default_max), np.linspace(
+                    0.0, float(default_max), _N_BINS + 1)
+            raw = max(vals) * _X_PAD
+            w = max(_nice_ceil(raw / _N_BINS), 0.5)
+            n = max(2, int(np.ceil(raw / w)))
+            x_max = w * n
+            return x_max, np.linspace(0.0, x_max, n + 1)
+        min_w = 1.0 if _DIM_SPECS[key][1] == 0 else 0.01
         vals = self._axis_values(key)
         if not vals:
             x_max = float(_DIM_SPECS[key][3])
@@ -357,7 +394,10 @@ class ThresholdPanel(QWidget):
         key = self._current
         st = self._dim_state.get(key)
         self._x_max, _bins = self._plan_axis(key)
-        _name, dec, step, _d = _DIM_SPECS[key]
+        if key == "score":
+            _name, dec, step, _d = self._score_spec()
+        else:
+            _name, dec, step, _d = _DIM_SPECS[key]
         spin = self.spin_thr
         spin.blockSignals(True)
         spin.setDecimals(dec)
@@ -371,7 +411,9 @@ class ThresholdPanel(QWidget):
         self.cb_enable.blockSignals(True)
         self.cb_enable.setChecked(bool(st and st.get("enabled")))
         self.cb_enable.blockSignals(False)
-        self.plot.setLabel("bottom", tr(_dim_label(key)))
+        self.plot.setLabel(
+            "bottom", tr(self._score_label() if key == "score"
+                         else _dim_label(key)))
 
     def _on_enable_toggled(self, state: int):
         st = self._dim_state.get(self._current)
@@ -383,10 +425,11 @@ class ThresholdPanel(QWidget):
     def _apply_threshold(self, v: float):
         """阈值统一入口（拖线/键入共用）：钳回固定轴范围 → 取整到维度
         小数位 → 回写线与输入框 → 启用当前维 → 刷新指标并广播。"""
-        # 拖拽/键盘可能把线带出固定轴范围
+        # 真机实测（2026-11-13）：拖拽/键盘可把线带出固定轴范围
         # → 钳回 [0, x_max]（score 恒 [0,1]）后再入状态
         v = min(max(float(v), 0.0), self._x_max)
-        _name, dec, _step, _d = _DIM_SPECS[self._current]
+        _name, dec, _step, _d = (self._score_spec() if self._current == "score"
+                                 else _DIM_SPECS[self._current])
         v = round(v, dec)
         self._line.blockSignals(True)
         self._line.setValue(v)
@@ -426,14 +469,16 @@ class ThresholdPanel(QWidget):
             sw = sweep_unjudged(self._stats, key, xs, self._sweep_fixed())
             series = [("OK", _GREEN, sw["ok"]), ("NG", _RED, sw["ng"])]
         else:
-            # 曲线=**图口径**——该阈值下三组的图数，
+            # V0.7.2 真机勘误：曲线=**图口径**——该阈值下三组的图数，
             # 与右侧分组/统计行完全同口径（正确 31/过检 53 即曲线读数）
             from .review_logic import sweep_group_counts
             from ..i18n import tr
 
             sw = sweep_group_counts(self._stats, key, xs, self._sweep_fixed())
+            over_name = (tr("错误") if self._stats.get("task") == "classification"
+                         else tr("过检"))
             series = [(tr("正确"), _GREEN, sw["correct"]),
-                      (tr("过检"), _RED, sw["over"]),
+                      (over_name, _RED, sw["over"]),
                       (tr("漏检"), _BLUE, sw["missed"])]
             if not self._stats.get("gt_available"):
                 # 无 GT：生产图无真值，全在未评估性质——只画有检出过阈图数
@@ -459,7 +504,7 @@ class ThresholdPanel(QWidget):
         dec = _DIM_SPECS[key][1]
         self.plot.setXRange(0.0, x_max, padding=0)
         # 注意：底部轴禁止 setWidth——那会钳死轴控件宽度，刻度文字全部
-        # 挤进左端几十像素；左轴保留预留宽度
+        # 挤进左端几十像素（V0.7.2 任务①根因，P237）；左轴保留预留宽度
         self.plot.getAxis("bottom").setTicks(_axis_ticks(x_max, dec))
         self.plot.getAxis("left").setWidth(42)
 

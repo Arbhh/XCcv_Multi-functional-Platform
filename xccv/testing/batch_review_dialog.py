@@ -2,7 +2,7 @@
 
 纯逻辑在 batch_review.py（状态持久化/建议/回流计划与执行），本模块只做
 表格展示与按钮接线。非模态窗口，宿主测试窗口持有单实例；offscreen 自动
-化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属 UI 验收项。
+化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属真机验证项。
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from .batch_review import (
     execute_reflow, load_review, plan_reflow, review_stats, save_review,
     suggest_status,
 )
-from ..i18n import tr  # 模块级：动态文案站点直接用（漏导入会 NameError）
+from ..i18n import tr  # 模块级：动态文案站点直接用（P246 教训：漏导即 NameError）
 
 _STAT_ORDER = (STATUS_OK, STATUS_MISSED, STATUS_FP, STATUS_UNCERTAIN,
                STATUS_UNJUDGED)
@@ -32,7 +32,7 @@ class BatchReviewDialog(QDialog):
     def __init__(self, results: list, match_stats: dict | None,
                  review_path, dataset_dir=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("批量结果复判与回流")
+        self.setWindowTitle(tr("批量结果复判与回流"))
         self.setModal(False)
         self._review_path = Path(review_path)
         self._dataset_dir = Path(dataset_dir) if dataset_dir else None
@@ -54,7 +54,8 @@ class BatchReviewDialog(QDialog):
         lay.addWidget(self.lbl_stats)
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
-            ["文件", "检出", "GT", "漏检", "过检", "建议", "状态"])
+            [tr("文件"), tr("检出"), "GT", tr("漏检"), tr("过检"),
+             tr("建议"), tr("状态")])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
@@ -63,28 +64,28 @@ class BatchReviewDialog(QDialog):
         lay.addWidget(self.table)
 
         btns = QHBoxLayout()
-        for text, status in (("标记正常", STATUS_OK), ("标记漏检", STATUS_MISSED),
-                             ("标记过检", STATUS_FP), ("标记存疑", STATUS_UNCERTAIN),
-                             ("清除标记", STATUS_UNJUDGED)):
+        for text, status in ((tr("标记正常"), STATUS_OK), (tr("标记漏检"), STATUS_MISSED),
+                             (tr("标记过检"), STATUS_FP), (tr("标记存疑"), STATUS_UNCERTAIN),
+                             (tr("清除标记"), STATUS_UNJUDGED)):
             btn = QPushButton(text)
             btn.clicked.connect(lambda _, s=status: self._mark_selected(s))
             btns.addWidget(btn)
         lay.addLayout(btns)
 
         btns2 = QHBoxLayout()
-        self.btn_reflow = QPushButton("回流所选到训练集（待标注）")
-        self.btn_reflow.setToolTip(
-            "把选中图片复制进数据集目录的「待标注」子目录：有标注的图带原"
-            "标注（人工修正漏检），无标注的图带当前模型预测框（labelme 格式）")
+        self.btn_reflow = QPushButton(tr("回流所选到训练集（待标注）"))
+        _tip = ("把选中图片复制进数据集目录的「待标注」子目录：有标注的图带原"
+                "标注（人工修正漏检），无标注的图带当前模型预测框（labelme 格式）")
+        self.btn_reflow.setToolTip(tr(_tip))
         self.btn_reflow.clicked.connect(self._reflow_selected)
         btns2.addWidget(self.btn_reflow)
         btns2.addStretch(1)
-        btn_close = QPushButton("关闭")
+        btn_close = QPushButton(tr("关闭"))
         btn_close.clicked.connect(self.close)
         btns2.addWidget(btn_close)
         lay.addLayout(btns2)
         self._reload_table()
-        from ..i18n import localize_widget_tree
+        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
 
         localize_widget_tree(self)
 
@@ -103,7 +104,7 @@ class BatchReviewDialog(QDialog):
                     "-" if gt is None else str(gt),
                     "-" if e.get("missed") is None else str(e["missed"]),
                     "-" if e.get("fp") is None else str(e["fp"]),
-                    suggest_status(e), self._effective(e)]
+                    tr(suggest_status(e)), tr(self._effective(e))]
             for c, text in enumerate(vals):
                 t.setItem(r, c, QTableWidgetItem(text))
         self._refresh_stats()
@@ -111,7 +112,8 @@ class BatchReviewDialog(QDialog):
     def _refresh_stats(self):
         stats = review_stats(self._review, self._entries)
         total = stats["_total"]
-        parts = [f"{s} {stats[s]['count']}（{stats[s]['rate']:.0%}）"
+        # 状态词是 review.json 数据键（中文），显示层经 tr 换语言（键不动）
+        parts = [f"{tr(s)} {stats[s]['count']}（{stats[s]['rate']:.0%}）"
                  for s in _STAT_ORDER]
         self.lbl_stats.setText(
             f"{tr('共')} {total} {tr('张')}：　" + "　".join(parts))
@@ -137,8 +139,6 @@ class BatchReviewDialog(QDialog):
         self._reload_table()
 
     def _reflow_selected(self):
-        from ..i18n import tr
-
         sel = self._selected_entries()
         if not sel:
             QMessageBox.information(self, tr("回流"), tr("请先在表格中选中要回流的图片"))

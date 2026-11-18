@@ -70,7 +70,8 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
                       inference: dict | None = None, prediction=None,
                       classes: list | None = None, flow_info: dict | None = None,
                       error: str | None = None,
-                      verdict: dict | None = None) -> dict:
+                      verdict: dict | None = None,
+                      score_semantics: dict | None = None) -> dict:
     """组装一份统一检出结果。
 
     - task：TaskType 或其 value（"detection"/"segmentation"/"classification"，
@@ -79,7 +80,9 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
     - model：{file, name}（可缺省）；
     - inference：{conf, iou}（可选；flow 相关字段由 flow_info 合并生成）；
     - prediction：引擎 Prediction（可 None——纯错误条目）；
-    - flow_info：apply_flow 的 info dict（removed / count_check）。
+    - flow_info：apply_flow 的 info dict（removed / count_check）；
+    - score_semantics：模型分数语义元数据（§三 additive 键，None 不输出；
+      名称/范围/阈值映射——消费方按此解释 score 与 conf 字段语义）。
     """
     from .dataset.base import TaskType
 
@@ -127,6 +130,14 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
         "verdict": verdict or verdict_from_count_check(flow_info),
         "error": error,
     }
+    if score_semantics:
+        # §三additive 键：分数语义元数据（schema 只增不改）
+        payload["score_semantics"] = {
+            "key": str(score_semantics.get("key") or "conf"),
+            "name": str(score_semantics.get("name") or "置信度"),
+            "range": list(score_semantics.get("range") or [0.0, 1.0]),
+            "higher": str(score_semantics.get("higher") or ""),
+        }
     return payload
 
 

@@ -22,11 +22,11 @@ applies across the whole platform).
 | Module | Capabilities |
 |---|---|
 | Annotation | Integrated labelme annotator: rectangles / polygons, autosave, class management; **AI-assisted annotation** (S smart polygon, B brush shaping, L single-image smart annotation, folder batch pre-annotation, based on SAM / EfficientSAM); OK/good-part folder badges, annotation quality tips, AI review of suspected missed labels |
-| Training | Project-based management; **5 task types, 12 built-in models** (classification / detection / segmentation / unsupervised anomaly detection PatchCore / OCR CRNN, incl. ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN); quick-config and expert-mode dual-track parameters; industrial optimizations (CBAM/ECA, DCNv2, Focal-family losses); training accelerations (frozen backbone, AMP, TF32, early stop, grayscale, deterministic runs); P2 small-object head, negative-sample training, tiling training; per-class metrics table, data grid, split donut chart redrawn live with parameters, real-time preview of all augmentation operators, loss diagnosis, run manifest, data health check, multi-run comparison |
-| Testing | Single-image / batch inference; live confidence and IOU threshold tuning; class filtering; 4K tiled inference; unified JSON / labelme / COCO export; **Standard / Project Review dual pages** (auto batch over the training set; the review page decouples **Evaluated / Unevaluated** — evaluated images group into Correct / Missed / Over-kill, unevaluated production images group into OK / NG); dimension threshold dragging and typing (confidence / area / short side / long side / gray difference; sweep curves show the image count per group at the threshold, same semantics as the groups; curves switch semantics with the scope); review reflow; model A/B comparison (cached results + overall verdict bar); latency / VRAM statistics |
+| Training | Project-based management; **5 task types, 14 built-in models** (classification / detection / segmentation / unsupervised and few-shot anomaly detection PatchCore, CIF, SubspaceAD / OCR CRNN, incl. ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN); quick-config and expert-mode dual-track parameters; industrial optimizations (CBAM/ECA, DCNv2, Focal-family losses); training accelerations (frozen backbone, AMP, TF32, early stop, grayscale, deterministic runs); P2 small-object head, negative-sample training, tiling training; per-class metrics table, data grid, split donut chart redrawn live with parameters, real-time preview of all augmentation operators, loss diagnosis, run manifest, data health check, multi-run comparison |
+| Testing | Single-image / batch inference; live confidence and IOU threshold tuning; class filtering; 4K tiled inference; unified JSON / labelme / COCO export; **Standard / Project Review dual pages** (auto batch over the training set; the review page decouples **Evaluated / Unevaluated** — evaluated images group into Correct / Missed / Over-kill, unevaluated production images group into OK / NG); dimension threshold dragging and typing (confidence / area / short side / long side / gray difference; sweep curves show the image count per group at the threshold, same semantics as the groups; curves switch semantics with the scope); review reflow; model A/B comparison (cached results + overall verdict bar); latency / VRAM statistics; score semantics follow the model declaration (confidence / probability / image score z) |
 | Flowchart | A standalone module at the same level as the AI platform: **39 AI & common operators** built in (model inference / detection filtering / crop & merge / per-image execution / result merge / logic verdict / output); drag-and-drop web canvas, node library split into "AI operators / Common operators"; run preview, save JSON, pack / unpack `.xvap`, batch runs; 4 templates (AI filter, cascade crop-merge, detection→segmentation cascade, detection→crop→classification cascade) |
 | Defect Sample Synthesis | Blends defect patches onto good-part images with Poisson fusion to expand scarce defect samples (separate process with an embedded web UI) |
-| UI Language | **One-click Chinese / English switching**: choose in the workbench "Settings" dialog; the whole platform switches automatically; resident UI texts and frequent messages are translated (see this document); some settings dialogs and the defect synthesis tool are not yet localized and will be covered in later releases |
+| UI Language | **One-click Chinese / English switching**: choose in the workbench "Settings" dialog; the whole platform switches automatically; resident UI texts and frequent messages are translated (see this document) |
 
 > The flowchart module supports visual orchestration of AI and common operators
 > (39 nodes / 4 templates), covering model inference, detection filtering, crop & merge,
@@ -133,7 +133,7 @@ XCcv-Community/
 ├── labelme/             # vendored labelme 5.8.1 (GPLv3, with local modifications,
 │                        #   see labelme/MODIFICATIONS.md)
 ├── docs/                # Quick start / project introduction / images
-├── licenses/            # License texts (AGPL-3.0 / labelme GPLv3)
+├── licenses/            # License texts (AGPL-3.0 / labelme GPLv3 / CIF MIT / SubspaceAD Apache-2.0 / BSD-3)
 ├── requirements.txt
 └── run_*.bat            # Per-platform launch scripts
 ```
@@ -150,7 +150,11 @@ distributed with the repository.
   [licenses/labelme-LICENSE-GPLv3.txt](licenses/labelme-LICENSE-GPLv3.txt).
 - ultralytics (YOLO11 / SAM) used in the training pipeline is **AGPL-3.0**; for closed-source
   commercial use, please evaluate its enterprise licensing yourself.
-- Third-party dependency list and notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- The CIF backend is adapted from [Sunny5250/CIF](https://github.com/Sunny5250/CIF) (MIT);
+  the SubspaceAD backend is adapted from [CLendering/SubspaceAD](https://github.com/CLendering/SubspaceAD)
+  (Apache-2.0). Modifications are licensed under AGPL-3.0; see `licenses/`.
+- Third-party dependency list and notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md);
+  paper citations: [CITATIONS.md](CITATIONS.md).
 
 ## Disclaimer
 

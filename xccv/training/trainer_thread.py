@@ -176,6 +176,11 @@ class TrainThread(QThread):
                              and getattr(model, "p2", False)),
                 save_epoch_weights=getattr(project, "save_epoch_weights", True),
                 resume_from_pruned=resume_path is not None,
+                # 免训练范式自有参数（k-shot/增强样本数；轮次式范式忽略）
+                model_params={
+                    "k_shot": int(getattr(project, "k_shot", 4) or 4),
+                    "aug_count": int(getattr(project, "aug_count", 30) or 30),
+                },
             )
             metrics = model.train(cfg, self._reporter)
             log.info("训练完成: 项目=%s 输出=%s 耗时=%.0fs", project.name,

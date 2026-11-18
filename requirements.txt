@@ -22,6 +22,12 @@ pycocotools==2.0.11
 matplotlib==3.9.2
 pyqtgraph==0.13.7
 
+# 少样本异常检测（CIF / SubspaceAD）
+timm==1.0.31
+scikit-learn==1.9.1
+anomalib==2.7.0
+transformers==5.23.0
+
 # 缺陷样本合成（本地 Web 服务）
 fastapi==0.141.1
 uvicorn==0.53.0

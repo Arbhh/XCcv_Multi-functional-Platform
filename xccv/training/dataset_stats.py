@@ -5,7 +5,11 @@ from pathlib import Path
 
 from ..engine.dataset.base import TaskType
 from ..engine.dataset.ignore import IGNORE_LABEL
-from ..engine.dataset.reader import scan_classification_dataset, scan_labelme_dataset
+from ..engine.dataset.reader import (
+    scan_classification_dataset,
+    scan_labelme_dataset,
+    scan_negative_images,
+)
 
 
 @dataclass
@@ -38,6 +42,23 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
         stats.n_labeled = len(samples)
         return stats
 
+    if task is TaskType.ANOMALY:
+        # A1/V0.7.3（P252）：异常检测数据集 = OK/NG 子目录纯图（无标注），
+        # 与 run_health_check 的 is_anomaly 分支同口径走分类式扫描；
+        # trainer_thread 依赖 n_images/classes 判空，缺此分支 UI 训练链
+        # 会对合法数据报"数据集中没有图片"。
+        samples, classes = scan_classification_dataset(dataset_dir)
+        stats.classes = classes
+        stats.class_counts = {c: 0 for c in classes}
+        for s in samples:
+            stats.class_counts[s.label] += 1
+            stats.widths.append(s.width)
+            stats.heights.append(s.height)
+        stats.n_images = len(samples)
+        stats.n_labeled = 0                      # 无标注语义
+        stats.n_ok = len(scan_negative_images(dataset_dir))
+        return stats
+
     samples, classes, from_file = scan_labelme_dataset(dataset_dir)
     stats.classes = classes
     stats.class_counts = {c: 0 for c in classes}
@@ -55,7 +76,5 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
     stats.n_images = len(samples)
     stats.n_labeled = len(samples)
     # O6（V0.7）：OK 负样本数量与训练侧同源口径（NEGATIVE_DIR_NAMES）
-    from ..engine.dataset.reader import scan_negative_images
-
     stats.n_ok = len(scan_negative_images(dataset_dir))
     return stats

@@ -36,9 +36,17 @@ docs/验收/
 docs/社区版更新说明_*.md
 docs/社区版约定.md
 docs/交接_*.md
+docs/社区版开源合规参考_*.md
+
+# 按版本文档目录（本地留存；远端 docs/ 仅保留 quickstart、images 与最新版简介 docx）
+docs/0.7.*/
 
 # Office 锁文件
 ~$*.docx
 
 # AI 协作记忆（本机留存，不入仓库）
 AGENTS.md
+
+# 内部文档分版本目录（更新说明/验收/交接的按版本归档，仅本地留存）
+docs/V0.7.*/
+docs/0.7.*/

@@ -27,6 +27,8 @@ export function initRenderer(canvas) {
   worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
   const off = canvas.transferControlToOffscreen();
   worker.postMessage({ t: 'init', canvas: off, dpr: state.dpr }, [off]);
+  // EN 模式下发词典，画布分屏标签走 worker 内 tr
+  worker.postMessage({ t: 'i18n', dict: (window.__DG_LANG === 'en' && window.__DG_I18N) ? window.__DG_I18N : null });
   worker.onmessage = onWorkerMessage;
 
   const wrap = canvas.parentElement;

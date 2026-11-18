@@ -74,6 +74,8 @@ class TrainConfig:
     mix_full_view: float = 0.1    # 整图混入比例（防"只见局部"分布偏移）
     # ---- 负样本（检测/分割全家族）----
     use_negatives: bool = True    # 负样本文件夹（OK/良品/负样本/背景…）内未标注图作背景训练
+    # ---- 范式自有参数（§四）：免训练范式的支持集张数/增强样本数等 ----
+    model_params: dict = field(default_factory=dict)  # {"k_shot": 4, "aug_count": 30, ...}
     # ---- YOLO 家族 ----
     p2_head: bool = False         # P2 小目标检测头（stride 4 第四检测层；其他家族忽略）
     # ---- O5（V0.7）颜色模式 ----
@@ -158,6 +160,7 @@ def _with_run_meta(metrics: dict, cfg: TrainConfig, started: datetime,
         "p2_head": bool(getattr(cfg, "p2_head", False)),
         "color_mode": str(getattr(cfg, "color_mode", "color")),
         "deterministic": bool(getattr(cfg, "deterministic", False)),
+        "model_params": dict(getattr(cfg, "model_params", None) or {}),
     }
     if error:
         metrics["error"] = error
@@ -198,6 +201,16 @@ class BaseModel(ABC):
     family: str = ""                 # "yolo" | "coco" | "folder"
     supported_tasks: tuple = ()
     default_image_size: int = 640
+    # 对外分数语义元数据——测试平台/复盘面板/部署
+    # 服务读此元数据渲染提示，新增范式接入即自带语义（杜绝隐式口径）。
+    # key: conf=检出置信度(0~1)；z=OK 分布标定 z 分数（无上界）；prob=分类
+    # softmax 概率(0~1)。range[1] 为 None 表示无上界（阈值轴按数据动态规划）。
+    score_semantics: dict = {
+        "key": "conf", "name": "置信度", "range": [0.0, 1.0],
+        "higher": "分数越高越可信",
+    }
+    # 模型实例所属任务（复盘/测试链路按此路由统计口径；None=未声明）
+    task: "TaskType | None" = None
 
     def __init__(self, num_classes: int, device: str = "auto"):
         self.num_classes = num_classes

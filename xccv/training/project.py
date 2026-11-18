@@ -73,6 +73,9 @@ class Project:
     deterministic: bool = False    # E3（V0.7）：确定性训练 opt-in（同机同种子可复现；有性能损失）
     tf32: bool = True              # GPU 提速：TF32 + cuDNN 自动调优（仅 GPU 生效）
     save_epoch_weights: bool = True  # 逐轮保存权重到共用 epoch_weights 文件夹（覆盖式）
+    # 免训练范式自有参数（仅声明 support_k_shot 的模型消费；k-shot 上限 12）
+    k_shot: int = 4
+    aug_count: int = 30
     created_at: str = ""
 
     @property

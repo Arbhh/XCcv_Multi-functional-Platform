@@ -9,9 +9,11 @@ import torch
 from ..dataset.base import TaskType
 from .anomaly import AnomalyModel
 from .base import BaseModel
+from .cif import CifModel
 from .classifier import ClassifierModel
 from .ocr import OcrModel
 from .rcnn import RCNNModel
+from .subspacead import SubspaceAdModel
 from .yolo import YoloModel
 
 log = logging.getLogger(__name__)
@@ -41,9 +43,24 @@ MODEL_SPECS: dict[str, tuple] = {
     # A1（V0.7）：无监督异常检测（OK 图训练 + 热力图/连通域检出）
     "patchcore": (TaskType.ANOMALY, "PatchCore 异常检测（无监督，OK 图训练）",
                   lambda task, n, dev, pre: AnomalyModel(n, dev, pre)),
+    # CIF 少样本异常检测（DINO 特征 + 模糊超图，RGB 分支）
+    "cif": (TaskType.ANOMALY, "CIF 异常检测（少样本超图，DINO 特征）",
+            lambda task, n, dev, pre: CifModel(n, dev, pre)),
+    # SubspaceAD 少样本异常检测（DINOv2 PCA 子空间）
+    "subspacead": (TaskType.ANOMALY, "SubspaceAD 异常检测（少样本 PCA 子空间）",
+                   lambda task, n, dev, pre: SubspaceAdModel(n, dev, pre)),
     # A2（V0.7）：OCR 字符识别（CRNN+CTC；rectangle 标注、label=文本内容）
     "crnn": (TaskType.OCR, "CRNN 字符识别（OCR，行文本）",
              lambda task, n, dev, pre: OcrModel(n, dev, pre)),
+}
+
+# 模型元数据：train_mode 声明训练形态（free=免训练范式，UI 隐藏轮次类参数、
+# 阶段化进度、Loss 区口径切换）；support_k_shot=支持集张数参数（上限 12）。
+# 未列出的模型按 "epoch" 处理。
+MODEL_META: dict[str, dict] = {
+    "patchcore": {"train_mode": "free"},
+    "cif": {"train_mode": "free"},
+    "subspacead": {"train_mode": "free", "support_k_shot": True},
 }
 
 
@@ -52,7 +69,11 @@ def list_models(task: TaskType | str | None = None) -> list[dict]:
     if task is not None:
         task = TaskType(task)
     return [
-        {"name": name, "task": info[0].value, "desc": info[1]}
+        {"name": name, "task": info[0].value, "desc": info[1],
+         "train_mode": str(MODEL_META.get(name, {}).get("train_mode")
+                            or "epoch"),
+         "support_k_shot": bool(MODEL_META.get(name, {}).get(
+             "support_k_shot", False))}
         for name, info in MODEL_SPECS.items()
         if task is None or info[0] is task
     ]
@@ -100,6 +121,19 @@ def load_model(weights_path: Path, device: str = "auto") -> BaseModel:
         log.info("格式: xccv-anomaly (记忆库 %s patch, 加载耗时 %.1fs)",
                  getattr(ckpt.get("memory"), "shape", "?"), time.perf_counter() - t0)
         model = AnomalyModel(1, device, use_pretrained=False)
+        model.load_weights(ckpt)
+        return model
+    if isinstance(ckpt, dict) and ckpt.get("format") == "xccv-cif":
+        log.info("格式: xccv-cif (记忆库 %s 节点, 加载耗时 %.1fs)",
+                 getattr(ckpt.get("memory"), "shape", "?"), time.perf_counter() - t0)
+        model = CifModel(1, device, use_pretrained=False)
+        model.load_weights(ckpt)
+        return model
+    if isinstance(ckpt, dict) and ckpt.get("format") == "xccv-subspacead":
+        log.info("格式: xccv-subspacead (PCA 子空间 k=%s, 加载耗时 %.1fs)",
+                 ckpt.get("params", {}).get("k_components", "?"),
+                 time.perf_counter() - t0)
+        model = SubspaceAdModel(1, device, use_pretrained=False)
         model.load_weights(ckpt)
         return model
     if isinstance(ckpt, dict) and ckpt.get("format") == "xccv-ocr":

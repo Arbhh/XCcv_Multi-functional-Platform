@@ -6,47 +6,124 @@ Notable changes to XCcv Community. The format follows
 
 Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 
-## [0.7.2-community] - 2026-11-16
+## [0.7.3-community] - 2026-11-18
+
+> Feature release: two few-shot anomaly-detection backends and a training-free
+> paradigm UI, unified score semantics and review grouping, broader language
+> rebuild coverage, and English UI for the defect synthesis tool.
 
 ### Added
 
-- **UI language: one-click Chinese / English switching**: switch in the workbench "Settings"
-  dialog and every platform window follows, no restart required. Resident UI texts, dialogs,
-  status bar, chart texts and the flowchart web canvas are translated; uncovered texts fall
-  back to Chinese.
-- **Testing platform: Evaluated / Unevaluated decoupling**: the project review page gains a
-  scope toggle — "Evaluated" shows Correct / Missed / Over-kill, "Unevaluated" shows unlabeled
-  production images grouped as OK / NG; the statistics row follows the selected scope.
-- **Testing platform: A/B comparison cache and overall bar**: comparison results are cached by
-  (model A, parameters, B weights, batch fingerprint) and reused when the dialog is reopened;
-  verdict statistics include a four-segment bar (A better / B better / Equal / Unevaluated).
-
-> Language coverage: some settings dialogs and the defect synthesis tool are not yet localized
-> and currently fall back to Chinese; English coverage will be extended in later releases.
+- **Training: CIF few-shot anomaly backend** (DINO ViT-B/8 + fuzzy hypergraph,
+  RGB branch; coreset memory, Bi-TF-MP propagation, hyperedge retrieval, z
+  calibration; backbone weights are user-supplied).
+- **Training: SubspaceAD few-shot anomaly backend** (DINOv2 features + PCA
+  subspace; k-shot support 1–12, augmentation count configurable; reconstruction
+  residual scoring and z calibration).
+- **Training-free paradigm UI**: epoch/batch/learning-rate parameters hidden;
+  progress shown by stage (features & memory / calibration / validation); loss
+  area states that no loss curve exists; AUROC curve supported.
+- **Score-semantics metadata**: models declare `conf` / `prob` / `z`; testing
+  sliders, review threshold panel and unified JSON follow the declared semantics
+  (z uses an unbounded dynamic axis).
+- **Weak-GT review**: ANOMALY uses source folders as image-level GT (OK with
+  detection = over-kill, NG with none = missed, NG with detection = correct);
+  classification groups correct/wrong by folder label.
+- **UI language**: training project windows follow host rebuilds; a loaded model
+  prompts a window reopen; the defect synthesis tool is localized (DOM dictionary
+  + canvas labels).
+- **Compliance**: source attribution and license texts for CIF (MIT) and
+  SubspaceAD (Apache-2.0), notice entries, `CITATIONS.md`, DCO and PR template.
 
 ### Changed
 
-- Threshold sweep curves now read "image count of each group at threshold = x", matching the
-  groups and statistics row; switching scope re-bases the curves and number row, while axes
-  still follow the dataset only.
-- Per-detection records of unevaluated production images now feed the batch statistics for
-  OK / NG sweeping and grouping, with zero re-inference.
-- UI text trims: verbose hints on the flowchart and review pages were removed (details live in
-  the user documentation).
+- Built-in models: 12 → **14** (CIF, SubspaceAD).
+- `requirements.txt` adds pinned `timm`, `scikit-learn`, `anomalib`, `transformers`.
+- README main-UI screenshot and docx Figure 1 updated to the 0.7.3 render.
+- Training outputs remain plaintext `best.pt`; backbone weights are not
+  distributed with the repository or source package.
 
 ### Fixed
 
-- Bottom-axis tick labels of the threshold panel were squeezed together (misapplied
-  width-clamping API); now protected by a rendering-level regression test.
-- The missed curve on the project review page displayed incorrectly or not at all; resolved by
-  the sweep-curve redesign.
-- The review-and-reflow and model-A/B dialogs crashed on open (missing translation import);
-  a repository-wide static scan now guards against recurrence.
+- Platform windows did not rebuild after another process changed the language
+  preference file (stale in-process cache).
+- ANOMALY review counted OK-image false detections as TP, inflating precision
+  and recall.
+- Switching language with a loaded model lost the loaded weights; the UI now asks
+  the user to reopen the window.
 
 ### Tests
 
-- `python -m unittest discover -s tests -p "test_*.py"`: 194 tests passed; offscreen self-tests
-  of four platforms passed; English-mode UI verification passed.
+- `python -m unittest discover -s tests -p "test_*.py"`: **239 tests passed**
+  (194 from 0.7.2 + 45 CIF/review/semantics/language regressions; 5 CIF
+  integration tests skipped by design when DINO weights are absent).
+- `compileall` and the four-platform offscreen self-tests: passed.
+
+### Third-party license changes
+
+- Added CIF (MIT), SubspaceAD (Apache-2.0), timm (Apache-2.0), scikit-learn
+  (BSD-3-Clause), anomalib (Apache-2.0) and transformers (Apache-2.0); all are
+  AGPL-3.0-compatible. See `THIRD_PARTY_NOTICES.md` and `licenses/`.
+- Standard DINO / DINOv2 weights are Apache-2.0; the repository does not
+  distribute weights — users provide them.
+
+## [0.7.2-community] - 2026-11-16
+
+> Feature release synchronizing V0.7.2: four project-review fixes in the
+> testing platform plus platform-wide **one-click Chinese / English switching**.
+
+### Added
+
+- **UI language: one-click Chinese / English switching**: choose the language in the workbench
+  "Settings" dialog and every platform window follows after saving (no restart required —
+  a preference-file watcher rebuilds the workbench immediately and each platform window
+  automatically). Resident UI texts, message boxes / file dialogs / status bar / toasts,
+  matplotlib and pyqtgraph chart texts, and the flowchart web canvas (node library / property
+  panel / in-page texts) are translated; uncovered texts fall back to Chinese. The preference
+  lives in `platform_data/ui_lang.json`.
+- **Testing platform: Evaluated / Unevaluated decoupling**: the project review page gains a
+  scope toggle — "Evaluated" shows the Correct / Missed / Over-kill groups, "Unevaluated" shows
+  unlabeled production images as OK / NG (NG = at least one detection above threshold); the
+  statistics row switches semantics with the scope.
+- **Testing platform: A/B comparison cache and overall bar**: comparison results are cached by
+  (model A, parameters, B weights, batch fingerprint), so accidentally closing the dialog and
+  reopening reuses the result instead of re-running inference; the verdict statistics gain a
+  four-segment stacked overall bar (A better / B better / Equal / Unevaluated).
+
+### Changed
+
+- **Testing platform: threshold sweep curves redesigned**: the curves now read "the **image
+  count** of each group at threshold = x" — exactly the same semantics as the groups and the
+  statistics row (always Correct + Over-kill + Missed = evaluated images; the score dimension
+  also gets a missed curve). Switching Evaluated / Unevaluated re-bases the curves and the
+  number row, while the axis still follows the dataset only (no axis re-layout on switching,
+  so the threshold line is never pushed out of view).
+- Per-detection records of unevaluated production images now enter the batch statistics
+  (the data source for the OK / NG sweep and grouping, with zero re-inference).
+- UI text trims: verbose hints on the flowchart page and the review page were removed
+  (details live in the user documentation).
+
+### Fixed
+
+- Bottom-axis tick labels of the dimension threshold panel were squeezed together (root cause:
+  a width-clamping API was misapplied to the bottom axis, compressing ticks into a few tens of
+  pixels on the left); now protected by a rendering-level regression test.
+- The missed curve on the project review page displayed incorrectly or not at all (the old
+  curve used a detection-instance semantics and could only be drawn for geometry dimensions;
+  resolved by the sweep-curve redesign).
+- The review-and-reflow and model-A/B dialogs crashed on open (a translation helper was used
+  without importing it, affecting both Chinese and English modes); a repository-wide static
+  scan now guards against recurrence.
+
+### Tests
+
+- `python -m unittest discover -s tests -p "test_*.py"`: **194 tests passed** (the 170 from
+  0.7.1 + 20 new 0.7.2 regression tests + 4 existing tests updated to the new semantics;
+  covering threshold-panel rendering, sweep-curve numerics, scope-switch wiring, A/B cache
+  reuse, the bilingual replacement layer / tree localization / language persistence /
+  real-window integration, and the missing-import static scan).
+- Offscreen self-tests of four platforms (workbench / training / testing / flowchart): passed.
+- English-mode UI verified: the workbench and the testing platform render fully in English.
 
 ## [0.7.1-community] - 2026-11-14
 
@@ -161,7 +238,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - The annotation platform's `_ai_loading` flag stuck after an AI model load failure, making
   later clicks ineffective.
 - Threshold-line out-of-range dragging, leftover review cache and crowded Standard-page entries
-  found during 0.7 real-machine testing.
+  found during 0.7 testing.
 
 ### Tests
 
@@ -169,7 +246,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - `python -m compileall -q xccv labelme`: passed.
 - Offscreen UI smoke tests: training platform (5 task types), testing platform (dual pages /
   review page), flowchart page, threshold panel and data grid all instantiate.
-- Real-machine UI acceptance: workbench → training task dropdown (anomaly / OCR) → testing
+- UI acceptance: workbench → training task dropdown (anomaly / OCR) → testing
   Standard / Project Review switch → annotation [OK] / help menu → flowchart editing, all
   passed.
 

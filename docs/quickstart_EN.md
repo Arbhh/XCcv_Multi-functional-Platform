@@ -31,7 +31,8 @@ sub-folders included).
      unsupervised anomaly detection / OCR;
 2. Enter the project → pick a model (`yolo11n` recommended for detection,
    `yolo11n-seg` or `maskrcnn18` for segmentation, `resnet18` for classification,
-   `patchcore` for anomaly detection, `crnn` for OCR);
+   `patchcore` (zero-training baseline) / `cif` (few-shot hypergraph) /
+   `subspacead` (few-shot PCA subspace) for anomaly detection, `crnn` for OCR);
 3. "Quick Config" recommends parameters automatically; switch to "Expert Mode" to fine-tune
    (augmentation, industrial optimizations, accelerations, tiling, ...). The project info page
    offers the data grid (filter by label / OK negatives / unlabeled), the split donut chart that
@@ -96,6 +97,12 @@ Click "Flowchart" in the workbench's left navigation (same level as the AI platf
   `xccv/engine/offline.py`);
 - **AI annotation says weights missing**: place the SAM weights under `weights/sam/` as
   described in the README;
+- **CIF / SubspaceAD reports missing backbone weights**: CIF needs the DINO ViT-B/8 weights at
+  `weights/dino/dino_vitbase8_pretrain.pth` (or `XCCV_DINO_CKPT`); SubspaceAD prefers a local
+  DINOv2 model directory under `weights/dinov2/` (or `XCCV_DINOV2_CKPT`) and may let
+  transformers download the standard DINOv2 weights from Hugging Face when no local copy is
+  present (use `HF_ENDPOINT` for a mirror). Weights are not distributed with this repository;
+  use them under their publishers' terms;
 - **Class mismatch errors**: transfer-learning weights must match the current dataset's classes;
 - **Out of GPU memory**: reduce the batch size, or enable "Freeze backbone",
   "Lightweight mask head" and other acceleration options;

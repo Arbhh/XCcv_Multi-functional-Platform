@@ -20,6 +20,10 @@ recall=TP/gt_total、ok_fp_per_img=OK 误检框/OK 图数。
 
 V0.7.1：另收集 dims（O2 扩展多维分布）与 dims_missed（漏检 GT 框的
 面积/短边/长边）——阈值面板"漏检"曲线的数据源。
+
+task="anomaly"/"classification" 走图像级口径
+（来源目录=弱 GT；与训练平台统一）——见 collect_match_stats 与两个
+_collect_* 分支；per_image/dims 结构三口径同构（只增不改）。
 """
 
 from __future__ import annotations
@@ -162,24 +166,170 @@ def _det_record(det: dict, matched: bool) -> list:
             v.get("fg_ratio"), v.get("gray_diff")]
 
 
-def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
-    """批量结果（含 path/detections）→ match_stats dict。
+def _new_match_stats(score_semantics: dict | None = None, task: str = "detection") -> dict:
+    """match_stats 骨架（三口径共用；score_semantics/task 为 §二/§三 additive 键）。"""
+    return {"gt_total": 0, "n_gt_images": 0, "n_ok_images": 0,
+            "n_unmatched": 0, "green": [], "red_defect": [], "red_ok": [],
+            "per_image": [],
+            "dims": {k: {"green": [], "red_defect": [], "red_ok": []}
+                     for k in _DIM_KEYS},
+            # V0.7.1：漏检 GT 框自身的几何维度（面积/短边/长边）——
+            # 阈值面板"漏检"曲线的数据源；分数/灰度类维度 GT 侧无值不收集
+            "dims_missed": {k: [] for k in ("area", "short", "long")},
+            "task": task,
+            "score_semantics": dict(score_semantics or {})}
+
+
+def _weak_dir_names(path: Path, weak_classes) -> tuple[bool, bool]:
+    """图片路径父目录 → (是 OK 图, 是 NG 图)：来源目录当弱 GT（§二口径）。
+
+    OK = 任一父目录命中负样本名（NEGATIVE_DIR_NAMES，与训练平台同源）；
+    NG = 任一父目录命中类别目录名（weak_classes 优先；缺省退"直接父目录
+    名非负样本名即 NG"——OK/NG 子目录布局下直接父目录即类别目录）。
+    """
+    names = [p.name for p in path.parents]
+    if any(is_negative_dir_name(n) for n in names):
+        return True, False
+    if weak_classes:
+        return False, any(n in weak_classes for n in names)
+    return False, not is_negative_dir_name(path.parent.name)
+
+
+def _collect_anomaly_stats(results: list, score_semantics, weak_classes) -> dict:
+    """§二：ANOMALY 图像级复盘口径（与训练平台 OK 留出 + NG 验证统一）。
+
+    OK 图有图像级检出=过检、NG 图零检出=漏检、NG 图有检出=正确（阈值
+    复用/分组逻辑零改动：一图一条检出记录 [图像分, matched(NG 恒 True),
+    无几何维度]，review_logic 按阈值现算分组）。图像分 = 模型标定 z
+    （Prediction.probs[0]，缺省退检出最大分）。
+    """
+    stats = _new_match_stats(score_semantics, task="anomaly")
+    seen_gt = False
+    for r in results:
+        path = Path(str(r.get("path") or r.get("file") or ""))
+        score = r.get("image_score")
+        if score is None:
+            dets = r.get("detections") or []
+            score = max((float(d.get("score", 0.0)) for d in dets),
+                        default=None)
+        ok_dir, ng_dir = _weak_dir_names(path, weak_classes)
+        # 检出记录 matched 语义：NG 图的图像级检出=命中(True)；OK 图/来源
+        # 不明图的检出=误报(False)——否则精确率/召回率把 OK 误报计成 TP
+        # （第十六轮实机复盘抓到：precision 1.0 / recall 1.5 假象）
+        rec = ([float(score), bool(ng_dir), None, None, None, None, None]
+               if score is not None else [])
+        if ok_dir:
+            seen_gt = True
+            stats["n_ok_images"] += 1
+            if rec:
+                stats["red_ok"].append(rec[0])
+            stats["per_image"].append({
+                "path": str(path), "gt": 0, "gt_available": True,
+                "ok_dir": True, "missed": 0,
+                "fp": 1 if rec else 0, "fp_ok": 1 if rec else 0,
+                "matched_all": not rec,
+                "dets": [rec] if rec else []})
+        elif ng_dir:
+            seen_gt = True
+            stats["n_gt_images"] += 1
+            stats["gt_total"] += 1
+            if rec:
+                stats["green"].append(rec[0])
+            else:
+                stats["n_unmatched"] += 1
+            stats["per_image"].append({
+                "path": str(path), "gt": 1, "gt_available": True,
+                "ok_dir": False, "missed": 0 if rec else 1,
+                "fp": 0, "fp_ok": 0, "matched_all": bool(rec),
+                "dets": [rec] if rec else []})
+        else:
+            # 来源目录不明（非 OK/NG 布局）：未评估，仅展示图像分供肉眼确认
+            stats["per_image"].append({
+                "path": str(path), "gt": None, "gt_available": False,
+                "ok_dir": False, "missed": None, "fp": None,
+                "fp_ok": None, "matched_all": None,
+                "dets": [rec] if rec else []})
+    stats["gt_available"] = seen_gt
+    return stats
+
+
+def _collect_classification_stats(results: list, score_semantics,
+                                  weak_classes) -> dict:
+    """§二：分类图像级口径——预测类别 vs 数据集目录真值（子文件夹=GT）。
+
+    对/错分组（错预测进"错误"组，复盘页按任务改组名）；分数 = softmax
+    概率；一图一条检出记录 [prob, matched(预测=目录名), 无几何维度]。
+    """
+    stats = _new_match_stats(score_semantics, task="classification")
+    seen_gt = False
+    for r in results:
+        path = Path(str(r.get("path") or r.get("file") or ""))
+        cls = list(r.get("classifications") or [])
+        if not cls:
+            dets = r.get("detections") or []
+            if dets:
+                cls = [{"label": str(dets[0].get("label", "")),
+                        "score": float(dets[0].get("score", 0.0))}]
+        gt_label = path.parent.name
+        judged = (gt_label in weak_classes) if weak_classes else (
+            bool(gt_label) and not is_negative_dir_name(gt_label))
+        if cls:
+            pred_label = str(cls[0].get("label", ""))
+            rec = [float(cls[0].get("score", 0.0)), pred_label == gt_label,
+                   None, None, None, None, None]
+        else:
+            pred_label, rec = "", []
+        if not judged:
+            stats["per_image"].append({
+                "path": str(path), "gt": None, "gt_available": False,
+                "ok_dir": False, "missed": None, "fp": None,
+                "fp_ok": None, "matched_all": None,
+                "dets": [rec] if rec else []})
+            continue
+        seen_gt = True
+        stats["n_gt_images"] += 1
+        stats["gt_total"] += 1
+        if rec and rec[1]:
+            stats["green"].append(rec[0])
+        elif rec:
+            stats["red_defect"].append(rec[0])
+        else:
+            stats["n_unmatched"] += 1
+        wrong = bool(rec) and not rec[1]
+        stats["per_image"].append({
+            "path": str(path), "gt": 1, "gt_available": True,
+            "ok_dir": False, "missed": 1 if wrong else 0,
+            "fp": 1 if wrong else 0, "fp_ok": 0,
+            "matched_all": bool(rec) and rec[1],
+            "dets": [rec] if rec else []})
+    stats["gt_available"] = seen_gt
+    return stats
+
+
+def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
+                        score_semantics: dict | None = None,
+                        weak_classes=None) -> dict:
+    """批量结果（含 path/detections）→ match_stats dict（按任务路由口径）。
 
     results 每项需含 "path" 与 "detections"（label/score/bbox，批量线程
     既有产出）。无任何同名 GT json 时返回 {"gt_available": False}。
+
+    §二（用户指令：复盘与训练平台统一口径）：
+    - task="anomaly"：图像级判定（来源目录=弱 GT）→ _collect_anomaly_stats；
+    - task="classification"：预测类别 vs 目录真值 → _collect_classification_stats；
+    - 其余（检测/分割）：labelme json GT 框匹配（既有口径）。
 
     O2 扩展（V0.7 用户追加）：同时收集多维度值表 stats["dims"]
     （{dim: {green, red_defect, red_ok}}）——阈值面板各维度直方图数据源；
     fg_ratio/gray_diff 取批量线程预计算的 det["_dims"]（无图维度为空表）。
     """
-    stats = {"gt_total": 0, "n_gt_images": 0, "n_ok_images": 0,
-             "n_unmatched": 0, "green": [], "red_defect": [], "red_ok": [],
-             "per_image": [],
-             "dims": {k: {"green": [], "red_defect": [], "red_ok": []}
-                      for k in _DIM_KEYS},
-             # V0.7.1：漏检 GT 框自身的几何维度（面积/短边/长边）——
-             # 阈值面板"漏检"曲线的数据源；分数/灰度类维度 GT 侧无值不收集
-             "dims_missed": {k: [] for k in ("area", "short", "long")}}
+    task_v = str(getattr(task, "value", task) or "")
+    if task_v == "anomaly":
+        return _collect_anomaly_stats(results, score_semantics, weak_classes)
+    if task_v == "classification":
+        return _collect_classification_stats(results, score_semantics,
+                                             weak_classes)
+    stats = _new_match_stats(score_semantics)
 
     def _push(values: dict, bucket: str):
         for k in _DIM_KEYS:
@@ -242,7 +392,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5) -> dict:
                     "path": str(path), "gt": None, "gt_available": False,
                     "ok_dir": False, "missed": None, "fp": None,
                     "fp_ok": None, "matched_all": None,
-                    # 未评估图的检出照记——OK/NG 扫描曲线与分组需要
+                    # V0.7.2：未评估图的检出照记——OK/NG 扫描曲线与分组需要
                     "dets": [_det_record(d, False) for d in kept_dets]})
             continue
         seen_gt = True
@@ -321,8 +471,8 @@ def threshold_metrics(stats: dict, conf: float) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 阈值扫描曲线数据层（用户重设计）。
-# 曲线含义："阈值=x 处 正常/过检/漏检 的总数"（联合过滤口径，与复盘
+# V0.7.2（用户重设计）：阈值扫描曲线数据层。
+# 曲线含义改为"阈值=x 处 正常/过检/漏检 的总数"（联合过滤口径，与复盘
 # 分组同源）：正常=阈值下命中 GT 的检出数；过检=未命中检出数（含 OK 图
 # 误检）；漏检=gt_total−正常（贪心一对一匹配下被阈值筛掉的命中 + 未命中
 # GT）。未评估范围（无 GT 生产图）另给 OK/NG 图数曲线：NG=有检出通过
