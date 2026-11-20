@@ -1,6 +1,8 @@
 """V0.7 O3/O4/O5/O12：Loss 判读、缩放 8×8 校验、灰度模式、划分环形图回归锁。"""
 
 import json
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -172,6 +174,10 @@ class SplitDonutTest(unittest.TestCase):
     """
 
     def test_update_split_smoke(self):
+        if sys.platform == "linux" and not (os.environ.get("DISPLAY")
+                                            or os.environ.get("WAYLAND_DISPLAY")):
+            self.skipTest("headless Linux 无 DISPLAY：QtAgg 画布无法创建"
+                          "（Windows CI / 真机覆盖）")
         from xccv.training.charts import SplitDonutCanvas
 
         c = SplitDonutCanvas()

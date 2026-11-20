@@ -132,8 +132,10 @@ class ServicePanelStateMachineTest(unittest.TestCase):
     def test_watchdog_reports_dead_process(self):
         """A2：子进程退出后看门狗给出失败提示（含日志指引）。"""
         import subprocess as sp
+        import sys
 
-        self.page._proc = sp.Popen("cmd /c exit 0", shell=False)
+        # 跨平台探针进程：快速退出的空 Python 进程（cmd 仅 Windows 可用）
+        self.page._proc = sp.Popen([sys.executable, "-c", "pass"])
         self.page._proc.wait()
         self.page._watchdog_left = 5
         self.page._watchdog()

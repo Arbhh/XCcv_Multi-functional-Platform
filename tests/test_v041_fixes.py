@@ -148,7 +148,9 @@ class RunLogTest(unittest.TestCase):
             s.run({"nodes": [{"id": 1, "type": "image_loader",
                               "properties": {"path": str(p)}}], "links": []},
                   label="单测")
-            logs = list(_fs._RUN_LOG_DIR.glob("flow_*.txt"))
+            # glob 顺序取决于文件系统（Linux ext4 为哈希序），须排序后取最新；
+            # 运行日志名带当前时间戳，必然排在 20260101 占位文件之后
+            logs = sorted(_fs._RUN_LOG_DIR.glob("flow_*.txt"))
             self.assertTrue(logs)
             text = logs[-1].read_text(encoding="utf-8")
             self.assertIn("来源：单测", text)

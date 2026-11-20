@@ -25,11 +25,20 @@ _APP = QApplication.instance() or QApplication(sys.argv)
 
 
 def _load_weights_sync(win, path):
-    """加载模型（平台内为后台线程）并等待完成。"""
+    """加载模型（平台内为后台线程）并等待完成。
+
+    等待条件是完成回调把 _load_thread 置空，而不是 isRunning()：
+    QThread 刚 start() 后、OS 线程被调度前存在 isRunning()==False 的窗口
+    （低核数 CI runner 上可复现），以它作循环入口会整体跳过等待，
+    跨线程的 done/finished 队列信号将不被投递。
+    """
     win._load_weights(path)
-    while win._load_thread is not None and win._load_thread.isRunning():
-        win._load_thread.wait(50)
-        QApplication.processEvents()
+    deadline = time.monotonic() + 600
+    while win._load_thread is not None and time.monotonic() < deadline:
+        QApplication.processEvents()          # 投递 done/failed/finished 队列信号
+        if win._load_thread is not None:
+            win._load_thread.wait(50)
+    QApplication.processEvents()
 
 
 

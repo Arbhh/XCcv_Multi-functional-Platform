@@ -8,18 +8,25 @@ xccv.modeltools.flowgraph_web_window。
 import json
 from unittest import mock
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-os.environ["QT_QPA_PLATFORM"] = "windows"  # QtWebEngine 不支持 offscreen
+if sys.platform == "win32":
+    os.environ["QT_QPA_PLATFORM"] = "windows"  # QtWebEngine 不支持 offscreen
+else:
+    # Linux 无显示器环境（CI）无法初始化 QtWebEngine：Web 窗口用例交由
+    # Windows CI / 真机覆盖，其余控件用例照常运行
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox --disable-gpu")
 
 from PyQt5.QtWidgets import QApplication as _QApp  # noqa: E402
 from xccv.engine import flow_package as fp  # noqa: E402
 try:
     from xccv.modeltools.flowgraph_web_window import FlowGraphWebWindow  # noqa: E402
-    _WEB_OK = True
+    # offscreen/minimal 平台下 QtWebEngine 无法初始化（进程内即崩），等效不可用
+    _WEB_OK = os.environ.get("QT_QPA_PLATFORM") not in ("offscreen", "minimal")
 except Exception:
     FlowGraphWebWindow = None
     _WEB_OK = False

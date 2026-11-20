@@ -14,6 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import cv2
 import numpy as np
 
+from xccv.engine.io_utils import imwrite_unicode  # cv2.imwrite 中文路径不可靠
 from xccv.modeltools.flow_session import (
     FlowSession, _normalize_types, node_library_payload,
 )
@@ -133,7 +134,7 @@ class ResultOutputNodeTest(unittest.TestCase):
             img = np.zeros((40, 50, 3), np.uint8)
             img[10:30, 20:45] = 255
             p = Path(tmp) / "工件A.png"
-            cv2.imwrite(str(p), img)
+            imwrite_unicode(p, img)
             g = {"nodes": [
                 {"id": 1, "type": "image_loader", "properties": {"path": str(p)}},
                 {"id": 2, "type": "blob_analysis",
@@ -183,7 +184,7 @@ class XcvBatchThreadTest(unittest.TestCase):
             for i, name in enumerate(("图A.png", "图B.png")):
                 img = np.zeros((50, 60, 3), np.uint8)
                 cv2.circle(img, (30, 25), 10 + i * 3, 255, -1)
-                cv2.imwrite(str(root / name), img)
+                imwrite_unicode(root / name, img)
             flow = {"nodes": [
                 {"id": 1, "type": "xccv2/image_loader", "properties": {}},
                 {"id": 2, "type": "xccv2/blob_analysis",

@@ -68,6 +68,10 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 
 - 全量回归：单测（历史锁 + 模块行为锁 + 页快照锁）与四平台离屏自检，
   全部通过；推荐使用 `python tools/run_tests.py` 逐模块运行。
+- CI 双平台（Ubuntu / Windows）全绿：测试运行器自动带齐子进程环境
+  （UTF-8 输出、无显示器 Qt/matplotlib 前提、Windows 下 VC++ OpenMP
+  运行库预加载），并修正跨平台测试的平台假设（WebEngine 平台选择、
+  看门狗探针进程、线程加载等待、日志 glob 顺序）。
 
 ### 第三方许可变更
 

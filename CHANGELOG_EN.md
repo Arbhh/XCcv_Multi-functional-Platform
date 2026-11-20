@@ -90,6 +90,11 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - Full regression: unit tests (historical locks + module locks + page snapshot
   locks) and per-platform offscreen self-tests; results are in the release
   acceptance notes. Use `python tools/run_tests.py` to run per module.
+- CI green on both platforms (Ubuntu / Windows): the test runner now sets up
+  the subprocess environment itself (UTF-8 output, headless Qt/matplotlib
+  defaults, VC++ OpenMP runtime preload on Windows), and cross-platform
+  assumptions in tests were fixed (WebEngine platform choice, watchdog probe
+  process, threaded model-load wait, log glob ordering).
 
 ### Third-party license changes
 

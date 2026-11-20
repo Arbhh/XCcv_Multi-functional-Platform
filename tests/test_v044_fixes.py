@@ -212,7 +212,7 @@ class TestingPlatformFlowModeTest(unittest.TestCase):
             img = np.zeros((50, 60, 3), np.uint8)
             cv2.circle(img, (30, 25), 12, 255, -1)
             img_path = Path(tmp) / "工件.png"
-            cv2.imwrite(str(img_path), img)
+            imwrite_unicode(img_path, img)   # cv2.imwrite 中文路径在 cp1252 下必败
             flow = {"nodes": [
                 {"id": 1, "type": "xccv2/image_loader", "properties": {}},
                 {"id": 2, "type": "xccv2/blob_analysis",
