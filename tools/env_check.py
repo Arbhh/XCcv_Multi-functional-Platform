@@ -2,7 +2,7 @@
 """启动环境诊断（中文）：按 run_*.bat 的优先级逐个检查候选解释器。
 
 优先级：XCCV_PY 环境变量 → python_path.txt → PATH 的 python → py -3
-        → C:\XCcv\venv（产品环境，可选）→ 本目录 venv/.venv（可选兜底）
+        → 本目录 venv/.venv（可选兜底）
 注意：本目录 venv 只是最后兜底，不要求存在。
 """
 import os
@@ -25,13 +25,12 @@ CANDIDATES = [
     ("python_path.txt", cfg_value, []),
     ("PATH 中的 python", shutil.which("python") or "", []),
     ("py 启动器（-3）", shutil.which("py") or "", ["-3"]),
-    ("产品环境 C:\\XCcv\\venv", r"C:\XCcv\venv\Scripts\python.exe", []),
     ("本目录 venv（可选）", str(ROOT / "venv" / "Scripts" / "python.exe"), []),
     ("本目录 .venv（可选）", str(ROOT / ".venv" / "Scripts" / "python.exe"), []),
 ]
 
 print("=" * 62)
-print("XCcv 社区版 · 启动环境诊断")
+print("XCcv 启动环境诊断")
 print(f"程序目录: {ROOT}")
 print("=" * 62)
 ok = None

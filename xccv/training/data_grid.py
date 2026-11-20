@@ -1,6 +1,6 @@
-"""O11（V0.7）：训练平台数据网格（缩略图墙）。
+"""训练平台数据网格（缩略图墙）。
 
-复用 flow_platform._TreeScanWorker 的线程纪律（坑 P140：线程不碰 QWidget）：
+复用 flow_platform._TreeScanWorker 的线程纪律：
 - 扫描线程只产出 GridEntry 列表（路径/标注状态/标签/OK 目录/忽略区域数）；
 - 缩略图线程按队列懒生成 QImage（cv2 解码在子线程；QPixmap 只能主线程建），
   分批投递主线程；
@@ -376,7 +376,7 @@ def _build_widget_classes():
             todo = [p for p in paths if p not in self._cache]
             # V0.7.1 修复：筛选/切标签会重建全部列表项，LRU 缓存里已有的
             # 缩略不会经过缩略线程，必须直接回贴到新条目——否则界面只剩
-            # 占位灰块（用户实测"只渲染一次，再筛全省空白"）
+            # 占位灰块（实测"只渲染一次，再筛全省空白"）
             missed = False
             for p in paths:
                 if p in self._cache:

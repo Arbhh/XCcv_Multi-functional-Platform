@@ -1,36 +1,41 @@
-# XCcv Community — Deep Learning Vision Model Training Platform (Community Edition)
+# XCcv Multi-functional Platform
 
-[![CI](https://github.com/Arbhh/XCcv_community/actions/workflows/ci.yml/badge.svg)](https://github.com/Arbhh/XCcv_community/actions/workflows/ci.yml)
+[![CI](https://github.com/Arbhh/XCcv_Multi-functional-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Arbhh/XCcv_Multi-functional-Platform/actions/workflows/ci.yml)
 
 [中文](README.md) | English
 
-XCcv Community is the community edition of an **offline desktop** deep learning model training
-platform for industrial vision scenarios. It covers the full pipeline of **data annotation →
-model training → testing & evaluation**, plus a **defect sample synthesis** tool.
-A first-time user can take a vision model from raw data to trained weights entirely through the
-desktop UI, running fully offline so data never leaves the local network.
-The UI supports **one-click Chinese / English switching** (in the workbench "Settings" dialog;
-applies across the whole platform).
+XCcv is a fully open-source, **offline desktop** multi-functional deep learning vision
+platform for industrial vision scenarios. It covers the complete pipeline of
+**data annotation → model training → testing & evaluation → deployment inference service**,
+plus **model tools** (structured pruning / TensorRT acceleration), a **flowchart
+orchestrator** (57 built-in operators) and a **defect sample synthesis** tool.
+A first-time user can take a vision model from raw data to trained weights — and to a
+production inference service — entirely through the desktop UI, running fully offline so
+data never leaves the local network.
+The UI supports **one-click Chinese / English switching** (in the workbench "Settings"
+dialog; applies across the whole platform).
 
 ![XCcv workbench (AI platform)](docs/images/main.png)
 
-> Workbench: Annotate → Train → Test in three steps, plus defect sample synthesis and a
-> flowchart orchestration module.
+> Workbench: Annotate → Train → Test in three steps; the left navigation opens the
+> Deployment platform and Flowchart, plus Model Tools and Defect Sample Synthesis.
 
 ## Feature Overview
 
 | Module | Capabilities |
 |---|---|
 | Annotation | Integrated labelme annotator: rectangles / polygons, autosave, class management; **AI-assisted annotation** (S smart polygon, B brush shaping, L single-image smart annotation, folder batch pre-annotation, based on SAM / EfficientSAM); OK/good-part folder badges, annotation quality tips, AI review of suspected missed labels |
-| Training | Project-based management; **5 task types, 14 built-in models** (classification / detection / segmentation / unsupervised and few-shot anomaly detection PatchCore, CIF, SubspaceAD / OCR CRNN, incl. ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN); quick-config and expert-mode dual-track parameters; industrial optimizations (CBAM/ECA, DCNv2, Focal-family losses); training accelerations (frozen backbone, AMP, TF32, early stop, grayscale, deterministic runs); P2 small-object head, negative-sample training, tiling training; per-class metrics table, data grid, split donut chart redrawn live with parameters, real-time preview of all augmentation operators, loss diagnosis, run manifest, data health check, multi-run comparison |
-| Testing | Single-image / batch inference; live confidence and IOU threshold tuning; class filtering; 4K tiled inference; unified JSON / labelme / COCO export; **Standard / Project Review dual pages** (auto batch over the training set; the review page decouples **Evaluated / Unevaluated** — evaluated images group into Correct / Missed / Over-kill, unevaluated production images group into OK / NG); dimension threshold dragging and typing (confidence / area / short side / long side / gray difference; sweep curves show the image count per group at the threshold, same semantics as the groups; curves switch semantics with the scope); review reflow; model A/B comparison (cached results + overall verdict bar); latency / VRAM statistics; score semantics follow the model declaration (confidence / probability / image score z) |
-| Flowchart | A standalone module at the same level as the AI platform: **39 AI & common operators** built in (model inference / detection filtering / crop & merge / per-image execution / result merge / logic verdict / output); drag-and-drop web canvas, node library split into "AI operators / Common operators"; run preview, save JSON, pack / unpack `.xvap`, batch runs; 4 templates (AI filter, cascade crop-merge, detection→segmentation cascade, detection→crop→classification cascade) |
+| Training | Project-based management; **5 task types, 14 built-in models** (classification / detection / segmentation / unsupervised and few-shot anomaly detection PatchCore, CIF, SubspaceAD / OCR CRNN, incl. ResNet / MobileNetV3 / YOLO11 / Faster R-CNN / Mask R-CNN); quick-config and expert-mode dual-track parameters; industrial optimizations (CBAM/ECA, DCNv2, Focal-family losses); training accelerations (frozen backbone, AMP, TF32, early stop, grayscale, deterministic runs); P2 small-object head, negative-sample training, tiled training; per-class metrics table, data grid, split donut chart redrawn live with parameters, real-time preview of all augmentation operators, loss diagnosis, run manifest, data health check, multi-run comparison |
+| Testing | Single-image / batch inference; live confidence and IOU threshold tuning; class filtering; 4K tiled inference; unified JSON / labelme / COCO export; **Standard / Project Review dual pages** (evaluated images group into Correct / Missed / Over-kill, unevaluated production images group into OK / NG; dimension-threshold dragging with sweep curves in the same semantics); review reflow; model A/B comparison (cached results + overall verdict bar); latency / VRAM statistics; score semantics follow the model declaration (confidence / probability / image score z) |
+| Deployment | **HTTP inference service** (FastAPI): load models/flows as resident APIs, single-frame & batch inference, overlay rendering, WebSocket binary-frame streaming, per-stage timing (`X-XCcv-Timing` header); API-key auth, concurrency gating, model path whitelist, self-hosted offline Swagger docs; a **Model Loading** window and a **C# Test** demo (`service/csharp` single-file SDK + WinForms demo, compiled with the system csc); one-click consistency check (local inference vs service inference, box-by-box) |
+| Model Tools | **Structured channel pruning** (Torch-Pruning DepGraph; pre-training pruning for transfer learning / post-training pruning, isolated subprocess with RAM watchdog and emergency stop); **TensorRT engine export** (YOLO via the native ultralytics path; classification via in-memory ONNX→TRT; Mask R-CNN feature-segment acceleration with cross-GPU compute-capability precheck and friendly fallback) |
+| Flowchart | A standalone module at the same level as the AI platform: **57 built-in AI & common operators** (model inference / classic vision operators: blob analysis, template matching, find line/circle, measurement / detection filtering / crop & merge / logic verdict / external-operator plugin backend / output); drag-and-drop web canvas, node library split into "AI operators / Classic operators"; run preview, save JSON, pack / unpack `.xvap`, batch runs; 9 templates (AI filter, cascade crop-merge, detection→segmentation cascade, template-match prefilter, etc.) |
 | Defect Sample Synthesis | Blends defect patches onto good-part images with Poisson fusion to expand scarce defect samples (separate process with an embedded web UI) |
-| UI Language | **One-click Chinese / English switching**: choose in the workbench "Settings" dialog; the whole platform switches automatically; resident UI texts and frequent messages are translated (see this document) |
+| UI Language | **One-click Chinese / English switching**: choose in the workbench "Settings" dialog; the whole platform switches automatically; resident UI texts and frequent messages are translated |
 
-> The flowchart module supports visual orchestration of AI and common operators
-> (39 nodes / 4 templates), covering model inference, detection filtering, crop & merge,
-> logic verdicts and result output for common production lines.
+> The flowchart module orchestrates AI and classic vision operators visually
+> (66 nodes / 9 templates), covering model inference, classic locate/measure steps,
+> detection filtering, crop & merge, logic verdicts and result output for production lines.
 
 ## Requirements
 
@@ -39,6 +44,8 @@ applies across the whole platform).
 - GPU: optional. An NVIDIA GPU greatly speeds up training and inference; CPU also works
   (small models recommended)
 - Disk: dependencies (PyTorch etc.) need about 6–8 GB
+- Optional: TensorRT runtime (needed for model acceleration / `.engine` inference;
+  `pip install tensorrt`, or set `TENSORRT_DIR` to a folder containing `nvinfer_10.dll`)
 
 ## Installation
 
@@ -65,8 +72,7 @@ pip install -r requirements.txt
 > 2. `python_path.txt` in this folder (one line: full path to python.exe);
 > 3. `python` on PATH;
 > 4. the `py` launcher (`py -3`);
-> 5. `C:\XCcv\venv` (the product environment's conventional location, if present and usable);
-> 6. `venv` / `.venv` in this folder (optional fallback).
+> 5. `venv` / `.venv` in this folder (optional fallback).
 >
 > If none works, the scripts print English guidance and run `tools\env_check.py` for a detailed
 > diagnosis. It is recommended to write one line into `python_path.txt` on the target machine,
@@ -84,12 +90,17 @@ platform from its card:
    results on the Standard page, or switch to the "Project Review" page: tune thresholds under
    "Evaluated" (Correct / Missed / Over-kill), then switch to "Unevaluated" to check production
    images as OK / NG; review reflow and A/B comparison supported;
-4. **Flowchart** (same-level module in the left navigation): pick the data path and a flow
-   JSON → "Run Flow" for single-image results, or "Edit Flow" to orchestrate AI / common
-   operators on the canvas, pack as `.xvap` and run batches;
-5. **Defect Sample Synthesis** (optional): enter from the workbench card to expand the
+4. **Deployment platform** (same-level module in the left navigation): start the HTTP inference
+   service → load models/flows as resident APIs → single / batch / WebSocket inference;
+   the C# Test card compiles and runs the WinForms demo in one click;
+5. **Flowchart** (same-level module): pick the data path and a flow JSON → "Run Flow" for
+   single-image results, or "Edit Flow" to orchestrate AI / classic operators on the canvas,
+   pack as `.xvap` and run batches;
+6. **Model Tools**: pre/post-training pruning for lightweight models; export best.pt to a
+   TensorRT engine (.engine) for faster production inference;
+7. **Defect Sample Synthesis** (optional): enter from the workbench card to expand the
    training set;
-6. **UI Language**: workbench "Settings" → "Language" → English; all platform windows switch
+8. **UI Language**: workbench "Settings" → "Language" → English; all platform windows switch
    automatically after saving.
 
 Command-line entries (equivalent to the workbench cards):
@@ -99,47 +110,84 @@ run_annotation.bat   :: Annotation platform
 run_training.bat     :: Training platform
 run_testing.bat      :: Testing platform
 run_flow.bat         :: Flowchart (standalone window; also in the left navigation)
+run_modeltools.bat   :: Model tools (pruning / TensorRT acceleration)
+run_deploy.bat       :: Deployment platform (inference service / model loading / C# test)
+run_service.bat      :: Inference service (headless service process)
 run_defectgen.bat    :: Defect sample synthesis
 ```
 
+The inference service can also start directly: `python -m xccv.service.main --host 127.0.0.1
+--port 8600` (an API key is generated on first start into
+`platform_data/service/config.json`; API docs at `http://127.0.0.1:8600/docs`).
+C# demo: one-click build via `xccv\service\csharp\build_demo.bat` (uses the built-in
+.NET Framework csc, no third-party dependencies).
+
 For the detailed getting-started guide see
-[docs/quickstart_EN.md](docs/quickstart_EN.md) (中文: [docs/quickstart.md](docs/quickstart.md));
-for the full project introduction (positioning, feature details, architecture, compliance) see
-the appendix [docs/XCcv社区版_项目简介.docx](docs/XCcv社区版_项目简介.docx) (Chinese).
+[docs/quickstart_EN.md](docs/quickstart_EN.md) (中文: [docs/quickstart.md](docs/quickstart.md)).
 
-### Optional: AI annotation weights
+**Documentation index**: project introduction in
+[docs/XCcv多功能视觉平台_项目简介_EN.docx](docs/XCcv多功能视觉平台_项目简介_EN.docx)
+(中文: [docs/XCcv多功能视觉平台_项目简介.docx](docs/XCcv多功能视觉平台_项目简介.docx));
+FAQs on environment, weights, annotation, training, deployment and 0.7.x migration in
+[docs/FAQ_EN.md](docs/FAQ_EN.md) (中文: [docs/FAQ.md](docs/FAQ.md)).
 
-AI-assisted annotation (smart polygon / brush / smart annotation / batch pre-annotation)
-needs SAM-family weights, which are not distributed with this repository. Please obtain them
-from the official channels (e.g. `sam2.1_t.pt`, `mobile_sam.pt`), follow each weight's license
-terms, and place them under `weights/sam/` in the repository root. When missing, the affected
-features show clear guidance and everything else keeps working.
+### Optional: weights and sample data (not distributed here)
+
+> **This repository ships no model weights and no sample data.** Weights follow their
+> publishers' licenses and must be obtained by the user; sample data is distributed as a
+> separate data package. The repo and source package contain only code, docs and UI icons.
+
+| Resource | How to obtain | Where to put it |
+|---|---|---|
+| SAM family (AI-assisted annotation) | Official channels (e.g. `sam2.1_t.pt`, `mobile_sam.pt`), under their license terms | `weights/sam/` |
+| DINO ViT-B/8 (CIF) | Official channels | `weights/dino/` (or `XCCV_DINO_CKPT`) |
+| DINOv2 (SubspaceAD) | Official channels; mainland networks may set `HF_ENDPOINT=https://hf-mirror.com` | `weights/dinov2/` (or `XCCV_DINOV2_CKPT`) |
+| YOLO COCO / torchvision baselines | `python xccv/engine/weights/download_weights.py` (one-shot, local only) | `xccv/engine/weights/` |
+| Defect-synthesis sample data (~33 MB) | Download `XCcv-Platform-testdata-0.8.0.zip` | Extract under `xccv/defectgen/` (yields `testdata/`) |
+| maskrcnn18 slim initial weights | Build with `python tools/build_maskrcnn18_init.py`, or convert mmdet weights with `tools/convert_mmdet_r18.py` | `weights/` |
+
+When a resource is missing, the affected features show clear guidance and everything else
+keeps working. `.gitignore` excludes `weights/`, `xccv/engine/weights/`,
+`xccv/defectgen/testdata/` and `*.pt / *.pth / *.onnx / *.engine / *.xva / *.xcs`.
+
+### Migrating from 0.7.x
+
+Since 0.8.0 model weights are **plaintext** `best.pt` / `.engine` (training artifacts are no
+longer wrapped in encrypted containers); the legacy encrypted containers (`.xva` / `.xcs`)
+are no longer supported — loading one raises a clear message. Retrain or re-export with 0.8.0.
 
 ## Repository Layout
 
 ```
-XCcv-Community/
-├── xccv/                # Main package (workbench / annotation / training / testing /
-│   │                    #   defect synthesis / engine)
-│   ├── annotation/      #   Annotation platform (labelme host + AI-assisted annotation)
-│   ├── training/        #   Training platform
-│   ├── testing/         #   Testing platform
-│   ├── defectgen/       #   Defect sample synthesis (FastAPI + embedded web)
-│   ├── flow_platform.py #   Flowchart page (same level as AI platform; image tree / run / batch)
-│   ├── modeltools/      #   Flow canvas host (QtWebEngine + LiteGraph), flow session & templates
-│   ├── engine/          #   Pure-logic engine (data pipeline / model registry / metrics /
-│   │   └── flow/        #     result contracts; flow engine: typed-port IR / executor / 39 ops)
-│   └── assets/          #   Icons
-├── labelme/             # vendored labelme 5.8.1 (GPLv3, with local modifications,
-│                        #   see labelme/MODIFICATIONS.md)
-├── docs/                # Quick start / project introduction / images
-├── licenses/            # License texts (AGPL-3.0 / labelme GPLv3 / CIF MIT / SubspaceAD Apache-2.0 / BSD-3)
+XCcv-Multi-functional platform/
+├── xccv/                  # Main package
+│   ├── annotation/        #   Annotation platform (labelme host + AI-assisted annotation)
+│   ├── training/          #   Training platform
+│   ├── testing/           #   Testing platform (Standard + Project Review pages)
+│   ├── deploy_platform.py #   Deployment platform (service window / model loading / C# test)
+│   ├── service/           #   HTTP inference service (FastAPI + C# SDK and demo)
+│   ├── modeltools/        #   Model-tools window (pruning / TensorRT) + flow canvas host
+│   ├── defectgen/         #   Defect sample synthesis (FastAPI + embedded web)
+│   ├── flow_platform.py   #   Flowchart page (same level as the AI platform)
+│   ├── workbench.py       #   Classic-operator workbench
+│   ├── engine/            #   Pure-logic engine (data pipeline / model registry / metrics)
+│   │   ├── models/        #     14 built-in models (with pruning / export support)
+│   │   └── flow/          #     Flow engine (typed-port IR / executor / 57 operators)
+│   └── assets/            #   Icons
+├── labelme/               # vendored labelme 5.8.1 (GPLv3, with local modifications,
+│                          #   see labelme/MODIFICATIONS.md)
+├── tests/                 # Unit tests (incl. tests/modules behavior locks)
+├── tools/                 # env check / doc reconcile / per-module test runner
+├── docs/                  # Quick start / images
+├── licenses/              # License texts (AGPL-3.0 / labelme GPLv3 / CIF MIT /
+│                          #   SubspaceAD Apache-2.0 / BSD-3 / MIT)
 ├── requirements.txt
-└── run_*.bat            # Per-platform launch scripts
+└── run_*.bat              # Per-platform launch scripts
 ```
 
 Runtime data (projects, logs, preferences) is generated under `platform_data/` and is not
-distributed with the repository.
+distributed with the repository; engine weights live in `weights/` or
+`xccv/engine/weights/` (both gitignored).
 
 ## License
 
@@ -152,7 +200,11 @@ distributed with the repository.
   commercial use, please evaluate its enterprise licensing yourself.
 - The CIF backend is adapted from [Sunny5250/CIF](https://github.com/Sunny5250/CIF) (MIT);
   the SubspaceAD backend is adapted from [CLendering/SubspaceAD](https://github.com/CLendering/SubspaceAD)
-  (Apache-2.0). Modifications are licensed under AGPL-3.0; see `licenses/`.
+  (Apache-2.0); pruning depends on [Torch-Pruning](https://github.com/VainF/Torch-Pruning) (MIT).
+  Modifications are licensed under AGPL-3.0; see `licenses/`.
+- The Swagger UI static assets bundled with the deployment service are Apache-2.0 (Apache
+  Software Foundation); TensorRT is an optional external runtime (Apache-2.0), not distributed
+  with this repository.
 - Third-party dependency list and notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md);
   paper citations: [CITATIONS.md](CITATIONS.md).
 

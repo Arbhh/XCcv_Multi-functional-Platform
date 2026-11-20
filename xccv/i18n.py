@@ -17,6 +17,8 @@
 """
 
 from __future__ import annotations
+import logging
+log = logging.getLogger(__name__)
 
 import json
 import subprocess
@@ -92,7 +94,7 @@ def localize_widget_tree(root) -> int:
             if wt:
                 w.setWindowTitle(_sub(wt))
         except Exception:  # noqa: BLE001（个别控件属性异常不阻断整体）
-            pass
+            log.debug("控件语言适配属性异常（跳过该控件）")
         if isinstance(w, (QLabel, QPushButton, QCheckBox, QRadioButton,
                           QToolButton)):
             t = w.text()
@@ -127,7 +129,7 @@ def localize_widget_tree(root) -> int:
                 if act.text():
                     act.setText(_sub(act.text()))
         except Exception:  # noqa: BLE001
-            pass
+            log.debug("菜单语言适配异常（跳过）")
     return n
 
 
@@ -137,7 +139,7 @@ def restart_current_platform(delay_s: float = 1.6) -> bool:
     开发态重跑 `pythonw -m <入口模块>`；安装态重跑同目录独立 exe。
     stager 代码经 sys.argv[1:] 取目标命令——目标命令前**不要放双减号
     分隔参数**：python -c 的 sys.argv 不会剥掉它，新进程会启动失败
-    （实测：旧窗已关、新窗没起，表现为"闪退"）。
+    。
     返回是否已安排重启（False 时调用方不得关闭窗口，应提示手动重启）。"""
     stage = ("import time, subprocess, sys; time.sleep(%f); "
              "subprocess.Popen(sys.argv[1:], close_fds=True)" % delay_s)
@@ -202,9 +204,11 @@ class _LangWatcher:
         self._debounce.start()
 
     def _fire(self):
-        # 偏好文件是跨进程共享状态，lang() 走进程内缓存——非"保存"进程的
-        # 缓存恒为启动值，外部改动后 new_lang == self._lang 恒成立，平台
-        # 窗口不会重建。此处绕过缓存直读文件，并同步进程缓存。
+        # 偏好文件是跨进程共享状态，lang() 走
+        # 进程内缓存——非"保存"进程的缓存恒为启动值，外部改动后
+        # new_lang == self._lang 恒成立 → 平台窗口永远不重建（实测复现：
+        # 主界面保存 EN 后主界面自己重建、训练/测试平台窗口纹丝不动）。
+        # 此处必须绕过缓存直读文件，并同步进程缓存。
         global _lang_cache
         try:
             new_lang = json.loads(_LANG_FILE.read_text(encoding="utf-8")).get("lang")
@@ -224,7 +228,7 @@ def install_language_watcher(rebuild, parent=None):
 
     rebuild：无参回调——销毁旧窗口并按当前语言重建（由宿主提供：先建新窗
     再关旧窗，避免 quitOnLastWindowClosed 误退）。本进程保存偏好后同样
-    经此回调生效（与主题切换的文件监听同款体验）。
+    经此回调生效（与主题切换的文件监听同款体验，V0.7.2 实测修复）。
     返回监听器（宿主窗口重建时经 set_rebuild 转移回调并保留引用；
     返回 None=文件不可监听，重开生效）。"""
     try:

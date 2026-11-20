@@ -1,22 +1,27 @@
 # Third-Party Notices / 第三方组件声明
 
-XCcv Community 依赖以下开源组件，在此致谢。各组件归属其原作者，本仓库仅按其原许可引用。
+XCcv 多功能视觉平台依赖以下开源组件，在此致谢。各组件归属其原作者，本仓库仅按其原许可引用。
 
 | 组件 | 许可 | 用途 | 备注 |
 |---|---|---|---|
 | [PyQt5](https://www.riverbankcomputing.com/software/pyqt/) | GPL v3（或 Riverbank 商业许可） | 桌面界面框架 | 本项目按 GPL v3 合规使用；若衍生作品需闭源分发，须自行取得商业许可 |
-| [PyQtWebEngine](https://www.riverbankcomputing.com/software/pyqtwebengine/) | GPL v3（或商业许可） | 缺陷样本合成内嵌 Web 界面 | 同上 |
+| [PyQtWebEngine](https://www.riverbankcomputing.com/software/pyqtwebengine/) | GPL v3（或商业许可） | 流程画布 / 缺陷样本合成内嵌 Web 界面 | 同上 |
 | [PyTorch](https://pytorch.org/) / [torchvision](https://github.com/pytorch/vision) | BSD-3-Clause | 训练与推理引擎；分类 / R-CNN 家族模型结构 | |
 | [ultralytics](https://github.com/ultralytics/ultralytics) | **AGPL-3.0**（或 Ultralytics 企业许可） | YOLO11 训练与推理、SAM 预测器 | AGPL 传染性较强：与本作品组合分发须整体遵循 AGPL-3.0；闭源商用请联系 Ultralytics |
 | [labelme](https://github.com/wkentaro/labelme) 5.8.1 | **GPL v3** | 数据标注器（vendored 副本） | 见下方 vendored 说明 |
-| [OpenCV](https://github.com/opencv/opencv) (opencv-python) | Apache-2.0 | 图像处理 | |
+| [OpenCV](https://github.com/opencv/opencv) (opencv-python) | Apache-2.0 | 图像处理与传统视觉算子 | |
 | [NumPy](https://numpy.org/) | BSD-3-Clause | 数值计算 | |
 | [Pillow](https://python-pillow.org/) | HPND（类 MIT） | 图像读写 | |
 | [matplotlib](https://matplotlib.org/) | PSF/BSD 风格 | 训练曲线渲染 | |
 | [pyqtgraph](https://pyqtgraph.org/) | MIT | 训练可视化 |
 | [LiteGraph.js](https://github.com/jagenjo/litegraph.js) | MIT | 流程图 Web 画布（vendored，许可见 `xccv/modeltools/web/litegraph.LICENSE`） | |
-| [FastAPI](https://fastapi.tiangolo.com/) / [uvicorn](https://www.uvicorn.org/) / pydantic | MIT / BSD-3-Clause | 缺陷样本合成本地服务 | 仅监听本机回环地址 |
+| [FastAPI](https://fastapi.tiangolo.com/) / [uvicorn](https://www.uvicorn.org/) / pydantic | MIT / BSD-3-Clause | 推理服务与缺陷样本合成本地服务 | 默认仅监听本机回环地址 |
+| [Swagger UI](https://github.com/swagger-api/swagger-ui) | Apache-2.0 | 推理服务自托管接口文档（vendored 静态资源，`xccv/service/api/static/`） | 许可全文见 `licenses/Apache-2.0.txt` |
 | [onnxruntime](https://onnxruntime.ai/) | MIT | EfficientSAM 编解码推理 | |
+| [onnx](https://github.com/onnx/onnx) | MIT | TensorRT 导出的 ONNX 中间产物（torch.onnx.export 序列化） | |
+| [Torch-Pruning](https://github.com/VainF/Torch-Pruning) | MIT | 结构化通道剪枝（DepGraph） | |
+| [psutil](https://github.com/giampaolo/psutil) | BSD-3-Clause | 剪枝子进程内存水位监视 | |
+| [python-multipart](https://github.com/kludex/python-multipart) | Apache-2.0 | 推理服务 multipart 表单解析（FastAPI 依赖） | |
 | [pycocotools](https://github.com/ppwwyyxx/cocoapi) | BSD-2-Clause | COCO 指标评估与导出 | |
 | [scikit-image](https://scikit-image.org/) | BSD-3-Clause（含部分 BSD/PSF 组件） | 轮廓简化等图像工具 | |
 | [imgviz](https://github.com/wkentaro/imgviz) | MIT | labelme 依赖 | |
@@ -29,6 +34,7 @@ XCcv Community 依赖以下开源组件，在此致谢。各组件归属其原�
 | [scikit-learn](https://github.com/scikit-learn/scikit-learn) | BSD-3-Clause | KMeans 聚类与随机投影维度估计（CIF） | 许可全文见 `licenses/BSD-3-Clause.txt` |
 | [anomalib](https://github.com/openvinotoolkit/anomalib) | Apache-2.0 | 稀疏随机投影（CIF） | 许可全文见 `licenses/Apache-2.0.txt` |
 | [transformers](https://github.com/huggingface/transformers) | Apache-2.0 | DINOv2 特征加载（SubspaceAD） | 许可全文见 `licenses/Apache-2.0.txt`；传递依赖保留各自许可 |
+| [TensorRT](https://developer.nvidia.com/tensorrt) | Apache-2.0（开源仓库）/ NVIDIA SDK 许可（二进制） | 模型加速导出与 `.engine` 产线推理（可选） | **不随仓库分发**：请自行 `pip install tensorrt` 或安装 TensorRT 运行库；本仓库代码只调用其 API |
 
 > 上表为直接依赖；timm / anomalib / transformers / scikit-learn 的传递依赖
 > （如 tokenizers、safetensors、huggingface-hub、scipy、joblib、omegaconf、

@@ -86,18 +86,36 @@ def _is_plain_method(obj) -> bool:
         type(obj).__name__ == "cython_function_or_method"
 
 
-def apply_auto_slot(cls) -> None:
-    """对单个 QObject 子类应用槽包装；重复调用无害（幂等）。"""
-    if os.environ.get("XCCV_DISABLE_AUTOSLOT"):
-        return
-    if not (isinstance(cls, type) and issubclass(cls, QObject)):
-        return
+def _wrap_class_methods(cls) -> None:
+    """把 cls 中本类定义的普通方法替换为包装函数（幂等）。"""
     for name, obj in list(vars(cls).items()):
         if name.startswith("__") or not _is_plain_method(obj):
             continue
         if getattr(obj, "_autoslot_wrapped", False):
             continue  # 已是包装函数（幂等保护；编译函数自带 __wrapped__，不能用它判断）
         setattr(cls, name, _wrap(obj))
+
+
+def apply_auto_slot(cls) -> None:
+    """对单个 QObject 子类应用槽包装；重复调用无害（幂等）。"""
+    if os.environ.get("XCCV_DISABLE_AUTOSLOT"):
+        return
+    if not (isinstance(cls, type) and issubclass(cls, QObject)):
+        return
+    _wrap_class_methods(cls)
+
+
+def apply_auto_slot_class(cls) -> None:
+    """对任意类（含非 QObject 的 mixin 基类）应用槽包装（幂等）。
+
+    用途：窗口类按页拆分为 mixin（如 training/panels 的 InfoPageMixin 等）
+    后，mixin 自身不是 QObject 子类——apply_auto_slot 的 QObject 守卫会
+    跳过它们；而其方法经继承进入窗口类后，编译态同样需要参数裁剪包装。
+    各 mixin 所在模块尾部直接对本模块的 mixin 类调用本函数。
+    """
+    if os.environ.get("XCCV_DISABLE_AUTOSLOT"):
+        return
+    _wrap_class_methods(cls)
 
 
 def apply_auto_slot_module(globals_: dict) -> None:

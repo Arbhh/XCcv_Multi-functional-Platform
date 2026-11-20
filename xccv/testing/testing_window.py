@@ -1,7 +1,7 @@
 """测试平台主窗口：加载训练好的模型，对图片/文件夹/数据集推理并可视化。
 
 - 模型来源：项目（自动找最新一次训练产出的 best.pt）
-  或直接选择权重文件（.pt）
+  或直接选择权重文件（.pt / .engine）
 - 输入来源：单张图片 / 文件夹（树形列表，子文件夹可展开）/ 数据集
 - 参数：置信度阈值、IOU 阈值实时调节；标签 / 掩码 / 面积显示开关
 - 结果：类别筛选（画布与列表联动）、bbox、实例掩码与掩码面积、Top-5（分类）
@@ -28,7 +28,8 @@ from PyQt5.QtWidgets import (
     QGraphicsScene, QGraphicsTextItem, QGraphicsView, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QPushButton, QScrollArea, QShortcut, QSlider, QStackedWidget, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget,
+    QTreeWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from ..engine.io_utils import imread_unicode
@@ -48,14 +49,15 @@ log = logging.getLogger(__name__)
 
 def latest_weights(model_dir) -> Path | None:
     """在模型储存目录里找最新一次训练产出的 best.pt。"""
-    candidates = list(Path(model_dir).rglob("best.pt"))
-    if candidates:
-        return max(candidates, key=lambda p: p.stat().st_mtime)
+    for name in ("best.pt",):
+        candidates = list(Path(model_dir).rglob(name))
+        if candidates:
+            return max(candidates, key=lambda p: p.stat().st_mtime)
     return None
 
 
 class _ModelLoadThread(QThread):
-    """后台加载模型：避免大权重加载时界面卡死（网络重建耗时）。"""
+    """后台加载模型：避免大权重加载时界面卡死（权重加载 + 网络重建耗时）。"""
 
     done = pyqtSignal(object)
     failed = pyqtSignal(str)
@@ -65,18 +67,25 @@ class _ModelLoadThread(QThread):
         self.path = Path(path)
 
     def run(self):
-        # torch 延迟导入（T1-4）：引擎链在加载线程里引入，让启动闪屏先显示
+        # torch 延迟导入：引擎链在加载线程里引入，让启动闪屏先显示
         from ..engine.models import load_model
 
         try:
             self.done.emit(load_model(self.path))
         except Exception as e:
-            log.error("模型加载失败: %s (%s)", self.path, e, exc_info=True)
-            self.failed.emit(f"{type(e).__name__}: {e}")
+            from ..engine.trt_runtime import TrtUnavailableError
+
+            if isinstance(e, TrtUnavailableError):
+                # 已知预期情况（无 GPU/无 TensorRT）：友好文案+INFO，不记裸堆栈
+                log.info("加载 .engine 受阻（当前环境无 TensorRT/GPU）：%s", self.path)
+                self.failed.emit(str(e))
+            else:
+                log.error("模型加载失败: %s (%s)", self.path, e, exc_info=True)
+                self.failed.emit(f"{type(e).__name__}: {e}")
 
 
 class _BatchThread(QThread):
-    """批量推理线程：逐张预测，按设置保存渲染图与检出 JSON
+    """批量推理线程：逐张预测（含检出流程），按设置保存渲染图与检出 JSON
     （每张图片一个同名 .json，镜像相对目录防重名）。"""
 
     progress = pyqtSignal(int, int, str)   # 已完成数, 总数, 当前文件名
@@ -117,8 +126,9 @@ class _BatchThread(QThread):
             total = len(self._paths)
             import time as _time
 
-            # O13（V0.7）：批量预热——首图推理一次不计入统计（暖 CUDA 上下文
-            # 与引擎缓存）。失败不阻塞批量本身。
+            # 批量预热——首图推理一次不计入统计（暖 CUDA 上下文
+            # 与引擎缓存；口径："前三张为预热图，平均耗时更具参考性"，
+            # 平台取一：单图预热）。失败不阻塞批量本身。
             if total:
                 try:
                     wimg = imread_unicode(self._paths[0])
@@ -156,11 +166,14 @@ class _BatchThread(QThread):
                     pred, _info = apply_flow_safe(
                         pred, (w, h), self._flow, classes=self._classes or None)
                 detections = []
-                # O2 扩展（V0.7）：逐图灰度图（前景占比/灰度差维度的计算底图）
+                # 逐图灰度图（前景占比/灰度差维度
+                # 的计算底图）；仅检测/分割任务计算
                 gray = None
                 if self._task in ("detection", "segmentation"):
-                    gray = img if img.ndim == 2 else cv2.cvtColor(
-                        img, cv2.COLOR_BGR2GRAY)
+                    import cv2 as _cv2
+
+                    gray = img if img.ndim == 2 else _cv2.cvtColor(
+                        img, _cv2.COLOR_BGR2GRAY)
                 for j, box in enumerate(pred.boxes):
                     x1, y1, x2, y2 = (float(v) for v in box)
                     label = (self._classes[pred.labels[j]]
@@ -181,7 +194,7 @@ class _BatchThread(QThread):
                 result = {"file": p.name, "path": str(p),
                           "width": w, "height": h,
                           "detections": detections}
-                # 图像级口径逐图附加值（batch_match 分支消费）
+                # §二（V0.7.3）：图像级口径逐图附加值（batch_match 分支消费）
                 if str(self._task) == "anomaly" and pred.probs:
                     result["image_score"] = round(float(pred.probs[0]), 4)
                 if str(self._task) == "classification" and pred.labels \
@@ -214,8 +227,9 @@ class _BatchThread(QThread):
             from ..engine.result_json import batch_summary, save_result_json
 
             self.summary = batch_summary(results, self._costs_ms)
-            # O2/O19（V0.7）：GT 匹配统计——批量目录里同名 labelme json
-            # 视为真值；无 GT 时面板与复判对话框给出说明。
+            # GT 匹配统计——批量目录里同名 labelme json
+            # 视为真值（分数分布/复判建议的数据源）；无 GT 时仅记
+            # gt_available=False，面板与复判对话框给出说明。
             try:
                 from ..engine.metrics.batch_match import collect_match_stats
 
@@ -372,15 +386,14 @@ class TestingWindow(QMainWindow):
 
         self.model = None            # 引擎 BaseModel 实例
         self.classes: list[str] = []
-        self._flow = None            # 检出过滤流程（项目文件夹中的 检出流程.json）
+        self._flow = None            # 检出过滤流程（模型工具中编辑）
         self._flow_info = None
-        self._flow_base = None       # O2：阈值应用落点
-        self._loaded_weights_path = None
-        self._last_batch_results = None
-        self._last_match_stats = None
-        self._batch_out_dir = None
-        self._review_ctx = None
-        self.task: str = ""          # classification / detection / segmentation / anomaly / ocr
+        self._pending_flow = None    # .xvap 解包出的流程链
+        self._tmp_model_path = None
+        self.task: str = ""          # classification / detection / segmentation
+        self._xcv_flow = None        # 传统算法流程（新算子图，Q3：全量可测）
+        self._xcv_flow_name = ""
+        self._xcv_session = None
         self.image_paths: list[Path] = []
         self._last_image = None      # 缓存最近一次推理的原图与结果，供显示开关/筛选切换
         self._last_prediction = None
@@ -391,7 +404,7 @@ class TestingWindow(QMainWindow):
         from ..status_bus import attach_platform_status
 
         attach_platform_status(self, "测试平台", "testing")
-        # 勘误：底部状态栏徽章旁加 标准 / 项目复盘 页签
+        # 底部状态栏徽章旁加 标准 / 项目复盘 页签
         self.btn_mode_std = QPushButton("标准")
         self.btn_mode_std.setObjectName("seg")
         self.btn_mode_std.setCheckable(True)
@@ -411,12 +424,13 @@ class TestingWindow(QMainWindow):
         self._infer_timer.setSingleShot(True)
         self._infer_timer.setInterval(250)
         self._infer_timer.timeout.connect(self._infer_current)
-        from ..i18n import localize_widget_tree  # 英文模式整体替换层
+        from ..i18n import localize_widget_tree, tr  # 整体替换层
 
         localize_widget_tree(self)
 
     def i18n_rebuild_blocked(self) -> bool:
-        """语言重建忙时钩子：批量/加载线程存活或已加载模型即禁重建。"""
+        """语言重建忙时钩子——批量/加载线程存活即禁重建。
+        已加载模型同判忙——重建丢已加载权重，须重开窗口后再切。"""
         for attr in ("_batch_thread", "_load_thread"):
             worker = getattr(self, attr, None)
             if worker is not None and worker.isRunning():
@@ -424,7 +438,7 @@ class TestingWindow(QMainWindow):
         return self.model is not None
 
     def i18n_block_reason(self) -> str:
-        """忙因提示语：已加载模型与运行中任务分开说。"""
+        """忙因提示语——已加载模型与运行中任务分开说。"""
         if self.model is not None:
             return "已加载模型，语言重开窗口后生效"
         return "任务运行中，语言重开窗口后生效"
@@ -432,7 +446,7 @@ class TestingWindow(QMainWindow):
     def closeEvent(self, event):
         if self._load_thread is not None and self._load_thread.isRunning():
             self._load_thread.wait(5000)  # 等待模型加载线程收尾，避免退出崩溃
-        # 勘误：复盘页临时缓存随平台关闭清理
+        # 复盘页临时缓存随平台关闭清理
         self.review_page.shutdown()
         event.accept()
 
@@ -450,7 +464,7 @@ class TestingWindow(QMainWindow):
 
             self._flow = load_flow(Path(ctx["project_dir"]) / "检出流程.json")
         except Exception:  # noqa: BLE001
-            pass
+            log.debug("项目检出流程未加载（缺失或损坏）")
 
     def _add_shortcuts(self):
         """XCcv：快捷键（A/D 切换图片、F 适应窗口、Ctrl+1 原始尺寸、Ctrl+O 打开）。"""
@@ -502,7 +516,8 @@ class TestingWindow(QMainWindow):
         head.addWidget(self.header_model_info)
         root.addWidget(header)
 
-        # 勘误（2026-11-13）：标准 / 项目复盘 双页（页签在底部状态栏）
+        # 标准 / 项目复盘 双页（页签在底部状态栏
+        # 「测试平台」徽章旁；与训练平台的项目信息/训练可视化同款交互）
         self._detail_stack = QStackedWidget()
         self._detail_stack.addWidget(self._build_standard_page())   # 0 标准
         from .review_page import ProjectReviewPage
@@ -577,7 +592,7 @@ class TestingWindow(QMainWindow):
         row.addWidget(btn_folder)
         v2.addLayout(row)
         btn_batch = QPushButton("批量运行…")
-        btn_batch.setToolTip("选择文件夹批量推理，完成后可导出检出结果 JSON")
+        btn_batch.setToolTip("选择文件夹批量推理（含检出流程），完成后可导出检出结果 JSON")
         btn_batch.clicked.connect(self._batch_run)
         v2.addWidget(btn_batch)
         self.btn_batch = btn_batch
@@ -612,7 +627,7 @@ class TestingWindow(QMainWindow):
         self.chk_tiled.setToolTip(
             "整图缩到模型输入会把小目标缩没；分块推理保持模型原生口径逐块检出"
             "后合并去重（同类 NMS）。小图自动回退整图推理；分类任务不适用。\n"
-            "与训练平台「切图训练」（T9-3）配对使用效果最佳。")
+            "与训练平台「切图训练」配对使用效果最佳。")
         v3.addWidget(self.show_labels)
         v3.addWidget(self.show_masks)
         v3.addWidget(self.show_area)
@@ -633,6 +648,8 @@ class TestingWindow(QMainWindow):
         return panel
 
     def _build_center(self) -> QWidget:
+        # 标准页回退干净版——分数分布/阈值面板移入
+        # 「项目复盘」页（review_page），此处只留画布与视图按钮
         center = QWidget()
         center_lay = QVBoxLayout(center)
         center_lay.setContentsMargins(0, 0, 0, 0)
@@ -674,7 +691,7 @@ class TestingWindow(QMainWindow):
         slider = QSlider(Qt.Horizontal)
         slider.setRange(vmin, vmax)
         slider.setValue(value)
-        slider._xccv_label = label      # 模型加载时按分数语义改题
+        slider._xccv_label = label      # §三：模型加载时按分数语义改题
         slider._xccv_title = tr(title)
         layout.addWidget(label)
         layout.addWidget(slider)
@@ -698,10 +715,9 @@ class TestingWindow(QMainWindow):
         try:
             project = load_project(name)
         except Exception:
+            log.debug("项目提示构建失败（按空提示）")
             self.project_hint.setText("")
             return
-        from ..i18n import tr
-
         self.project_hint.setText(
             f"{project.task_type.label} | {tr('输出目录：')}{project.model_dir}")
 
@@ -726,34 +742,154 @@ class TestingWindow(QMainWindow):
 
         path, _ = QFileDialog.getOpenFileName(
             self, tr("选择权重文件"), "",
-            tr("模型权重 (*.pt);;所有文件 (*)"))
+            tr("模型权重/流程包 (*.pt *.engine *.xvap *.json);;"
+               "流程包 (*.xvap);;所有文件 (*)"))
         if not path:
             return
-        self._load_weights(Path(path))
+        path = Path(path)
+        # 传统算法流程（Q3：测试平台可测软件产出的所有模型、流程文件）
+        if path.suffix.lower() in (".json", ".xvap"):
+            flow = self._peek_xcv_flow(path)
+            if flow is not None:
+                self._load_xcv_flow(path, flow)
+                return
+        self._load_weights(path)
 
+    def _peek_xcv_flow(self, path) -> dict | None:
+        """嗅探文件是否纯传统算法流程（新算子图）。非流程文件返回 None。"""
+        from pathlib import Path as _Path
 
+        from ..engine.flow.legacy_adapter import sniff_format
+
+        path = _Path(path)   # 兼容字符串路径（.suffix 属性需要 Path）
+        try:
+            if path.suffix.lower() == ".xvap":
+                from ..engine import flow_package as fp
+
+                flow, _models = fp.load_xvap(path)
+            else:
+                flow = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            log.warning("流程嗅探失败: %s", path, exc_info=True)
+            return None
+        if sniff_format(flow) == "xcv_graph":
+            return flow
+        from ..i18n import tr
+
+        if path.suffix.lower() == ".json":
+            QMessageBox.information(
+                self, tr("提示"),
+                tr("该 JSON 为链式检出流程（模型检出后的过滤规则），会在加载"
+                   "对应项目的模型后自动应用，无需在此单独加载。"))
+        return None
+
+    def _load_xcv_flow(self, path, flow: dict):
+        """进入传统算法流程模式：无模型，逐图跑新引擎。"""
+        from pathlib import Path as _Path
+
+        from ..modeltools.flow_session import FlowSession, _normalize_types
+
+        path = _Path(path)   # 兼容字符串路径（.name 属性需要 Path）
+        self._xcv_flow = _normalize_types(flow)
+        self._xcv_flow_name = path.name
+        self._xcv_session = FlowSession()
+        self.model = None
+        self._flow = None
+        self._pending_flow = None
+        self.task = "detection"
+        self.classes = []
+        self.class_filter.clear()
+        self.class_filter.addItem("全部", None)
+        self.class_filter.setEnabled(False)
+        self.conf_slider.setEnabled(False)
+        self.iou_slider.setEnabled(False)
+        note = (f"{tr('传统算法流程：')}{path.name}（"
+                f"{tr('无模型；选择图片即运行，「批量运行…」可导出统一 JSON 与可视化')}）")
+        self.model_info.setText(note)
+        self.header_model_info.setText(f"{tr('传统流程：')}{path.name}")
+        self.result_stats.setText(note)
+        log.info("加载传统算法流程: %s", path)
 
     def _load_weights(self, path: Path):
         """后台线程加载模型：加载期间禁用加载入口并显示进度提示。"""
-        from ..i18n import tr
-
         if self._load_thread is not None and self._load_thread.isRunning():
             QMessageBox.information(self, tr("请稍候"), tr("正在加载模型，请等待完成"))
             return
+        self._xcv_flow = None   # 加载真实模型时退出传统流程模式
+        self._xcv_session = None
         self.btn_load_project.setEnabled(False)
         self.btn_pick.setEnabled(False)
         self.model_info.setText(f"{tr('正在加载')} {path.name} …"
-                                f"{tr('（网络构建需要数秒）')}")
+                                f"{tr('（权重加载与网络构建需要数秒）')}")
         self.header_model_info.setText("模型加载中…")
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        self._load_thread = _ModelLoadThread(path, self)
+        self._pending_flow = None
+        load_path = path
+        if path.suffix == ".xvap":
+            try:
+                load_path, self._pending_flow = self._materialize_xvap(path)
+            except Exception as e:
+                # 失败必须恢复加载入口，否则界面锁死只能重开
+                self.btn_load_project.setEnabled(True)
+                self.btn_pick.setEnabled(True)
+                QApplication.restoreOverrideCursor()
+                self.model_info.setText("流程包加载失败")
+                self.header_model_info.setText("加载失败")
+                QMessageBox.critical(self, "流程图加载失败", str(e))
+                return
+        self._load_thread = _ModelLoadThread(load_path, self)
         self._load_thread.done.connect(
             lambda model, p=path: self._on_model_loaded(p, model))
         self._load_thread.failed.connect(self._on_model_load_failed)
-        auto_cleanup_thread(self, "_load_thread", self._load_thread)  # A-3（T2-6）
+        auto_cleanup_thread(self, "_load_thread", self._load_thread)  # A-3
         self._load_thread.start()
 
+    def _materialize_xvap(self, path: Path) -> tuple[Path, dict]:
+        """解包 .xvap：内嵌模型落临时文件供加载，流程图转执行链。
 
+        临时文件在模型加载完成（权重已进内存）后于 _on_model_loaded 清理。
+        """
+        import os
+        import tempfile
+
+        from ..engine import flow_package as fp
+        from ..modeltools.flowgraph_web_window import graph_to_chain
+
+        flow, models = fp.load_xvap(path)
+        has_legacy = any(str(n.get("type", "")).startswith(
+            ("model/", "xccv/model", "post/", "xccv/post_"))
+            for n in flow.get("nodes", []))
+        if not has_legacy:
+            # 纯传统算子流程包：测试平台语义是「AI 模型 + 检出过滤」，
+            # 纯传统流程请在主界面「流程图」页运行（支持批量 + 统一 JSON 结果）
+            raise ValueError(
+                "该流程包为纯传统算子流程（不含 AI 模型），测试平台无法运行。\n"
+                "请在主界面左侧导航「流程图」页打开并运行"
+                "（支持批量运行并导出统一 JSON 结果）。")
+        model_name = next(
+            (Path((n.get("properties") or n.get("params") or {}).get("model_file") or "").name
+             for n in flow.get("nodes", [])
+             if str(n["type"]).startswith(("model/", "xccv/model"))), None)
+        if not model_name or model_name not in models:
+            raise ValueError("流程包中缺少模型节点或模型文件")
+        fd, tmp = tempfile.mkstemp(suffix=Path(model_name).suffix)
+        with os.fdopen(fd, "wb") as f:
+            f.write(models[model_name])
+        self._tmp_model_path = Path(tmp)
+        return self._tmp_model_path, graph_to_chain(flow)
+
+    def _load_flow_for(self, weights_path: Path):
+        """探测权重所属项目的检出过滤流程（模型工具中保存于项目文件夹）。"""
+        from ..engine import detection_flow as df
+
+        for base in (weights_path.parent.parent, weights_path.parent):
+            flow = df.load_flow(base / "检出流程.json")
+            if flow:
+                self._flow_base = base  # 阈值应用落点
+                return flow
+        # 无流程文件：项目目录仍作为阈值应用的默认落点
+        self._flow_base = weights_path.parent.parent
+        return None
 
     def _on_model_loaded(self, path: Path, model):
         self._load_thread = None
@@ -762,16 +898,29 @@ class TestingWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
         self.model = model
         self.classes = model.classes or []
-        self._loaded_weights_path = path  # O2/O20：阈值落点与回流目标解析
+        self._loaded_weights_path = path  # 阈值落点与回流目标解析
+        self._flow_base = None
         task = getattr(model, "task", None)
         self.task = task.value if task is not None else ""
-        self._flow = self._load_flow_for(path)
+        self._flow = self._pending_flow or self._load_flow_for(path)
+        self._pending_flow = None
         self._warn_flow_mismatch()
+        tmp = getattr(self, "_tmp_model_path", None)
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
+            self._tmp_model_path = None
         log.info("模型已加载: %s 任务=%s 类别数=%s 设备=%s 检出流程=%s",
                  path.name, self.task, len(self.classes), model.device,
                  "有" if self._flow else "无")
-        # O14（V0.7）：推理形态显性化（社区版为 FP32 明文 .pt）
-        form_txt = "FP32 权重（.pt）"
+        # 推理形态显性化（FP32 权重 / TensorRT 引擎 + 构建算力）
+        if path.suffix.lower() == ".engine":
+            meta_cc = getattr(model, "_meta_cc_build", None)
+            form_txt = "TensorRT 加速引擎（.engine）"
+            if meta_cc:
+                form_txt += f"｜构建算力 sm_{meta_cc[0]}{meta_cc[1]}"
+            form_txt += "　（模型工具-加速 可在本机重新导出）"
+        else:
+            form_txt = "FP32 权重（.pt）　（要提速到模型工具-加速导出 TensorRT）"
         self.model_info.setText(
             f"权重：{path.name}\n任务：{task.label if task is not None else '未知'}\n"
             f"类别数：{len(self.classes)}\n设备：{model.device}\n推理形态：{form_txt}"
@@ -783,7 +932,7 @@ class TestingWindow(QMainWindow):
         is_seg = self.task == "segmentation"
         self.conf_slider.setEnabled(not is_cls)
         self.iou_slider.setEnabled(not is_cls)
-        # 滑条名随模型分数语义渲染（ANOMALY=图像分数 z）
+        # §三（V0.7.3）：滑条名随模型分数语义渲染（ANOMALY=图像分数 z）
         sem = getattr(model, "score_semantics", None) or {}
         conf_title = str(sem.get("name") or "置信度阈值")
         self.conf_slider._xccv_title = conf_title
@@ -808,21 +957,9 @@ class TestingWindow(QMainWindow):
         self.result_stats.setText("模型已加载，请选择图片")
         self.result_list.clear()
 
-    def _load_flow_for(self, weights_path: Path):
-        """探测权重所属项目的检出过滤流程（项目文件夹中的 检出流程.json）。"""
-        from ..engine import detection_flow as df
-
-        for base in (weights_path.parent.parent, weights_path.parent):
-            flow = df.load_flow(base / "检出流程.json")
-            if flow:
-                self._flow_base = base  # O2：阈值应用落点
-                return flow
-        # 无流程文件：项目目录仍作为阈值应用的默认落点
-        self._flow_base = weights_path.parent.parent
-        return None
-
     def _warn_flow_mismatch(self):
-        """检出流程引用的类别与当前模型类别不一致时，状态栏提示。"""
+        """检出流程引用的类别与当前模型类别不一致时，状态栏提示
+        （防换模型后过滤规则失义——类别过滤不会命中，流程等于只做其余过滤）。"""
         if not self._flow:
             return
         from ..engine import detection_flow as df
@@ -836,11 +973,11 @@ class TestingWindow(QMainWindow):
                         missing, self.classes)
 
     def _on_model_load_failed(self, message: str):
+        from ..i18n import tr
+
         self._load_thread = None
         self.btn_load_project.setEnabled(True)
         self.btn_pick.setEnabled(True)
-        from ..i18n import tr
-
         QApplication.restoreOverrideCursor()
         self.model_info.setText(tr("未加载模型"))
         self.header_model_info.setText(tr("未加载模型"))
@@ -858,16 +995,14 @@ class TestingWindow(QMainWindow):
     def _open_folder(self):
         from ..i18n import tr
 
-        folder = QFileDialog.getExistingDirectory(
-            self, tr("选择图片文件夹（含子文件夹）"))
+        folder = QFileDialog.getExistingDirectory(self, tr("选择图片文件夹（含子文件夹）"))
         if not folder:
             return
         files = [p for p in sorted(Path(folder).rglob("*"))
                  if p.is_file() and p.suffix.lower() in IMAGE_EXTS
                  and not any(part.startswith(".") for part in p.relative_to(folder).parts[:-1])]
         if not files:
-            QMessageBox.information(self, tr("提示"),
-                                    tr("该文件夹（含子文件夹）中没有图片"))
+            QMessageBox.information(self, tr("提示"), tr("该文件夹（含子文件夹）中没有图片"))
             return
         self._set_image_list(files, root=Path(folder))
 
@@ -911,11 +1046,11 @@ class TestingWindow(QMainWindow):
 
     # ================= 批量运行 =================
     def _batch_run(self):
-        """批量推理：先弹设置（输出目录 / 是否存图等），再后台逐张推理。"""
+        """批量推理：先弹设置（输出目录 / 是否存图等，To3.2），再后台逐张推理。"""
         from ..i18n import tr
 
-        if self.model is None:
-            QMessageBox.information(self, tr("提示"), tr("请先加载模型，再批量运行"))
+        if getattr(self, "_xcv_flow", None) is None and self.model is None:
+            QMessageBox.information(self, tr("提示"), tr("请先加载模型或传统算法流程，再批量运行"))
             return
         if getattr(self, "_batch_thread", None) is not None \
                 and self._batch_thread.isRunning():
@@ -932,21 +1067,36 @@ class TestingWindow(QMainWindow):
                  if p.is_file() and p.suffix.lower() in IMAGE_EXTS
                  and not any(part.startswith(".") for part in p.relative_to(folder).parts[:-1])]
         if not files:
-            QMessageBox.information(self, tr("提示"),
-                                    tr("该文件夹（含子文件夹）中没有图片"))
+            QMessageBox.information(self, "提示", "该文件夹（含子文件夹）中没有图片")
             return
         out_dir = Path(settings.out_dir) if settings.out_dir else folder
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            QMessageBox.warning(self, tr("输出目录无效"),
-                                f"{tr('无法创建输出目录：')}{e}")
+            QMessageBox.warning(self, tr("输出目录无效"), f"{tr('无法创建输出目录：')}{e}")
             return
         conf, iou = self._current_params()
         self.btn_batch.setEnabled(False)
         self._batch_settings = settings
         self._batch_out_dir = out_dir
         self.result_stats.setText(f"{tr('批量推理')} 0 / {len(files)} …")
+        if getattr(self, "_xcv_flow", None) is not None:
+            # 传统算法流程批量：复用 _XcvBatchThread（统一 JSON + 蒙版图）
+            from ..flow_platform import _XcvBatchThread
+
+            self._batch_thread = _XcvBatchThread(
+                self._xcv_flow, files, folder, out_dir,
+                flow_name=self._xcv_flow_name,
+                save_json=settings.save_json, save_images=settings.save_images,
+                jpg_quality=settings.jpg_quality, parent=self)
+            self._batch_thread.progress.connect(
+                lambda done, total: self.result_stats.setText(
+                    f"{tr('批量运行')} {done} / {total} …"))
+            self._batch_thread.finished_ok.connect(self._on_xcv_batch_done)
+            self._batch_thread.failed.connect(self._on_batch_failed)
+            auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3
+            self._batch_thread.start()
+            return
         self._batch_thread = _BatchThread(
             self.model, files, conf, iou, self._flow, self.classes or [],
             self.task, out_dir=out_dir, save_json=settings.save_json,
@@ -960,9 +1110,19 @@ class TestingWindow(QMainWindow):
                 f"{tr('批量推理')} {done} / {total}　{name}"))
         self._batch_thread.finished_ok.connect(self._on_batch_done)
         self._batch_thread.failed.connect(self._on_batch_failed)
-        auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3（T2-6）
+        auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3
         self._batch_thread.start()
 
+    def _on_xcv_batch_done(self, out_dir: str):
+        self.btn_batch.setEnabled(True)
+        self._batch_thread = None
+        self.result_stats.setText(
+            f"批量运行完成，统一 JSON 与可视化已保存：{out_dir}\n"
+            f"（检出结果/ 每图一个 .json；可视化/ 蒙版渲染图）")
+        self.statusBar().showMessage(f"批量运行完成，输出目录：{out_dir}", 10000)
+        from ..ui_widgets import toast
+
+        toast(self, "批量测试完成", "success")
 
     def _on_batch_done(self, results: list):
         self.btn_batch.setEnabled(True)
@@ -971,8 +1131,6 @@ class TestingWindow(QMainWindow):
         self._batch_thread = None
         settings = getattr(self, "_batch_settings", None)
         out_dir = getattr(self, "_batch_out_dir", None)
-        from ..i18n import tr
-
         if not results:
             QMessageBox.information(self, tr("批量运行"), tr("没有可用的推理结果"))
             return
@@ -988,19 +1146,19 @@ class TestingWindow(QMainWindow):
                     for k, v in tops))
             lat = summary.get("latency_ms")
             if lat:
-                # O13（V0.7）：min/avg 补齐 + 预热口径说明
+                # min/avg 补齐 + 预热口径说明
                 lines.append(
                     f"单图耗时 min={lat['min_ms']:.0f} / p50={lat['p50_ms']:.0f}"
                     f" / avg={lat['avg_ms']:.0f} / max={lat['max_ms']:.0f} ms"
                     "（首张已自动预热，不计入统计）")
-            # O15（V0.7）：耗时离散度告警（单图 > 中位数×3 疑似掉频/热节流）
+            # 耗时离散度告警（单图 > 中位数×3 疑似掉频/热节流）
             outliers = summary.get("slow_outliers") or {}
             if outliers.get("count"):
                 lines.append(
                     f"⚠ 疑似 GPU 掉频/热节流：{outliers['count']} 张单图耗时"
                     f" > 中位数（{outliers['median_ms']:.0f} ms）×3——"
-                    "查电源/驱动设置")
-            # O13（V0.7）：显存水位（GPU 环境才显示）
+                    "查电源/驱动设置，见 docs/显卡掉频排查指引.md")
+            # 显存水位（GPU 环境才显示；_vram_line 先例口径）
             try:
                 import torch
                 if torch.cuda.is_available():
@@ -1009,16 +1167,16 @@ class TestingWindow(QMainWindow):
                         f"显存占用：{(total_b - free_b) / 1048576:.0f} MB"
                         f" / 共 {total_b / 1048576:.0f} MB")
             except Exception:  # noqa: BLE001  无 CUDA/驱动异常不显示
-                pass
+                log.debug("显存行探测失败")
             # 摘要 .json 已由批量线程落盘（检出结果/摘要.json）
         if settings is not None and settings.save_json and out_dir is not None:
             lines.append(f"{tr('检出 JSON（每图一个，同名对应）')}：{out_dir / '检出结果'}")
         if settings is not None and settings.save_images and out_dir is not None:
             lines.append(f"{tr('渲染图')}：{out_dir / '可视化'}")
         self.result_stats.setText("\n".join(lines))
-        self.statusBar().showMessage(
-            f"{tr('批量运行完成，输出目录：')}{out_dir}", 10000)
-        # 标准页不再挂分数面板/复判入口——批量统计仅落盘，复盘走「项目复盘」页
+        self.statusBar().showMessage(f"{tr('批量运行完成，输出目录：')}{out_dir}", 10000)
+        # 标准页不再挂分数面板/复判入口——批量统计仅落盘，复盘走
+        # 「项目复盘」页（自动对训练数据集批量并三分组）
         self._last_match_stats = summary.get("match_stats") if summary else None
         self._last_batch_results = results
         from ..ui_widgets import toast
@@ -1028,17 +1186,19 @@ class TestingWindow(QMainWindow):
               f"{tr('共检出')} {total_det} {tr('个目标')}",
               "success")
 
-    # ================= O2/O19/O20（V0.7）：批量评估闭环 =================
+    # ================= O2/O19/批量评估闭环 =================
     def _generate_threshold_flow(self, dims: dict):
-        """O2 扩展：面板启用维度阈值 → 生成流程图模板。"""
-        from ..i18n import tr
+        """面板启用维度阈值 → 生成流程图模板。
 
+        落盘 <模型存放文件夹>/flow/<时间>_<模型名>.json（既定约定）；模型
+        路径已填当前权重，生成即可在流程图平台打开运行。
+        """
         w = getattr(self, "_loaded_weights_path", None)
         if not w:
             QMessageBox.information(
-                self, tr("生成流程图模板"),
-                tr("当前模型未关联权重文件（无法定位模型存放文件夹）；")
-                + tr("请通过「加载模型」选择权重后再生成"))
+                self, "生成流程图模板",
+                "当前模型未关联权重文件（无法定位模型存放文件夹）；"
+                "请通过「加载模型」选择权重文件后再生成")
             return
         weights = Path(w)
         model_dir = weights.parent.parent
@@ -1048,27 +1208,46 @@ class TestingWindow(QMainWindow):
         try:
             path = save_threshold_flow(model_dir, model_name, dims,
                                        str(weights),
-                                       task=str(self.task or "detection"))
+                                       task=str(getattr(self, "_task", "")
+                                                or "detection"))
         except OSError as e:
-            QMessageBox.warning(self, tr("生成流程图模板"),
-                                f"{tr('写入流程文件失败：')}{e}")
+            QMessageBox.warning(self, tr("生成流程图模板"), f"{tr('写入流程文件失败：')}{e}")
             return
         dims_text = "、".join(f"{k}={v:g}" for k, v in sorted(dims.items()))
         self.statusBar().showMessage(
             f"{tr('流程图模板已生成：')}{path}（{tr('启用维度')}：{dims_text}）", 15000)
-        from ..ui_widgets import toast
+        self._flow_jump_dialog(
+            tr("生成流程图模板"),
+            tr("流程图模板已生成，可前往流程图界面打开运行") + f"\n{path}",
+            Path(path))
 
-        toast(self, tr("流程图模板已生成，可在流程图平台打开使用"), "success")
+    def _flow_jump_dialog(self, title: str, text: str, target):
+        """V0.7.4 二.3 / V0.7.5 重定向：操作结果弹窗 + 「前往流程图界面」
+        直达——落点为主界面「流程图」页（新版流程图界面；旧版独立编辑器
+        已弃用归档）。模板路径经启动参数/单实例转发载入。"""
+        from ..launcher import launch_platform
+
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setText(text)
+        btn_jump = box.addButton(tr("前往流程图界面"), QMessageBox.YesRole)
+        box.addButton(tr("知道了"), QMessageBox.NoRole)
+        box.exec_()
+        if box.clickedButton() is btn_jump:
+            try:
+                launch_platform("main",
+                                str(target) if target else None)
+            except Exception as e:  # noqa: BLE001（启动失败不影响本操作结果）
+                QMessageBox.warning(self, title,
+                                    f"{tr('流程图平台启动失败：')}{e}")
 
     def _apply_conf_to_flow(self, conf: float):
-        """面板阈值 → 项目「检出流程.json」置信度节点（O2 应用 + O18 留痕）。"""
+        """面板阈值 → 项目「检出流程.json」置信度节点（应用并留痕）。"""
         base = getattr(self, "_flow_base", None)
         if base is None:
             w = getattr(self, "_loaded_weights_path", None)
             if w is not None:
                 base = Path(w).parent.parent
-        from ..i18n import tr
-
         if base is None:
             QMessageBox.information(
                 self, tr("应用阈值"),
@@ -1087,7 +1266,7 @@ class TestingWindow(QMainWindow):
         stats = getattr(self, "_last_match_stats", None) or {}
         node.setdefault("params", {})
         node["params"]["min"] = round(float(conf), 2)
-        # O18 留痕：normalize_flow 保留节点的额外参数键（apply_flow 不读）
+        # 留痕：normalize_flow 保留节点的额外参数键（apply_flow 不读）
         node["params"]["note"] = (
             f"{time.strftime('%Y-%m-%d %H:%M')} 测试平台阈值面板：基于批量 "
             f"{stats.get('n_gt_images', 0)} 张有标注图"
@@ -1100,9 +1279,11 @@ class TestingWindow(QMainWindow):
         self._flow = flow  # 当前会话立即生效
         self.statusBar().showMessage(
             f"{tr('默认检出阈值已应用：')}conf={conf:.2f} → {flow_path}", 10000)
-        from ..ui_widgets import toast
-
-        toast(self, f"{tr('已应用为项目默认检出')} conf={conf:.2f}", "success")
+        self._flow_jump_dialog(
+            tr("应用阈值"),
+            tr("已写入项目默认检出流程 conf={v:.2f}，可前往流程图界面查看").format(
+                v=conf),
+            flow_path)
 
     def _resolve_dataset_dir(self):
         """权重所属项目的数据集目录（回流默认目标；找不到返回 None）。"""
@@ -1119,23 +1300,23 @@ class TestingWindow(QMainWindow):
                 d = data.get("dataset_dir")
                 if d and Path(d).is_dir():
                     return d
+            # 自定义模型目录：遍历项目找 model_dir 匹配项
             from ..training.project import list_projects, load_project
 
             for name in list_projects():
                 try:
                     p = load_project(name)
                 except Exception:
+                    log.debug("项目记录读取失败（跳过该候选）")
                     continue
                 if Path(p.model_dir).resolve() == model_dir.resolve():
                     return (p.dataset_dir
                             if Path(p.dataset_dir).is_dir() else None)
         except Exception:
-            pass
+            log.debug("项目数据目录解析失败")
         return None
 
     def _open_batch_review(self):
-        from ..i18n import tr
-
         results = getattr(self, "_last_batch_results", None)
         if not results:
             QMessageBox.information(self, tr("复判"), tr("请先完成一次批量推理"))
@@ -1150,19 +1331,24 @@ class TestingWindow(QMainWindow):
             try:
                 old.close()
             except Exception:  # noqa: BLE001
-                pass
+                log.warning("旧复盘窗关闭失败", exc_info=True)
         self._review_dialog = BatchReviewDialog(
             results, getattr(self, "_last_match_stats", None), review_path,
             dataset_dir=self._resolve_dataset_dir(), parent=self)
         self._review_dialog.show()
 
     def _open_model_compare(self):
-        """O21（V0.7）：模型 A/B 比对窗（非模态；B 模型复推在后台线程）。"""
-        from ..i18n import tr
+        """模型 A/B 比对窗（非模态；B 模型复推在后台线程）。
 
+        项目复盘页发起时用复盘的 conf/iou/类别表与权重。
+        """
         results = getattr(self, "_last_batch_results", None)
         if not results:
             QMessageBox.information(self, tr("A/B 比对"), tr("请先完成一次批量推理"))
+            return
+        if getattr(self, "_xcv_flow", None) is not None:
+            QMessageBox.information(
+                self, "A/B 比对", "传统算法流程批量不支持 A/B 比对（仅 AI 模型）")
             return
         ctx = getattr(self, "_review_ctx", None)
         if ctx:
@@ -1178,9 +1364,9 @@ class TestingWindow(QMainWindow):
             try:
                 old.close()
             except Exception:  # noqa: BLE001
-                pass
+                log.warning("旧结果窗关闭失败", exc_info=True)
         w = getattr(self, "_loaded_weights_path", None)
-        # 比对结果缓存（同模型/参数/B 权重重开免重推）
+        # V0.7.2 任务④：比对结果缓存（同模型/参数/B 权重重开免重推）
         if not hasattr(self, "_ab_cache"):
             self._ab_cache = {}
         self._ab_dialog = ModelCompareDialog(
@@ -1191,11 +1377,9 @@ class TestingWindow(QMainWindow):
         self._ab_dialog.show()
 
     def _on_batch_failed(self, message: str):
-        from ..i18n import tr
-
         self.btn_batch.setEnabled(True)
         self._batch_thread = None
-        self.result_stats.setText(tr("批量推理失败"))
+        self.result_stats.setText("批量推理失败")
         QMessageBox.critical(self, tr("批量运行失败"), message)
 
     def _current_image_path(self) -> Path | None:
@@ -1216,12 +1400,15 @@ class TestingWindow(QMainWindow):
         return f"{ms:.0f} ms" if ms < 1000.0 else f"{seconds:.2f} s"
 
     def _infer_current(self):
+        if getattr(self, "_xcv_flow", None) is not None:
+            self._infer_xcv_flow()
+            return
         if self.model is None:
             self.result_stats.setText("未加载模型")
             return
         if getattr(self, "_batch_thread", None) is not None:
             # 批量运行中禁止 UI 线程并发推理（与批量线程共用同一模型对象，
-            # 并发推理存在小概率卡死——用户批注 ToE3 的防护措施）
+            # 并发推理存在小概率卡死——的防护措施）
             return
         path = self._current_image_path()
         if path is None:
@@ -1244,6 +1431,13 @@ class TestingWindow(QMainWindow):
             log.error("推理失败: %s: %s", type(e).__name__, e, exc_info=True)
             QMessageBox.critical(self, tr("推理失败"), f"{type(e).__name__}: {e}")
             return
+        self._last_infer_cost = time.perf_counter() - t0
+        # 每次单图推理留痕
+        _boxes = getattr(prediction, "boxes", None)  # 判空不用真值
+        log.info("单图推理 %s %dx%d 检出 %d 耗时 %.2fs（conf=%.2f iou=%.2f）",
+                 path.name, image.shape[1], image.shape[0],
+                 0 if _boxes is None else len(_boxes),
+                 self._last_infer_cost, conf, iou)
         if self._flow and self.task != "classification":
             from ..engine.flow.legacy_adapter import apply_flow_safe
 
@@ -1256,20 +1450,13 @@ class TestingWindow(QMainWindow):
                          len(prediction.boxes) + flow_info.get("removed", 0),
                          len(prediction.boxes), flow_info.get("count_check"))
             except Exception as e:
-                # 流程应用失败只降级为不过滤，绝不打断推理
+                # 流程应用失败只降级为不过滤，绝不打断产线推理（原图上仍可见结果）
                 self._flow_info = None
                 log.error("检出流程应用失败，已跳过过滤: %s: %s",
                           type(e).__name__, e, exc_info=True)
                 self.result_stats.setText(tr("检出流程应用失败（已跳过过滤），详见日志"))
         else:
             self._flow_info = None
-        self._last_infer_cost = time.perf_counter() - t0
-        # 每次单图推理留痕（用户回传"推理变慢"排障依据：耗时/检出数/阈值可与环境对照）
-        _boxes = getattr(prediction, "boxes", None)  # 判空不用真值（P150）
-        log.info("单图推理 %s %dx%d 检出 %d 耗时 %.2fs（conf=%.2f iou=%.2f）",
-                 path.name, image.shape[1], image.shape[0],
-                 0 if _boxes is None else len(_boxes),
-                 self._last_infer_cost, conf, iou)
         self._last_image = image
         self._last_prediction = prediction
         self._show_result(path.name, image, prediction)
@@ -1302,6 +1489,88 @@ class TestingWindow(QMainWindow):
             name = item.text(0) if item else ""
             self._show_result(name, self._last_image, self._last_prediction)
 
+    def _infer_xcv_flow(self):
+        """传统算法流程模式单图推理：跑新引擎 → 蒙版可视化 + 结果列表。"""
+        if self._xcv_session is None:
+            return
+        if getattr(self, "_batch_thread", None) is not None:
+            return   # 批量运行中（防护同模型模式）
+        path = self._current_image_path()
+        if path is None:
+            return
+        import json as _json
+
+        from ..engine.flow.snapshot import overlay_result
+        from ..engine.flow.ir import ImageData as _Img
+
+        norm = _json.loads(_json.dumps(self._xcv_flow))
+        has_loader = False
+        for n in norm.get("nodes", []):
+            if str(n.get("type", "")) == "image_loader":
+                n.setdefault("properties", {})["path"] = str(path)
+                has_loader = True
+        if not has_loader:
+            self.result_stats.setText("流程缺少「读入图片」节点")
+            return
+        t0 = time.perf_counter()
+        try:
+            summary = self._xcv_session.run(
+                norm, label="测试平台", flow_dir=path.parent,
+                source_name=path.name, flow_name=self._xcv_flow_name)
+        except Exception as e:
+            log.error("传统流程运行失败: %s", e, exc_info=True)
+            QMessageBox.critical(self, tr("运行失败"), f"{e}")
+            return
+        flow_cost = time.perf_counter() - t0
+        image = imread_unicode(str(path))
+        ex_results = self._xcv_session.executor.results
+        det, geo_list, meas_list, all_outs, base = None, [], [], {}, None
+        for nid in sorted(ex_results):
+            r = ex_results[nid]
+            if not r.ok:
+                continue
+            for v in r.outputs.values():
+                if isinstance(v, _Img):
+                    base = v.mat
+                else:
+                    all_outs.setdefault(id(v), v)
+                    if hasattr(v, "kind"):
+                        geo_list.append(v)
+                    elif hasattr(v, "boxes") and det is None:
+                        det = v
+                    elif hasattr(v, "to_json"):
+                        meas_list.append(v)
+        base = base if base is not None else image
+        try:
+            rendered = overlay_result(base, list(all_outs.values())) \
+                if base is not None else None
+        except Exception:
+            log.debug("结果可视化渲染失败（回退底图）")
+            rendered = base
+        if rendered is not None:
+            self._set_canvas_image(rendered)
+        # 结果列表（检出 + 测量摘要）
+        self.result_list.clear()
+        classes = (self._xcv_session.ctx.get("model_classes")
+                   or self._xcv_session.ctx.get("flow_class_names") or [])
+        if det is not None:
+            for j, box in enumerate(det.boxes):
+                x1, y1, x2, y2 = (int(round(float(v))) for v in box)
+                label_id = int(det.labels[j]) if j < len(det.labels) else -1
+                name = classes[label_id] if 0 <= label_id < len(classes) \
+                    else str(label_id)
+                score = det.scores[j] if j < len(det.scores) else 0.0
+                self.result_list.addItem(f"{name}　{score:.2f}　[{x1},{y1},{x2},{y2}]")
+        for m in meas_list:
+            self.result_list.addItem(str(m.to_json()))
+        note = (f"运行完成：{summary['ok_count']}/{summary['total']} 节点成功"
+                + (f"，{len(summary['errors'])} 个失败" if summary["errors"] else ""))
+        if det is not None:
+            note += f"；检出 {len(det.boxes)} 个"
+        if meas_list:
+            note += f"；测量/数值 {len(meas_list)} 条"
+        note += f"；耗时 {self._fmt_cost(flow_cost)}"
+        self.result_stats.setText(note)
 
     def _show_result(self, name: str, image, raw_prediction):
         from ..engine.models.base import Prediction
@@ -1322,9 +1591,9 @@ class TestingWindow(QMainWindow):
             try:
                 self._set_canvas_image(image)
             except Exception:
-                pass
+                log.debug("画布回退显示失败（仍提示日志）")
             self.result_stats.setText(
-                f"{name}\n{tr('结果可视化失败（已显示原图），详见日志')}")
+            f"{name}\n{tr('结果可视化失败（已显示原图），详见日志')}")
             return
         cost_txt = (f"\n推理耗时：{self._fmt_cost(self._last_infer_cost)}"
                     if self._last_infer_cost is not None else "")
@@ -1365,7 +1634,7 @@ class TestingWindow(QMainWindow):
                 self.result_list.addItem(f"{name}　{prob:.1%}")
             return
         show_area = self.show_area.isChecked()
-        texts = getattr(prediction, "texts", None)   # A2（V0.7）：OCR 识别文本
+        texts = getattr(prediction, "texts", None)   # OCR 识别文本
         for i, (box, idx, score) in enumerate(zip(prediction.boxes, prediction.labels,
                                                   prediction.scores)):
             name = self.classes[idx] if idx < len(self.classes) else str(idx)

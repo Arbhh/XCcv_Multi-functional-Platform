@@ -901,7 +901,7 @@ function drawSplit(f, bgImg) {
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(8, 8, 76, 22); ctx.fillRect(vw - 92, 8, 84, 22);
   ctx.fillStyle = '#fff';
-  const _T = (s) => (self.__dgT ? self.__dgT(s) : s);
+  const _T = (s) => (self.__dgT ? self.__dgT(s) : s);  // i18n（V0.7.3）
   ctx.fillText(_T('◀ 原始'), 16, 23);
   ctx.fillText(_T('合成 ▶'), vw - 84, 23);
   ctx.restore();

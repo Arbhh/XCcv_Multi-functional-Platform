@@ -1,0 +1,21 @@
+{
+ "template": "tmpl_circle_locate",
+ "title": "圆件定位（同心卡尺亚像素）",
+ "description": "载图 → CLAHE 增强 → 圆定位（同心卡尺取边界 + 椭圆拟合，输出 [cx, cy, r]）。适合轴承/瓶口/圆片等圆件的位置与尺寸测量；亮目标选极性 bright，暗孔选 dark。",
+ "last_node_id": 3, "last_link_id": 2,
+ "nodes": [
+  {"id": 1, "type": "xccv2/image_loader", "pos": [80, 200],
+   "properties": {"path": "", "is_grayscale": false},
+   "inputs": [], "outputs": [{"name": "image", "type": "image", "links": [1]}]},
+  {"id": 2, "type": "xccv2/clahe", "pos": [360, 200],
+   "properties": {"clip_limit": 2.0, "tile_size": 8},
+   "inputs": [{"name": "image", "type": "image", "link": 1}],
+   "outputs": [{"name": "image", "type": "image", "links": [2]}]},
+  {"id": 3, "type": "xccv2/find_circle", "pos": [640, 200],
+   "properties": {"roi": "", "num_rays": 36, "polarity": "any",
+                   "min_contrast": 20.0},
+   "inputs": [{"name": "image", "type": "image", "link": 2}],
+   "outputs": [{"name": "circle", "type": "geometry", "links": []}]}
+ ],
+ "links": [[1, 1, 0, 2, 0], [2, 2, 0, 3, 0]]
+}

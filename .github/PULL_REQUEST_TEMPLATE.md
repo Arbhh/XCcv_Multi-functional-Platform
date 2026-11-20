@@ -6,7 +6,7 @@
 
 - [ ] `python -m compileall -q xccv labelme`
 - [ ] `python -m unittest discover -s tests -p "test_*.py"`
-- [ ] 涉及 UI 的改动已做离屏或界面验证
+- [ ] 涉及 UI 的改动已做离屏或真机验证
 
 ## 第三方来源声明 / Third-party declaration
 

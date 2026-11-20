@@ -53,11 +53,11 @@ class _FolderDataset(Dataset):
         self.samples = samples
         self.class_to_idx = {c: i for i, c in enumerate(classes)}
         self.targets = [self.class_to_idx[s.label] for s in samples]
-        self._gray = bool(grayscale)  # O5（V0.7）：灰度训练读图口径
         hw = (input_size, input_size) if isinstance(input_size, int) else tuple(input_size)
         self._hw = (int(hw[0]), int(hw[1]))  # (高, 宽)
         self._augment_ops = dict(augment_ops) if (train and augment_ops) else None
         self._augment_probs = dict(augment_probs or {})
+        self._gray = bool(grayscale)  # 灰度训练读图口径
         self._mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
         self._std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
 
@@ -88,7 +88,7 @@ class ClassifierModel(BaseModel):
         super().__init__(num_classes, device)
         self.arch = arch
         self.task = TaskType.CLASSIFICATION
-        # 分类分数 = softmax 概率（0~1）
+        # §三（V0.7.3）：分类分数 = softmax 概率（0~1）
         self.score_semantics = {
             "key": "prob", "name": "置信度", "range": [0.0, 1.0],
             "higher": "概率越高越可信",
@@ -188,14 +188,14 @@ class ClassifierModel(BaseModel):
             self._frozen = cfg.freeze_backbone
         # 直接读取原始数据集（训练侧在线增强），不再把数据集复制到输出目录
         gray = getattr(cfg, "color_mode", "color") == "gray"
-        self.color_mode = "gray" if gray else "color"  # O5：评估/推理同口径
+        self.color_mode = "gray" if gray else "color"  # 评估/推理同口径
         train_set = _FolderDataset(data.train_samples, data.classes, input_size,
                                    cfg.augment_ops, train=True,
                                    augment_probs=cfg.augment_probs, grayscale=gray)
         val_set = _FolderDataset(data.val_samples, data.classes, input_size,
                                  None, train=False, grayscale=gray)
 
-        # E3（V0.7）：确定性训练时固定 DataLoader 采样生成器（shuffle 可复现）
+        # 确定性训练时固定 DataLoader 采样生成器（shuffle 可复现）
         gen = (torch.Generator().manual_seed(cfg.seed)
                if getattr(cfg, "deterministic", False) else None)
         loader = DataLoader(train_set, batch_size=cfg.batch_size, shuffle=True,
@@ -296,7 +296,7 @@ class ClassifierModel(BaseModel):
             history.append({"epoch": epoch, **logs})
             reporter.on_epoch(epoch, logs)
             if getattr(self, "epoch_store", None) is not None:
-                # 逐轮存档（内存序列化 → .pt）
+                # 逐轮存档（序列化 → epoch_weights/ 明文 .pt）
                 self.epoch_store.save(epoch, {
                     "format": "xccv-classifier", "arch": self.arch,
                     "classes": data.classes, "image_size": self._input_size,
@@ -310,13 +310,13 @@ class ClassifierModel(BaseModel):
 
         if best_state is not None:
             self.net.load_state_dict(best_state)
-        # 保存最优权重 best.pt
+        # 训练产物明文落盘
         best_pt = cfg.output_dir / "best.pt"
         best_ckpt = {
             "format": "xccv-classifier", "arch": self.arch, "classes": data.classes,
             "image_size": self._input_size, "state_dict": self.net.state_dict(),
             "industrial_opt": cfg.industrial_opt, "loss_type": loss_type,
-            "color_mode": getattr(cfg, "color_mode", "color"),  # O5（V0.7）
+            "color_mode": getattr(cfg, "color_mode", "color"),
         }
         if cfg.resume_from_pruned:
             best_ckpt["net_module"] = self.net  # 剪后网络结构随文件保存
@@ -366,7 +366,7 @@ class ClassifierModel(BaseModel):
     @torch.no_grad()
     def predict(self, image_bgr: np.ndarray, conf: float = 0.0, iou: float = 0.0) -> Prediction:
         self.net.eval()
-        # O5（V0.7）：灰度训练的模型推理前同样转灰（训练/推理同处理方式）
+        # 灰度训练的模型推理前同样转灰（训练/推理同处理方式）
         if getattr(self, "color_mode", "color") == "gray":
             gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
             image_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -380,7 +380,7 @@ class ClassifierModel(BaseModel):
 
     # ---- 权重 ----
     def load_weights(self, path) -> None:
-        # path 为权重文件路径或 ckpt 字典（训练回调直传）
+        # path 为权重文件路径，或已加载的 ckpt 字典（内存直传）
         if isinstance(path, dict):
             ckpt = path
         else:
@@ -389,7 +389,7 @@ class ClassifierModel(BaseModel):
         self.num_classes = len(ckpt["classes"])
         self.classes = ckpt["classes"]
         self.industrial = ckpt.get("industrial_opt", False)
-        self.color_mode = ckpt.get("color_mode", "color")  # O5：推理侧同口径转灰
+        self.color_mode = ckpt.get("color_mode", "color")  # 推理侧同口径转灰
         restored = ckpt.get("image_size", self.default_image_size)
         if isinstance(restored, (list, tuple)):  # 非方形输入 (高, 宽)
             restored = (int(restored[0]), int(restored[1]))

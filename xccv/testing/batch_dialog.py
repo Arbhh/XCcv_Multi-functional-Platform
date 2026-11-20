@@ -1,4 +1,4 @@
-"""测试平台「批量运行」设置弹窗（用户批注 To3.2：点击批量运行先弹设置）。
+"""测试平台「批量运行」设置弹窗。
 
 可配置：输入文件夹、输出目录、是否导出检出结果 JSON、是否保存
 渲染图片（画框/掩码可视化，与 JSON 一一对应）及图片质量。
@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 class BatchSettings:
     """一次批量运行的设置（out_dir 为空时由调用方回退为输入文件夹）。
 
-    json_format：检出结果导出格式（P8/T8-1）——
+    json_format：检出结果导出格式——
     xcv=统一检出 JSON（每图一份，平台契约）；labelme=每图一份（标注平台
     可直接打开复核）；coco=合并为一份 results_coco.json。
     """
@@ -89,7 +89,7 @@ class BatchSettingsDialog(QDialog):
         box.accepted.connect(self._accept)
         box.rejected.connect(self.reject)
         form.addRow(box)
-        from ..i18n import localize_widget_tree
+        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
 
         localize_widget_tree(self)
 

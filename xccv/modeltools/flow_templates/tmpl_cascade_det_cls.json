@@ -2,7 +2,7 @@
  "template": "tmpl_cascade_det_cls",
  "schema": 3,
  "title": "级联：检测定位 → 裁图 → 二级分类复判",
- "description": "载图 → 目标检测模型（粗定位）→ 二级分类复判（逐框裁剪+边缘比后送分类模型判好坏）→ 保存结果（统一 JSON，复判结果挂在每框 roi_classifications）。典型场景：检测模型只保证「不漏」，分类模型在局部裁图上区分 OK/NG（如缺陷细分类、正反面区分）。请在检测节点选择检测模型（.xva/.pt）、复判节点选择分类模型（.xva/.pt）。",
+ "description": "载图 → 目标检测模型（粗定位）→ 二级分类复判（逐框裁剪+边缘比后送分类模型判好坏）→ 保存结果（统一 JSON，复判结果挂在每框 roi_classifications）。典型场景：检测模型只保证「不漏」，分类模型在局部裁图上区分 OK/NG（如缺陷细分类、正反面区分）。请在检测节点选择检测模型（.pt）、复判节点选择分类模型（.pt）。",
  "last_node_id": 4, "last_link_id": 5,
  "nodes": [
   {"id": 1, "type": "xccv2/image_loader", "pos": [60, 200],

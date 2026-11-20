@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import logging
+log = logging.getLogger(__name__)
 import base64
 import glob
 import importlib.util
@@ -683,6 +685,7 @@ def _run_batch(job_id: str, req: BatchReq):
                                        "note": "；".join(notes) if notes else "",
                                        "ms": int((time.time() - t0) * 1000)})
             except Exception as e:
+                log.debug("单图生成失败（计入 fail，note 已入结果）: %s", e)
                 fail += 1
                 job["results"].append({"name": name, "status": "failed",
                                        "note": str(e)[:200], "ms": int((time.time() - t0) * 1000)})
@@ -690,6 +693,7 @@ def _run_batch(job_id: str, req: BatchReq):
         job["summary"] = {"ok": ok, "failed": fail, "skipped": skip,
                           "total_ms": int((time.time() - job["t0"]) * 1000)}
     except Exception as e:
+        log.warning("批次执行失败（错误与堆栈已入任务载荷）: %s", e, exc_info=True)
         job["error"] = str(e)[:300]
         job["traceback"] = traceback.format_exc()[-800:]
     finally:

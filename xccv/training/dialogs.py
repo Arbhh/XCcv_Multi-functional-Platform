@@ -1,6 +1,6 @@
 """训练平台通用对话框：折叠分区、体检/预检报告、开发者选项。
 
-HealthReportDialog 同时服务两个入口（用户规则：少弹窗、两级档位）：
+HealthReportDialog 同时服务两个入口（设计规则：少弹窗、两级档位）：
 - mode="report"    数据体检报告（「去标注平台处理」闭环）；
 - mode="preflight" 训练前预检（应用建议并开始 / 直接开始 / 取消），
   底部折叠区展示「一键应用」修改过的参数。
@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..i18n import tr
 from ..ui_style import ACCENT, FG
 from .data_health import HealthIssue, LEVEL_WARN
 from .dev_options import DevOptions, load_options, save_options
@@ -30,7 +31,7 @@ class CollapsibleSection(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
-        self.btn = QPushButton(("▾  " if expanded else "▸  ") + title)
+        self.btn = QPushButton(("▾  " if expanded else "▸  ") + tr(title))
         self.btn.setCursor(Qt.PointingHandCursor)
         self.btn.setStyleSheet(
             f"QPushButton {{ text-align: left; font-weight: bold; color: {ACCENT};"
@@ -55,7 +56,7 @@ class CollapsibleSection(QWidget):
         # 在窗口未显示（如 offscreen 测试）时恒为 False，会导致状态翻转失效
         expanded = self.content.isHidden()
         # 批量布局期间挂起重绘：避免逐控件回流造成的卡顿与滚动条闪动
-        # 引发的窗口瞬间变形（用户回执 D1/H2）
+        # 引发的窗口瞬间变形
         win = self.window()
         frozen = win is not None and win.isVisible()
         if frozen:
@@ -93,7 +94,7 @@ class ReportRow:
         self.suggestion = suggestion
         self.apply_field = apply_field   # 一键应用的目标参数键（空=无按钮）
         self.apply_value = apply_value
-        self.apply_text = apply_text or "一键应用"
+        self.apply_text = apply_text or tr("一键应用")
 
     @classmethod
     def from_issue(cls, issue: HealthIssue):
@@ -138,11 +139,11 @@ class HealthReportDialog(QDialog):
         chips = []
         if n_warn:
             chips.append(f"<span style='color:{_WARN_COLOR};font-weight:bold;'>"
-                         f"⚠ {n_warn} 项警告</span>")
+                         f"⚠ {n_warn} {tr('项警告')}</span>")
         if n_info:
             chips.append(f"<span style='color:{_INFO_COLOR};font-weight:bold;'>"
-                         f"· {n_info} 项提示</span>")
-        head = QLabel("　".join(chips) if chips else "未发现问题")
+                         f"· {n_info} {tr('项提示')}</span>")
+        head = QLabel("　".join(chips) if chips else tr("未发现问题"))
         head.setTextFormat(Qt.RichText)
         lay.addWidget(head)
         if summary:
@@ -164,9 +165,11 @@ class HealthReportDialog(QDialog):
         scroll.setWidget(host)
         lay.addWidget(scroll, stretch=1)
 
-        # 折叠区：一键应用修改过的参数（用户要求可折叠查看）
-        self.applied_section = CollapsibleSection("已应用的参数修改", expanded=False)
-        self.applied_label = QLabel("（暂无——点击条目中的「一键应用」后在此记录）")
+        # 折叠区：一键应用修改过的参数
+        self.applied_section = CollapsibleSection(
+            tr("已应用的参数修改"), expanded=False)
+        self.applied_label = QLabel(
+            tr("（暂无——点击条目中的「一键应用」后在此记录）"))
         self.applied_label.setObjectName("hint")
         self.applied_label.setWordWrap(True)
         self.applied_section.add_widget(self.applied_label)
@@ -174,14 +177,14 @@ class HealthReportDialog(QDialog):
 
         btns = QHBoxLayout()
         if mode == "preflight":
-            self._btn_apply_all = QPushButton("应用全部建议并开始训练")
+            self._btn_apply_all = QPushButton(tr("应用全部建议并开始训练"))
             self._btn_apply_all.setObjectName("accent")
             has_apply = any(r.apply_field for r in self._row_specs)
             self._btn_apply_all.setVisible(has_apply)
             self._btn_apply_all.clicked.connect(self._apply_all)
-            btn_start = QPushButton("直接开始训练")
+            btn_start = QPushButton(tr("直接开始训练"))
             btn_start.clicked.connect(self.accept)
-            btn_cancel = QPushButton("取消")
+            btn_cancel = QPushButton(tr("取消"))
             btn_cancel.clicked.connect(self.reject)
             btns.addWidget(self._btn_apply_all)
             btns.addWidget(btn_start)
@@ -211,7 +214,7 @@ class HealthReportDialog(QDialog):
         v = QVBoxLayout(frame)
         v.setContentsMargins(12, 8, 12, 8)
         v.setSpacing(4)
-        cap = QLabel(f"<b style='color:{color}'>{r.level}</b>　{r.title}")
+        cap = QLabel(f"<b style='color:{color}'>{tr(r.level)}</b>　{r.title}")
         cap.setTextFormat(Qt.RichText)
         cap.setWordWrap(True)
         v.addWidget(cap)
@@ -221,7 +224,7 @@ class HealthReportDialog(QDialog):
             d.setWordWrap(True)
             v.addWidget(d)
         if r.suggestion:
-            s = QLabel("建议：" + r.suggestion)
+            s = QLabel(tr("建议：") + r.suggestion)
             s.setStyleSheet(f"color: {ACCENT};")
             s.setWordWrap(True)
             v.addWidget(s)
@@ -235,7 +238,7 @@ class HealthReportDialog(QDialog):
                 if (key, val) not in self.applied:
                     self.applied.append((key, val))
                 btn.setEnabled(False)
-                btn.setText("已应用")
+                btn.setText(tr("已应用"))
                 self._refresh_applied_label()
 
             btn.clicked.connect(_do)
@@ -245,11 +248,12 @@ class HealthReportDialog(QDialog):
 
     def _refresh_applied_label(self):
         names = {
-            "patience": "早停耐心", "learning_rate": "学习率",
-            "batch_size": "批量大小", "device": "训练设备", "resize": "调整图像大小",
+            "patience": tr("早停耐心"), "learning_rate": tr("学习率"),
+            "batch_size": tr("批量大小"), "device": tr("训练设备"),
+            "resize": tr("调整图像大小"),
         }
         lines = [f"{names.get(k, k)} → {v}" for k, v in self.applied] or \
-                ["（暂无——点击条目中的「一键应用」后在此记录）"]
+                [tr("（暂无——点击条目中的「一键应用」后在此记录）")]
         self.applied_label.setText("\n".join(str(x) for x in lines))
 
     # ---- 动作 ----
@@ -257,7 +261,7 @@ class HealthReportDialog(QDialog):
         for btn in self._buttons:
             if btn.isEnabled():
                 btn.click()
-        # 用户回执 B4：「应用全部建议并开始训练」应用后需关闭对话框继续流程
+        # 「应用全部建议并开始训练」应用后需关闭对话框继续流程
         self.accept()
 
     def _goto_annotate(self):
@@ -287,7 +291,7 @@ class DevOptionsDialog(QDialog):
         self.sp_imbalance.setSuffix(" %")
         self.sp_imbalance.setValue(opt.imbalance_share * 100)
         self.sp_imbalance.setToolTip("类别不均衡判定：最小类别的实例数占整体比例低于该值时警告"
-                                     "（默认 5%，用户回执 Q3 保守化口径）")
+                                     "（默认 5%）")
         self.sp_cls = QSpinBox()
         self.sp_cls.setRange(1, 1000)
         self.sp_cls.setValue(opt.min_cls_samples)
@@ -320,7 +324,7 @@ class DevOptionsDialog(QDialog):
         self.ck_preflight = QCheckBox("开始训练前执行预检（推荐开启；仅有警告时才弹窗）")
         self.ck_preflight.setChecked(opt.preflight_enabled)
         form.addRow(self.ck_preflight)
-        self.ck_info_popup = QCheckBox("预检仅发现提示级问题时也弹窗提示（用户回执 A5）")
+        self.ck_info_popup = QCheckBox("预检仅发现提示级问题时也弹窗提示")
         self.ck_info_popup.setChecked(opt.preflight_info_popup)
         form.addRow(self.ck_info_popup)
 

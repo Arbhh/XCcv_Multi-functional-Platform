@@ -1,14 +1,14 @@
-"""O21（V0.7 评审项补全）：模型 A/B 批量比对对话框（Qt 展示层）。
+"""模型 A/B 批量比对对话框（Qt 展示层）。
 
 用法：测试平台完成一次批量（模型 A）后打开本对话框 → 选择模型 B 权重
-（.pt）→ 后台逐图复推（与 A 同 conf/iou、同检出流程）→ 逐图
+（.pt/.engine）→ 后台逐图复推（与 A 同 conf/iou、同检出流程）→ 逐图
 对比表 + 判定统计；产物落 `检出结果/比对.json`。
 
-比对结果按 (模型A, 参数, B 权重, 批量指纹) 缓存——误触
+V0.7.2 任务④：比对结果按 (模型A, 参数, B 权重, 批量指纹) 缓存——误触
 关闭窗口后重开直接复用，不重新推理；判定统计附总体优劣比例条
 （A优/B优/一致/未评估 四段堆叠条）。
 
-线程纪律（坑 P144/P140）：CompareThread 无父对象 + auto_cleanup_thread
+线程纪律：CompareThread 无父对象 + auto_cleanup_thread
 收尾；线程内不碰任何 QWidget，产物经信号回主线程。
 """
 
@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (QDialog, QFileDialog, QFormLayout, QHBoxLayout,
                              QPushButton, QTableWidget, QTableWidgetItem,
                              QVBoxLayout, QWidget)
 
-from ..i18n import tr  # 模块级：动态文案站点直接用（漏导入会 NameError）
+from ..i18n import tr  # 模块级：动态文案站点直接用（P246 教训：漏导即 NameError）
 
 log = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class CompareThread(QThread):
 class ModelCompareDialog(QDialog):
     """A/B 比对窗：选 B 模型 → 复推 → 逐图判定表 + 统计 + 比对.json 落盘。
 
-    宿主传入共享 cache dict；同 (模型A/参数/B权重/批量指纹)
+    V0.7.2 任务④：宿主传入共享 cache dict；同 (模型A/参数/B权重/批量指纹)
     的比对结果重开窗口直接复用，不重新推理。
     """
 
@@ -198,11 +198,11 @@ class ModelCompareDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
         lay.addWidget(self.table, stretch=1)
-        from ..i18n import localize_widget_tree
+        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
 
         localize_widget_tree(self)
 
-    # ---- 缓存（误关窗口重开免重推） ----
+    # ---- 缓存（V0.7.2 任务④：误关窗口重开免重推） ----
     def _cache_key(self, b_name: str) -> tuple:
         return self._cache_base + (b_name,)
 
@@ -221,7 +221,7 @@ class ModelCompareDialog(QDialog):
     def _pick_model(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "选择模型 B 权重", "",
-            "模型权重 (*.pt);;全部文件 (*.*)")
+            "模型权重 (*.pt *.engine);;全部文件 (*.*)")
         if not path:
             return
         self._model_b_path = Path(path)

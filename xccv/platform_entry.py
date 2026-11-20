@@ -7,9 +7,11 @@
 
 import os
 import sys
+import logging
+log = logging.getLogger(__name__)
 
 # QtWebEngine 硬性约束：必须在 QApplication 创建前导入/初始化
-# （缺陷样本合成工具的内嵌 Web 界面依赖它）。
+# （测试平台加载 .xvap 流程包、模型工具流程图编辑器都依赖它）。
 # 必须发生在本模块导入时——各平台的 QApplication 都在 run_platform 内才创建。
 from PyQt5.QtCore import Qt as _Qt
 from PyQt5.QtWidgets import QApplication as _QApp
@@ -25,12 +27,19 @@ from .gui_utils import ensure_console_streams, install_excepthook
 
 ensure_console_streams()
 
+from .i18n import tr  # 模块级：P246 教训——嵌套函数/多处文案统一走顶层导入
+
 # 平台 key -> 加载中界面图标（assets/ 下；缺失时回退 app.png）
 _SPLASH_ICONS = {
     "annotation": "annotation.png",
     "training": "training.png",
     "testing": "testing.png",
-    "defectgen": "defectgen.png",  # 缺陷样本合成
+    "tools": "tools.png",
+    "deploy": "deploy.png",
+    "model_load": "model_load.png",
+    "csharp_test": "csharp_demo.png",
+    "flowmain": "flow.png",
+    "defectgen": "defectgen.png",  # V0.6 P6：缺陷生成
 }
 
 
@@ -45,18 +54,23 @@ def _splash_icon(key: str):
         pm = QPixmap(str(icon_path(name)))
         return pm if not pm.isNull() else None
     except Exception:
+        log.debug("加载中界面接管探测失败（按不接管处理）")
         return None
 
 
 def _splash_message(heavy: bool) -> str:
     """加载中文案（early_splash 与 run_platform 共用：一致则接管时不重绘）。"""
-    from .i18n import tr
-
     return tr("正在加载深度学习组件…\n首次启动约需 1~2 分钟，请耐心等待"
               if heavy else "正在加载…")
 
 
 _EARLY_APP = None  # early_splash 创建的 QApplication（模块级保活，见下）
+
+
+def _forward_args() -> list:
+    """单实例转发参数：argv 中的业务参数（如项目名；排除选项开关）。"""
+    return [a for a in sys.argv[1:]
+            if a not in ("--selftest",) and not a.startswith("-")]
 
 
 def early_splash(key: str, display_name: str, heavy: bool = False) -> None:
@@ -73,11 +87,11 @@ def early_splash(key: str, display_name: str, heavy: bool = False) -> None:
     """
     if "--selftest" in sys.argv:
         return
-    from .i18n import tr
     from .taskbar import aumid_for, set_process_app_user_model_id
     from .win_qos import opt_out_power_throttling
 
     display_name = tr(display_name)   # 闪屏标题双语
+
     # AUMID 须先于任何窗口（任务栏分组，v0.5.5）；QoS 越早越好
     set_process_app_user_model_id("XCcv.Main" if key == "main" else aumid_for(key))
     opt_out_power_throttling()
@@ -85,13 +99,13 @@ def early_splash(key: str, display_name: str, heavy: bool = False) -> None:
 
     global _EARLY_APP
     # 必须保活：局部变量持有的 QApplication 在函数返回时被 GC 销毁（连带加载卡），
-    # run_platform 会再建一个新 app+新卡、重付字体加载 ~300ms（坑 P157 实测）
+    # run_platform 会再建一个新 app+新卡、重付字体加载 ~300ms
     app = _EARLY_APP = QApplication.instance() or QApplication(sys.argv)
     if key != "main":
         from .single_instance import already_running
 
-        if already_running(key):
-            sys.exit(0)  # 已发激活消息给旧实例，本进程退出
+        if already_running(key, _forward_args()):
+            sys.exit(0)  # 已发激活消息（含业务参数）给旧实例，本进程退出
     from .gui_utils import apply_app_font
     from .splash import LoadingSplash
 
@@ -109,8 +123,8 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
 
     build: 无参工厂函数，返回主窗口；重型导入必须放在工厂内部，
     这样加载中界面才能在导入 torch 之前显示出来。
-    heavy: 平台是否包含 torch 等重型依赖——**静态声明**（V0.6 T1-3 修 P94：
-    原先在运行时探测 torch 是否已导入，但调用方模块的引擎链导入使探测恒
+    heavy: 平台是否包含 torch 等重型依赖——**静态声明**（原先在运行时
+    探测 torch 是否已导入，但调用方模块的引擎链导入使探测恒
     为 False，闪屏永不显示）。全部入口统一显示"加载中"界面，
     heavy 仅影响提示文案。
     enable_logging: 是否初始化平台日志文件（平台排障用）。
@@ -120,8 +134,6 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
 
     set_process_app_user_model_id(aumid_for(key))
     high_qos = opt_out_power_throttling()  # 退出 EcoQoS：后台/未响应时推理不被降频（3.4s→8.8s 实测）
-    from .i18n import tr
-
     display_name = tr(display_name)   # 闪屏标题双语
     log_path = None
     if enable_logging:
@@ -144,7 +156,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     from .gui_utils import apply_app_font, install_freeze_watchdog
 
     apply_app_font(app)  # 全局字体放大（含标注平台），减少长时间使用疲劳
-    # 第三批：双击判定统一 250ms（Windows 默认 500ms 偏慢；标注/训练/测试
+    # 双击判定统一 250ms（Windows 默认 500ms 偏慢；标注/训练/测试
     # 等各平台共用此入口，一次设置全覆盖）
     app.setDoubleClickInterval(250)
     install_excepthook(display_name)
@@ -155,8 +167,8 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
 
     from .single_instance import already_running, register
 
-    if already_running(key):
-        return  # 已有实例：激活旧窗口后本进程退出
+    if already_running(key, _forward_args()):
+        return  # 已有实例：激活旧窗口（并转发业务参数）后本进程退出
 
     heavy = bool(heavy)  # 静态声明，不做运行时探测（修 P94，见 docstring）
     from .splash import LoadingSplash
@@ -166,53 +178,60 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     try:
         window = build()
     except Exception:
+        log.warning("平台窗口构建失败（闪屏已收尾，原样上抛）", exc_info=True)
         splash.finish()
         raise
-    from .i18n import localize_widget_tree  # 英文模式替换层
+    from .i18n import localize_widget_tree  # V0.7.2 平台总体①：英文模式替换层
 
     localize_widget_tree(window)
     window.show()
     splash.finish(window)
     register(key, window)
-    # 语言切换免重启：偏好文件变化即同进程重建平台窗口（先建新窗再关旧窗）。
-    # defectgen 不重建：重建会另起 uvicorn 端口，origin 变化导致资产 IndexedDB
-    # 变空；重开窗口生效。
-    if key != "defectgen":
+    # V0.7.2 实测修复：语言切换免重启——偏好文件变化即同进程重建窗口。
+    # 部署三窗不接（重建会触发托盘/停服路径），重开窗口生效。
+    # defectgen 也不重建——重建会另起 uvicorn 端口（旧服务未停时
+    # _pick_port 顺延），origin 变化即资产 IndexedDB"变空"（既有教训面）；
+    # 重开窗口生效。
+    if key not in ("deploy", "model_load", "csharp", "defectgen"):
         from .i18n import install_language_watcher
 
-        # watcher 必须跨重建转移持有（挂到新窗）：提前析构会撞 Win32 监视线程
-        # 的销毁竞态。
-        _lang_watcher = install_language_watcher(lambda: None, parent=None)
+        # watcher 必须跨重建转移持有（挂到新窗）：刚处理完文件变化就被
+        # 析构会撞 Win32 监视线程的销毁竞态（0xC0000005 实测）
+        _lang_watcher = install_language_watcher(
+            lambda: None, parent=None)   # 先占位，闭包定义后接管
 
         def _lang_pending_note(reason: str) -> None:
-            """重建未执行的提示（状态栏优先，兜底弹窗）。"""
+            """重建未执行的提示（状态栏优先，兜底弹窗）：语言重开窗口生效。"""
             try:
                 sb = window.statusBar()
                 if sb is not None:
                     sb.showMessage(tr(reason), 10000)
                     return
             except Exception:
-                pass
+                log.warning("语言重建状态栏提示失败", exc_info=True)
             try:
                 from PyQt5.QtWidgets import QMessageBox
 
                 QMessageBox.information(window, tr("界面语言"), tr(reason))
             except Exception:
-                pass
+                log.warning("语言重建弹窗提示失败", exc_info=True)
 
         def _rebuild_window():
             nonlocal window
-            # 训练/批量/加载等工作进行中禁止重建——旧窗承载工作线程，重建会
-            # 撕毁其宿主窗口；提示关闭窗口重开后生效。
+            # 训练/加速等工作进行中禁止重建——旧窗承载
+            # 工作线程（训练/批量/剪枝/导出），重建会撕毁其宿主窗口；提示
+            # 关闭窗口重开后生效。窗口按 i18n_rebuild_blocked() 声明忙碌。
             try:
                 block = getattr(window, "i18n_rebuild_blocked", None)
                 if callable(block) and block():
+                    # 忙因可经 i18n_block_reason() 细化——已加载模型
+                    # 与运行中任务对用户是两件事，提示语分开说
                     reason = None
                     get_reason = getattr(window, "i18n_block_reason", None)
                     if callable(get_reason):
                         try:
                             reason = get_reason()
-                        except Exception:
+                        except Exception:  # noqa: BLE001（忙因异常不阻塞流程）
                             reason = None
                     _lang_pending_note(
                         reason or "任务运行中，语言重开窗口后生效")
@@ -226,15 +245,17 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
                 register(key, new_window)
                 if _lang_watcher is not None:
                     setattr(new_window, "_lang_watcher", _lang_watcher)
-            except Exception:  # 重建失败绝不让进程消亡（保留原窗口）
+            except Exception:  # 重建失败绝不让进程消亡
                 import logging
 
                 logging.getLogger("xccv").warning(
                     "语言重建失败（保留原窗口，重开生效）", exc_info=True)
                 _lang_pending_note("重建失败，语言重开窗口后生效")
                 return
-            # 宿主重建后子窗跟随：旧宿主经 i18n_transfer_children(new_host)
-            # 转移已打开的业务子窗（如训练项目窗）。
+            # 宿主重建后子窗跟随——旧宿主经
+            # i18n_transfer_children(new_host) 转移已打开的业务子窗（训练
+            # 平台的项目窗）：空闲窗原地重建换语言，忙碌窗原样过户。
+            # 钩子异常不阻断宿主重建（子窗重开窗口生效）。
             try:
                 transfer = getattr(window, "i18n_transfer_children", None)
                 if callable(transfer):
@@ -247,7 +268,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
             try:
                 window.close()      # 旧窗走 closeEvent 清理线程/缓存
                 window.deleteLater()
-            except Exception:
+            except Exception:       # 旧窗清理失败同样不亡进程
                 import logging
 
                 logging.getLogger("xccv").warning(

@@ -1,9 +1,9 @@
-"""0.7.3 回归锁：语言重建覆盖面与已加载模型忙时判定。
+"""回归锁：遗留待办 §三.1/§三.2。
 
-- §三.1 语言重建覆盖面补齐（P261）：TrainingWindow.i18n_transfer_children
+- §三.1 语言重建覆盖面补齐：TrainingWindow.i18n_transfer_children
   ——宿主列表窗语言重建时项目窗跟随（空闲窗原地重建换语言、忙碌窗原样
   过户、隐藏窗不转移）；过户/重建一律重绑回调到新宿主（旧窗即将销毁）；
-- §三.2 已加载模型纳入忙时判定（P261）：TestingWindow.i18n_rebuild_blocked
+- §三.2 已加载模型纳入忙时判定：TestingWindow.i18n_rebuild_blocked
   含已加载模型；i18n_block_reason 区分"已加载模型"与"任务运行中"。
 """
 
@@ -18,10 +18,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
 
-try:
-    from tests.synthetic import make_labelme_dataset
-except ImportError:  # discover 布局：tests 不是包
-    from synthetic import make_labelme_dataset
+from tests.synthetic import make_labelme_dataset
 from xccv.training import project as project_mod
 from xccv.training.project import create_project
 
@@ -100,7 +97,7 @@ class ProjectWindowTransferTest(unittest.TestCase):
             # qt_slots 包装令 bound method 每次访问都是新对象：断言宿主本体
             self.assertIs(moved.on_closed.__self__, new_host)
         finally:
-            set_lang("zh")  # P241：复位偏好与缓存
+            set_lang("zh")  #3371复位偏好与缓存
 
     def test_busy_window_transferred_as_is(self):
         """忙碌项目窗（训练中）：原样过户到新宿主，不得关闭，回调重绑。"""
@@ -151,7 +148,7 @@ class ProjectWindowTransferTest(unittest.TestCase):
 
 
 class TestingWindowBusyTest(unittest.TestCase):
-    """§三.2：已加载模型纳入语言重建忙时判定（P261）。"""
+    """§三.2：已加载模型纳入语言重建忙时判定。"""
 
     def test_loaded_model_blocks_and_reason(self):
         from xccv.testing.testing_window import TestingWindow

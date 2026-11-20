@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢关注 XCcv Community！
+感谢关注 XCcv 多功能视觉平台（XCcv Multi-functional Platform）！
 
 ## 环境搭建
 

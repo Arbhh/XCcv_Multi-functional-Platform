@@ -1,6 +1,6 @@
 """数据中间表示（IR）：类型化端口的数据契约 + 端口类型表。
 
-用户批注 Q1/Q5 的地基：几何/测量/数值结果可序列化、可被 C# 等外部
+的地基：几何/测量/数值结果可序列化、可被 C# 等外部
 接口稳定消费；图像本体不进 JSON（快照走 base64 PNG 旁路）。
 
 约定（本包纪律，测试有断言）：
@@ -16,8 +16,8 @@ import numpy as np
 
 # 端口类型表：前后端共享的唯一事实源（前端经桥接下发，JS 不得重复维护一份）
 #
-# V0.6 修复循环 3（用户批注：统一"度量衡"）：端口收敛为四类；
-# V0.6 修复循环 4（用户批注：图像/图像列表之分"极其不方便"）：**取消
+# 端口收敛为四类；
+# **取消
 # image_list 端口类型**，端口只余三类——
 # - image：图像。一个图像端口可承载**单张或多张**（ImageList 集合，裁图/
 #   分块族生产、逐张带原图坐标）；下游任意节点收到多张时由执行器**逐张
@@ -145,7 +145,7 @@ class ImageData:
 class ImageList:
     """多张图像（V0.6 F2-2，裁图/分块族生产）。
 
-    修复循环 4 起不再是端口类型：ImageList 作为 image 端口的**数据载体**
+    不再是端口类型：ImageList 作为 image 端口的**数据载体**
     在图上传递（单张=ImageData，多张=ImageList）；下游节点由执行器逐张
     自动映射（并行输入）。每个 item 是 ImageData，其 meta["roi_rect"]=
     [x1,y1,x2,y2] 为该图在**原图**中的像素矩形（合并回原图坐标的唯一
@@ -165,7 +165,7 @@ class ImageList:
 
 
 def result_kind(value) -> str:
-    """统一结果"度量衡"的种类判定（V0.6 F2-2，用户建议：各节点输出统一格式）。
+    """统一结果"度量衡"的种类判定（V0.6 F2-2，设计建议：各节点输出统一格式）。
 
     detection（AI 检出：框/掩码）、classification（AI 分类：无框有类别概率）、
     geometry、measure、number、bool、image；其余 unknown。
@@ -220,7 +220,7 @@ class ResultList:
     """结果列表（与 ImageList 逐项对应，V0.6 F2-2）：items 为 ResultItem。
 
     meta 可带 source_size=[W,H]（掩码回贴原图尺寸用）。AI 逐图推理与传统算子
-    逐图执行都产出本类型——「结果合并」一个节点统一合并（用户建议 result_list）。
+    逐图执行都产出本类型——「结果合并」一个节点统一合并（设计建议 result_list）。
     """
 
     items: list = field(default_factory=list)

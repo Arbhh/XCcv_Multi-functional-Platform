@@ -133,7 +133,8 @@ body{font-family:"Microsoft YaHei",sans-serif;background:#f4f7fb;color:#1e293b;
   <div id="palette">
     <input id="search-box" placeholder="搜索节点…">
     <div id="palette-tabs">
-      <button id="tab-ai" class="active" onclick="switchTab('ai')">AI 算子</button>
+      <button id="tab-ai" onclick="switchTab('ai')">AI 算子</button>
+      <button id="tab-trad" class="active" onclick="switchTab('trad')">传统算子</button>
       <button id="tab-common" onclick="switchTab('common')">通用算子</button>
     </div>
     <div id="nodecount">节点 0</div>
@@ -169,7 +170,7 @@ body{font-family:"Microsoft YaHei",sans-serif;background:#f4f7fb;color:#1e293b;
 <script>
 // Chromium 87（QtWebEngine 5.15）无原生 roundRect：为 LiteGraph 补齐。
 // 负/零宽高（加载退化 size 的节点）会让 arcTo 抛 IndexSizeError 中断整个
-// 绘制帧（用户实测"保存重开节点渲染显示异常"），此处必须防护跳过
+// 绘制帧（实测"保存重开节点渲染显示异常"），此处必须防护跳过
 if(window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.roundRect){
   CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r){
     if(!(w > 0) || !(h > 0)) {       // 退化矩形直接跳过，绝不让绘制中断
@@ -207,7 +208,7 @@ if(window.qt && qt.webChannelTransport){
   });
 }
 function handleEvent(payload){
-  if(payload.event === "loaded"){ loadFlow(payload.flow); setStatus(__trTxt("已打开 ") + (payload.name || "")); __applyI18N(); }
+  if(payload.event === "loaded"){ loadFlow(payload.flow); setStatus(((window.__I18N_EN && window.__I18N_EN["已打开 "]) || "已打开 ") + (payload.name || "")); __applyI18N(); }
   else if(payload.event === "status"){ setStatus(payload.text); }
   else if(payload.event === "node_library"){ applyNodeLibrary(payload); }
   else if(payload.event === "run_result"){ applyRunResult(payload); }
@@ -247,12 +248,12 @@ function applyRunResult(payload){
   for(const n of graph._nodes) n.boxcolor = "";
   for(const idStr of Object.keys(RUN_ERRORS)){
     const n = graph.getNodeById(+idStr);
-    if(n) n.boxcolor = "#dc2626";   // 失败节点红框（批次十九：节点错误标红）
+    if(n) n.boxcolor = "#dc2626";   // 失败节点红框（节点错误标红）
   }
   graph.setDirtyCanvas(true, true);
   showLogs(payload.logs || "");
   setStatus(payload.status || "运行完成");
-  // 快照实时刷新（用户实测：属性面板开着时快照不更新，需重开才显示）
+  // 快照实时刷新（实测：属性面板开着时快照不更新，需重开才显示）
   if(insNode) act("get_snapshot", {node_id: insNode.id});
 }
 const _base = p => String(p || "").split(/[\\/]/).pop();
@@ -350,16 +351,16 @@ for(const k of Object.keys(LiteGraph.registered_node_types))
   if(!(k.startsWith("xccv/") || k.startsWith("xccv2/")))
     delete LiteGraph.registered_node_types[k];
 
-// ================= 新算子节点系统（批次十九：Python registry 下发 schema） =================
+// ================= 新算子节点系统（Python registry 下发 schema） =================
 // 类型串 = "xccv2/<注册名>"：与旧 .json/.xvap 的 xccv/ 类型完全隔离；
 // graph_to_chain 不识别 xccv2/（旧链运行忽略新节点），新引擎按 xccv2/ 运行。
 const SCHEMA = {};          // type -> {name, category, desc, inputs, outputs, params}
 const PORT_COLORS = {};     // 端口类型 -> 颜色（PORT_TYPES 下发，不重复维护）
 const PORT_DESC = {};       // 端口类型 -> 中文描述（连线拒绝提示用）
-const CAT_GROUP = {         // 节点库分组（社区版：AI 算子 / 通用算子）
-  "图像源": "输入", "AI": "AI 算子",
-  "逻辑": "通用算子", "检出过滤": "通用算子", "测量": "通用算子",
-  "自定义": "通用算子", "通用": "通用算子", "输出": "通用算子",
+const CAT_GROUP = {         // 节点库分组（Q3：AI 算子 / 传统算子 / 通用算子）
+  "图像源": "输入", "AI": "AI 算子", "预处理": "传统算子", "定位": "传统算子",
+  "逻辑": "传统算子", "检出过滤": "传统算子", "测量": "传统算子", "自定义": "传统算子",
+  "通用": "通用算子",
 };
 function applyNodeLibrary(payload){
   for(const [t, info] of Object.entries(payload.port_types || {})){
@@ -375,7 +376,8 @@ function applyNodeLibrary(payload){
     registerSchemaNode(type, def);
   }
   buildPalette(document.getElementById("search-box").value.trim());
-  setStatus(__trTxt("已载入算子库：") + (payload.nodes || []).length + " " + __trTxt("个算子"));
+  setStatus(__trTxt("已载入算子库：") + (payload.nodes || []).length
+            + " " + __trTxt("个传统算子"));
   // 竞态防线：载入流程时库未就绪被搁置的流程，现在重新载入
   if(_pendingFlow){
     const f = _pendingFlow; _pendingFlow = null;
@@ -416,10 +418,10 @@ function registerSchemaNode(type, def){
         const w = this.addWidget("text", k, String(spec.default ?? ""), null, {property: k});
         w.label = label;
         if(spec.type === "path"){
-          // 照旧模型节点的做法（用户批注 A4/B1）：节点上只显示文件名，
+          // 照旧模型节点的做法：节点上只显示文件名，
           // 完整路径存 properties（长路径在节点控件里必然溢出）
           w.value = _base(this.properties[k]) || "";
-          // folder 型参数选目录（ToC1），其余选文件；按钮显示文本=第二参 name
+          // folder 型参数选目录，其余选文件；按钮显示文本=第二参 name
           const action = spec.folder ? "pick_param_folder" : "pick_param_file";
           this.addWidget("button", "浏览…", null, function(_v, _w, node){
             if(node) act(action, {node_id: node.id, key: k});
@@ -461,7 +463,7 @@ function registerSchemaNode(type, def){
   }
   // 结果合并：连上一对（图像, 结果）后自动出现下一对空输入；断开缩回。
   // 只从尾部裁剪/回补未连线的端口——槽位序号不变，既有连线不受影响。
-  // onAdded（修复循环 4，用户批注 image-6：生成时 8 对全显）：从节点库新建
+  // onAdded：从节点库新建
   // 落图即裁剪到 1 对——此前只在连线变化/载入时触发，新建节点全量显示。
   if(def.name === "merge_results"){
     SchemaNode.prototype.onAdded = function(){
@@ -482,7 +484,7 @@ function registerSchemaNode(type, def){
   }
   LiteGraph.registerNodeType(type, SchemaNode);
 }
-// 结果合并的成对输入自动增减（用户批注 image-2/3：连上一对出现下一对空输入）
+// 结果合并的成对输入自动增减
 function mergeTrimPairs(node){
   const def = SCHEMA[node.type];
   if(!def || !node.inputs) return;
@@ -670,7 +672,7 @@ function showSchemaInspector(node){
       const action = spec.folder ? "pick_param_folder" : "pick_param_file";
       b.onclick = () => act(action, {node_id: node.id, key: k});
       row.appendChild(b);
-    } else if(spec.type === "text" && k === "regions"){   // 区域参数：文本 + 图上绘制（F2-1）
+    } else if(spec.type === "text" && k === "regions"){   // 区域参数：文本 + 图上绘制
       rpRegionsRow(row, node, k, spec.tooltip || "");
       body.appendChild(row);
       continue;
@@ -755,7 +757,7 @@ function serialize(){
   const d = graph.serialize();
   // 直接透传 litegraph 节点信息（含 inputs/outputs/size）：端口挂接缺失会导致
   // configure 后画布不渲染连线（链接对象在、端口未接）
-  // schema=3：修复循环 4 起的端口布局代数（取消 image_list 端口、删 list_pick；
+  // schema=3：的端口布局代数（取消 image_list 端口、删 list_pick；
   // 载入侧按标记跳过旧布局迁移）
   return {last_node_id: d.last_node_id, last_link_id: d.last_link_id,
           schema: 3, nodes: d.nodes, links: d.links};
@@ -768,7 +770,7 @@ const _portsOf = t => {
   };
 };
 function loadFlow(flow){
-  // 防线（用户实测红色 undefined 节点）：图里含尚未注册的 xccv2 类型时
+  // 防线（实测红色 undefined 节点）：图里含尚未注册的 xccv2 类型时
   // （节点库事件晚于 loaded 到达的竞态），先缓存流程并请求节点库，
   // 库到位后（applyNodeLibrary）自动重新载入
   const unregistered = (flow.nodes || []).some(n =>
@@ -791,7 +793,7 @@ function loadFlow(flow){
     if(!n.inputs) n.inputs = _portsOf(n.type).inputs;
     if(!n.outputs) n.outputs = _portsOf(n.type).outputs;
   }
-  // 修复循环 3：序列化里的端口数组可能是旧布局缓存——xccv2 节点统一按当前
+  // 序列化里的端口数组可能是旧布局缓存——xccv2 节点统一按当前
   // SCHEMA 重建（连线已由 Python 侧迁移到当前槽位；越界连线丢弃）
   for(const n of (flow.nodes || [])){
     const def = SCHEMA[n.type];
@@ -820,7 +822,7 @@ function loadFlow(flow){
   }
   graph.configure(flow);
   for(const n of graph._nodes) if(n.onConfigure) n.onConfigure();
-  // 节点尺寸归一化（用户批注 B4/C2：退化 size 的节点渲染显示异常）：
+  // 节点尺寸归一化：
   // 过窄/未计算的 size 用 computeSize 重算；新算子节点最小宽度 190，
   // 中文标签与路径文本才显示得全（坑 34 同族）
   for(const n of graph._nodes){
@@ -834,7 +836,7 @@ function loadFlow(flow){
 }
 function updateCount(){
   document.getElementById("nodecount").textContent =
-      __trTxt("节点 ") + graph._nodes.length;
+      ((window.__I18N_EN && window.__I18N_EN["节点 "]) || "节点 ") + graph._nodes.length;
 }
 graph.onNodeAdded = graph.onNodeRemoved = updateCount;
 
@@ -964,17 +966,16 @@ function paletteDrag(ev, type){
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
 }
-// 节点库页签（用户批注 Q5 重构）：AI 算子 / 传统算子 / 通用算子——
+// 节点库页签：AI 算子 / 传统算子 / 通用算子——
 // 检出过滤与逻辑类算子是 AI、传统两条链共用的，归「通用」页签；
 // 旧版画布节点（xccv/ 前缀）不再进面板（测试阶段舍弃旧流程文件兼容，
 // 类型仍注册以便旧文件能打开查看），新流程一律使用 xccv2/ 节点
-let paletteTab = "ai";
+let paletteTab = "trad";
 function switchTab(tab){
   paletteTab = tab;
-  for (const t of ["ai", "common"]) {
-    const el = document.getElementById("tab-" + t);
-    if (el) el.classList.toggle("active", tab === t);
-  }
+  document.getElementById("tab-ai").classList.toggle("active", tab === "ai");
+  document.getElementById("tab-trad").classList.toggle("active", tab === "trad");
+  document.getElementById("tab-common").classList.toggle("active", tab === "common");
   buildPalette(document.getElementById("search-box").value.trim());
 }
 const TAB_SECTIONS = {
@@ -982,13 +983,18 @@ const TAB_SECTIONS = {
     {title: "模型（AI）", schema: ["AI"]},
     {title: "图像源", schema: ["图像源"]},
   ],
+  trad: [
+    {title: "图像源", schema: ["图像源"]},
+    {title: "预处理", schema: ["预处理"]},
+    {title: "定位", schema: ["定位"]},
+    {title: "测量", schema: ["测量"]},
+  ],
   common: [
     {title: "裁图与合并", schema: ["通用"]},
     {title: "检出过滤", schema: ["检出过滤"]},
     {title: "逻辑运算", schema: ["逻辑"]},
     {title: "输出", schema: ["输出"]},
     {title: "自定义算子", schema: ["自定义"]},
-    {title: "测量与判定", schema: ["测量"]},
   ],
 };
 function buildPalette(filter){
@@ -1277,7 +1283,7 @@ function rpMount(host, big){
 }
 function rpItemDown(ev, idx, svg, img, isHandle){
   // 点中形状（拖动）或把手（改形）：自然像素坐标下记录手势基线
-  if(ev.button !== 0) return;   // 右键留给撤销/菜单，不触发拖动（用户批注 F2-1 复测）
+  if(ev.button !== 0) return;   // 右键留给撤销/菜单，不触发拖动
   ev.preventDefault();
   ev.stopPropagation();
   rpState.sel = idx;
@@ -1313,7 +1319,7 @@ function rpWire(layer, img){
   const clamp = (v, hi) => Math.min(Math.max(v, 0), Math.round(hi));
   layer.addEventListener("pointerdown", ev => {
     if(!rpState) return;
-    if(ev.button !== 0) return;   // 右键=撤点（contextmenu）；禁用右键建点（用户批注）
+    if(ev.button !== 0) return;   // 右键=撤点（contextmenu）；禁用右键建点
     ev.preventDefault();
     const p = dpt(ev);
     if(ev.target.classList.contains("rp-shape") || ev.target.classList.contains("rp-h"))
@@ -1391,7 +1397,7 @@ function rpWire(layer, img){
       if(pts.length >= 2){ pts.pop(); pts.pop(); rpRender(); }
     }
   });
-  // 滚轮缩放底图（用户建议）：以当前适应宽度为基准，25% 步进；
+  // 滚轮缩放底图（设计建议）：以当前适应宽度为基准，25% 步进；
   // 放大后容器内滚动查看，重新打开面板/弹层即复位
   layer.addEventListener("wheel", ev => {
     if(!rpState || !img.naturalWidth) return;
@@ -1484,7 +1490,7 @@ function rpFinishPoly(item){
   }
 }
 (function(){  // Delete 删除选中区域；Esc 取消多边形/关闭放大编辑；Ctrl+S 保存
-  // 参数数字输入禁用滚轮调值（用户批注：滚动属性面板时误改数值）——
+  // 参数数字输入禁用滚轮调值——
   // 聚焦中的 number 输入上滚动=退出聚焦并拦下本次滚动，之后滚轮正常滚动面板
   document.addEventListener("wheel", ev => {
     const t = ev.target;
@@ -1498,7 +1504,7 @@ function rpFinishPoly(item){
     const t = ev.target;
     const inEditor = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
     if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s"){
-      ev.preventDefault();          // Ctrl+S 直接覆盖保存当前文件（用户批注 B13）
+      ev.preventDefault();          // Ctrl+S 直接覆盖保存当前文件
       saveJson();
       return;
     }
@@ -1529,7 +1535,7 @@ resizeCanvas();
 if(!location.search.includes("nort")) canvas.startRendering();
 canvas.setDirty(true, true);
 setStatus(__trTxt("新建或打开流程后开始编辑"));
-// ---- 双语层：Qt 侧注入 window.__I18N_EN（zh→en 表）后调用 ----
+// ---- 双语层（V0.7.2）：Qt 侧注入 window.__I18N_EN（zh→en 表）后调用 ----
 function __trTxt(s){
   const T = window.__I18N_EN || {};
   return (s && T[s]) ? T[s] : s;
@@ -1544,8 +1550,8 @@ function _trDef(d){
   const o = JSON.parse(JSON.stringify(d));
   o.title = _tr(o.title);
   o.desc = _tr(o.desc);
-  (o.inputs || []).forEach(pp => { pp.label = _tr(pp.label || pp.name); });
-  (o.outputs || []).forEach(pp => { pp.label = _tr(pp.label || pp.name); });
+  (o.inputs || []).forEach(p => { p.label = _tr(p.label || p.name); });
+  (o.outputs || []).forEach(p => { p.label = _tr(p.label || p.name); });
   for(const spec of Object.values(o.params || {}))
     if(spec.label) spec.label = _tr(spec.label);
   return o;
@@ -1554,8 +1560,8 @@ function __applyI18N(){
   const T = window.__I18N_EN || {};
   if(!Object.keys(T).length) return;
   const sub = (el) => {
-    const txt = (el.textContent || "").trim();
-    if (txt && T[txt]) el.textContent = T[txt];
+    const t = (el.textContent || "").trim();
+    if (t && T[t]) el.textContent = T[t];
   };
   document.querySelectorAll("button, span, h4, b").forEach(sub);
   document.querySelectorAll("div").forEach(el => {
@@ -1565,15 +1571,15 @@ function __applyI18N(){
     const v = T[el.placeholder];
     if (v) el.placeholder = v;
   });
-  const dt = (document.title || "").trim();
-  if (T[dt]) document.title = T[dt];
+  const t = (document.title || "").trim();
+  if (T[t]) document.title = T[t];
   const pt = document.getElementById("page-title");
   if (pt) sub(pt);
-  updateCount();   // 注入可能晚于首绘，计数文案需随注入刷新
+  updateCount();   // 注入晚于首绘，计数文案需随注入刷新
   try {   // 节点目录标题/分类（建库前改写，拖出的新节点即英文）
-    Object.values(SCHEMA || {}).forEach(d => {
+    Object.values(DEFS || {}).forEach(d => {
       if (d.title && T[d.title.trim()]) d.title = T[d.title.trim()];
-      if (d.category && T[d.category]) d.category = T[d.category];
+      if (d.cat && T[d.cat]) d.cat = T[d.cat];
     });
   } catch(e) {}
   try {   // 画布已有节点：标题 + 控件标签/占位值

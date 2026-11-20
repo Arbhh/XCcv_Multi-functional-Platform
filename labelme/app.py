@@ -820,7 +820,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 quit,
             ),
         )
-        # O10（V0.7）：标注质量引导 + 漏标复核（少量多次迭代原则的工具化）
+        # 标注质量引导 + 漏标复核（少量多次迭代原则的工具化）
         act_label_tips = action(
             self.tr("标注质量要点…"),
             self._show_label_tips,
@@ -1000,7 +1000,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode,
             self.actions.createPointMode,
             self.actions.createLineStripMode,
-            # V0.6 修复循环 4（用户批注）：S=智能多边形 / B=画笔——必须挂进
+            # S=智能多边形 / B=画笔——必须挂进
             # 编辑菜单 QAction 才归属窗口，快捷键才会激活（708 行 XXX 同坑）
             self.actions.createAiPolygonMode,
             self.actions.createBrushMode,
@@ -1014,7 +1014,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._act_ai_params.triggered.connect(self._ai_params_dialog)
         self.menus.edit.addSeparator()
         self.menus.edit.addAction(self._act_ai_params)
-        # 批注第二批 F2/F7/F5：粗细键 / 智能标注 L / 批量改名
+        # 批注F2/F7/F5：粗细键 / 智能标注 L / 批量改名
         self._act_brush_wider = _QA(self.tr("画笔加粗（+/=）"), self)
         self._act_brush_wider.setShortcut(QtGui.QKeySequence("+"))
         self._act_brush_wider.triggered.connect(
@@ -1147,7 +1147,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
         if not edit and createMode == "ai_polygon":
-            self._init_ai_model()   # 进入智能多边形前确保 SAM 就绪（T5-3）
+            self._init_ai_model()   # 进入智能多边形前确保 SAM 就绪
         if edit:
             for draw_action in draw_actions.values():
                 draw_action.setEnabled(True)
@@ -1184,7 +1184,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.toggleGrayscale()
 
     def _file_list_menu(self, pos):
-        """文件列表右键：打开所在文件夹（T5-6）+ 设为 OK 目录（O9，V0.7）。"""
+        """文件列表右键：打开所在文件夹+ 设为 OK 目录（O9，V0.7）。"""
         import subprocess
 
         item = self.fileListWidget.itemAt(pos)
@@ -1206,7 +1206,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._mark_dir_as_ok(filename)
 
     def _mark_dir_as_ok(self, filename: str):
-        """O9（V0.7）：把当前图片所在子文件夹重命名为 OK——训练侧
+        """把当前图片所在子文件夹重命名为 OK——训练侧
         NEGATIVE_DIR_NAMES 同源规则，未标注图即刻成为负样本。"""
         from PyQt5.QtWidgets import QMessageBox
         from xccv.engine.dataset.reader import is_negative_dir_name
@@ -1244,7 +1244,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.lastOpenDir and osp.isdir(self.lastOpenDir):
             self.importDirImages(self.lastOpenDir, load=False)  # 刷新徽标
 
-    # ---- O10（V0.7）：标注质量引导 + 漏标复核 ----
+    # ---- 标注质量引导 + 漏标复核 ----
     def _show_label_tips(self):
         from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QLabel, \
             QTextEdit, QVBoxLayout
@@ -1297,7 +1297,7 @@ class MainWindow(QtWidgets.QMainWindow):
         last = str(prefs.get("ai.review_model") or "")
         path, _ = QFileDialog.getOpenFileName(
             self, "选择检测模型权重（复核用；下次自动记住）", last,
-            "权重 (*.pt)")
+            "权重 (*.xva *.xcs *.pt)")
         if not path:
             return
         prefs["ai.review_model"] = path
@@ -1401,9 +1401,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     continue
                 cls = table.item(r, 1).text()
                 box = suspects[r][2]
-                sh = Shape(label=str(cls), shape_type="rectangle")
-                sh.points = [[box[0], box[1]], [box[2], box[3]]]
-                self.canvas.shapes.append(sh)
+                from xccv.engine.dataset.base import Shape as _Shape
+
+                self.canvas.shapes.append(_Shape(
+                    label=str(cls), shape_type="rectangle",
+                    points=[[box[0], box[1]], [box[2], box[3]]]))
                 added += 1
             if added:
                 self.setDirty(True)
@@ -1446,7 +1448,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setEditMode()
 
     def smartAnnotateSingle(self):
-        """批注第二批 F7：L=用平台模型标注当前图（批量链路的单图版）。"""
+        """批注F7：L=用平台模型标注当前图（批量链路的单图版）。"""
         import threading as _th
 
         if self.imagePath is None or self.canvas.pixmap is None:
@@ -1459,8 +1461,8 @@ class MainWindow(QtWidgets.QMainWindow):
         weights = ai.get("batch_model") or prefs.get("ai_batch_model") or ""
         if not weights or not osp.exists(weights):
             weights, _ = QtWidgets.QFileDialog.getOpenFileName(
-                self, "选择模型权重（.pt）", "",
-                "模型权重 (*.pt)")
+                self, "选择模型权重（.pt/.xva）", "",
+                "模型权重 (*.pt *.xva)")
             if not weights:
                 return
             save_prefs({"ai_batch_model": weights})   # 记住，下次免选
@@ -1531,7 +1533,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"智能标注完成：新增 {added} 个目标（追加模式）", 8000)
 
     def batchRenameLabels(self):
-        """批注第二批 F5（降级版）：当前图按标签批量改名。"""
+        """批注F5（降级版）：当前图按标签批量改名。"""
         from PyQt5.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
                                      QFormLayout, QLineEdit)
 
@@ -1582,7 +1584,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "右键撤销 / 双击或 Ctrl+左键完成", 8000)
 
     def _on_ai_banner(self, wait_msg, done_msg):
-        """AI 等待状态顶部横幅（第四批：模型加载/推理等待有可见提示）。
+        """AI 等待状态顶部横幅（模型加载/推理等待有可见提示）。
 
         wait_msg 含「加载中/稍候/推理」→ 顶部居中悬浮横幅持续显示（用户
         不再因无反馈而重复点击）；就绪/失败/普通消息 → 横幅收起，重要
@@ -1613,7 +1615,7 @@ class MainWindow(QtWidgets.QMainWindow):
         banner.raise_()
         banner.setVisible(True)
 
-    # ---- AI 模型选择与参数（第二批：用户可选模型、可调参数，持久化）----
+    # ---- AI 模型选择与参数（用户可选模型、可调参数，持久化）----
     _AI_DEFAULTS = {
         "max_points": 100, "tolerance": 0.004, "hover": True,
         "hover_ms": 120, "first_ratio": 0.9, "largest_only": True,
@@ -2416,7 +2418,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def enableKeepPrevScale(self, enabled):
         self._config["keep_prev_scale"] = enabled
         self.actions.keepPrevScale.setChecked(enabled)
-        try:   # XCcv（第三批补充）：跨会话记住用户选择
+        try:   # XCcv（）：跨会话记住用户选择
             from xccv.ui_widgets import save_prefs
 
             save_prefs({"keep_prev_scale": bool(enabled)})
@@ -2549,7 +2551,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setClean()
         self.canvas.setEnabled(True)
         # set zoom values
-        # XCcv 修复（第三批补充）：按文件记忆的缩放此前无条件恢复——用户在
+        # XCcv 修复（）：按文件记忆的缩放此前无条件恢复——用户在
         # A 图放大后切 B 再回 A，上一张倍率"粘"住，且「保持缩放」开关对其
         # 无效（等于无法关闭）。改为仅在开关开启时恢复；关闭时每张图自动
         # 适应窗口（滚动记忆同口径，避免恢复旧滚动错位）
@@ -3080,7 +3082,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setCheckState(0, Qt.Checked)
             else:
                 item.setCheckState(0, Qt.Unchecked)
-                # O9（V0.7）：OK/良品目录内的未标注图加 [OK] 徽标（与训练侧
+                # OK/良品目录内的未标注图加 [OK] 徽标（与训练侧
                 # NEGATIVE_DIR_NAMES 同源——负样本利用情况可见）
                 try:
                     from xccv.engine.dataset.reader import is_negative_dir_name

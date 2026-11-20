@@ -1,6 +1,6 @@
-"""O2（V0.7）+ V0.7.2 用户重设计：维度阈值扫描曲线面板。
+"""维度阈值扫描曲线面板（0.7.2 重设计）：维度阈值扫描曲线面板。
 
-曲线含义（V0.7.2 真机勘误定稿）——**图口径**：每条曲线给出阈值=x 时
+曲线含义（V0.7.2 实测修复定稿）——**图口径**：每条曲线给出阈值=x 时
 对应**分组的图数**，与右侧分组/统计行完全同口径：
 - 正确：该阈值下全命中且无误检的图数；
 - 过检：存在误检（含 OK 图误检）的图数；
@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QLabel, QPushButton,
                              QVBoxLayout, QWidget)
@@ -44,7 +44,7 @@ _RED = "#D64545"     # 过检 / NG
 _BLUE = "#25406B"    # 漏检
 
 # 维度规格：key → (显示名, 小数位, 步长, 无数据时的 x 轴上限)
-# score 走 0~1 固定通道；面积/短边/长边整数、灰度差两位小数（用户口径）
+# score 走 0~1 固定通道；面积/短边/长边整数、灰度差两位小数（既定口径）
 _DIM_SPECS = {
     "score": ("置信度", 2, 0.05, 1.0),
     "area": ("面积", 0, 10.0, 1000.0),
@@ -77,7 +77,7 @@ def _nice_ceil(v: float) -> float:
 
 
 def _axis_ticks(x_max: float, decimals: int) -> list:
-    """固定 x 轴主刻度 [(值, 文本)...]，格式随维度小数位（用户口径）。"""
+    """固定 x 轴主刻度 [(值, 文本)...]，格式随维度小数位（既定口径）。"""
     step = _nice_ceil(x_max / _TICK_TARGET) if x_max > 0 else 1.0
     vals = np.arange(0.0, x_max + step * 0.5, step)
     out = [(round(float(v), decimals), f"{v:.{decimals}f}")
@@ -94,13 +94,13 @@ class ThresholdPanel(QWidget):
     thresholdChanged = pyqtSignal(float)
     applyRequested = pyqtSignal(float)
     generateFlowRequested = pyqtSignal(dict)
-    # 项目复盘页（用户勘误）：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
+    # 项目复盘页：任一维度阈值/启用状态变化 → {dim: thr}（启用集）
     thresholdsChanged = pyqtSignal(dict)
 
     def __init__(self, parent=None, compact: bool = False):
         """compact=True：上下布局（图整幅在上、指标/按钮在下）。
 
-        项目复盘页左列较窄，横排布局会把图挤成窄条（再勘误 ②）；
+        项目复盘页左列较窄，横排布局会把图挤成窄条；
         测试平台旧内嵌处维持 compact=False 的横排原样。
         """
         super().__init__(parent)
@@ -126,9 +126,19 @@ class ThresholdPanel(QWidget):
         self.plot.addLegend(offset=(8, 6))
         self._line = pg.InfiniteLine(
             pos=0.25, angle=90, movable=True,
-            pen=pg.mkPen(token("primary"), width=2, style=Qt.DashLine))
+            pen=pg.mkPen(token("primary"), width=2, style=Qt.DashLine),
+            # V0.7.4 二.1：拖动钳回固定轴（线滑出轴会被视图裁剪成"看不见
+            # 抓不到"；实测现象"滑到最右端后滑不回来"的根因）；hoverPen 加宽
+            # 同时扩大抓取判定区（适度）与悬停反馈
+            bounds=(0.0, 1.0),
+            hoverPen=pg.mkPen(token("primary"), width=10, style=Qt.DashLine))
         self.plot.addItem(self._line)
         self._line.sigPositionChanged.connect(self._on_line_moved)
+        self._line.sigPositionChangeFinished.connect(self._on_drag_finished)
+        self._thr_emit_timer = QTimer(self)
+        self._thr_emit_timer.setSingleShot(True)
+        self._thr_emit_timer.setInterval(150)
+        self._thr_emit_timer.timeout.connect(self._on_drag_finished)
         if compact:
             self.plot.setMinimumHeight(190)
             self.plot.setMaximumHeight(230)
@@ -146,7 +156,7 @@ class ThresholdPanel(QWidget):
         for key in _DIM_ORDER:
             self.cmb_dim.addItem(_tr(_dim_label(key)), key)
         self.cmb_dim.currentIndexChanged.connect(self._on_dim_changed)
-        # 阈值数字输入框（V0.7.1 用户追加：拖线之外可直接键入）
+        # 阈值数字输入框（V0.7.1 追加：拖线之外可直接键入）
         self.spin_thr = QDoubleSpinBox()
         self.spin_thr.setRange(0.0, 1.0)
         self.spin_thr.setDecimals(2)
@@ -210,14 +220,14 @@ class ThresholdPanel(QWidget):
         btn_row.addStretch(1)
         lay.addLayout(btn_row)
 
-        # O18 上线检查单（VIMO 产线过漏杀五因；详细说明见操作手册）
+        # 上线检查单（产线过漏杀五因；详细说明见操作手册）
         self.lbl_warn = QLabel(
             "⚠ 阈值仅对本批数据有效，上线前请用新产线图复验")
         self.lbl_warn.setWordWrap(True)
         self.lbl_warn.setStyleSheet(f"color: {token('warn')};")
         lay.addWidget(self.lbl_warn)
 
-    # ---- 分数语义：conf/prob 固定 0~1 轴；z 无上界动态轴 ----
+    # ---- 分数语义（§三，V0.7.3）：conf/prob 固定 0~1 轴；z 无上界动态轴 ----
     def _score_unbounded(self) -> bool:
         rng = (self._stats.get("score_semantics") or {}).get("range") or [0.0, 1.0]
         return len(rng) > 1 and rng[1] is None
@@ -281,7 +291,7 @@ class ThresholdPanel(QWidget):
 
     def set_scope(self, scope: str):
         """评估范围切换（V0.7.2 任务③）：evaluated=正常/过检/漏检；
-        unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化（真机勘误），
+        unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化，
         切换即重绘曲线并同步输入框。"""
         scope = "unjudged" if scope == "unjudged" else "evaluated"
         if scope == self._scope:
@@ -299,8 +309,18 @@ class ThresholdPanel(QWidget):
         return {k: float(v["thr"]) for k, v in self._dim_state.items()
                 if v.get("enabled") and float(v["thr"]) > 0}
 
-    def _emit_thresholds_changed(self):
-        self.thresholdsChanged.emit(self.enabled_dims())
+    def _emit_thresholds_changed(self, debounce: bool = False):
+        """广播启用维度阈值（V0.7.4 二.1：真实拖线期间防抖 150ms——
+        sigPositionChanged 每像素一发的重分组会把复盘页拖垮；程序化
+        setValue 与拖线结束立即广播）。"""
+        if debounce:
+            self._thr_emit_timer.start()
+        else:
+            self._thr_emit_timer.stop()
+            self.thresholdsChanged.emit(self.enabled_dims())
+
+    def _on_drag_finished(self, *_):
+        self._emit_thresholds_changed()
 
     # ---- 交互 ----
     def _emit_apply_conf(self):
@@ -321,7 +341,7 @@ class ThresholdPanel(QWidget):
     def _axis_values(self, key: str) -> list:
         """本批数据该维度全部检出值（x 轴规划用，含未过阈值的）。
 
-        V0.7.2 真机勘误：坐标轴按**数据集**规划（用户 V0.7.1 约定"轴只随
+        V0.7.2 实测修复：坐标轴按**数据集**规划（V0.7.1 约定"轴只随
         数据集变化"），已评估/未评估切换不重排轴——否则阈值线会被切出
         视图、输入框范围失真。已评估/未评估只影响曲线口径与计数。
         per_image 无逐检出记录时回退 dims 汇总表（旧缓存/轻量 stats 兼容）。"""
@@ -394,6 +414,8 @@ class ThresholdPanel(QWidget):
         key = self._current
         st = self._dim_state.get(key)
         self._x_max, _bins = self._plan_axis(key)
+        # V0.7.4 二.1：拖动范围随轴上限更新（原生钳制，线永不滑出轴）
+        self._line.setBounds((0.0, float(self._x_max)))
         if key == "score":
             _name, dec, step, _d = self._score_spec()
         else:
@@ -422,10 +444,10 @@ class ThresholdPanel(QWidget):
         self._refresh_numbers()
         self._emit_thresholds_changed()
 
-    def _apply_threshold(self, v: float):
+    def _apply_threshold(self, v: float, debounce: bool = False):
         """阈值统一入口（拖线/键入共用）：钳回固定轴范围 → 取整到维度
         小数位 → 回写线与输入框 → 启用当前维 → 刷新指标并广播。"""
-        # 真机实测（2026-11-13）：拖拽/键盘可把线带出固定轴范围
+        # 实测：拖拽/键盘可把线带出固定轴范围
         # → 钳回 [0, x_max]（score 恒 [0,1]）后再入状态
         v = min(max(float(v), 0.0), self._x_max)
         _name, dec, _step, _d = (self._score_spec() if self._current == "score"
@@ -447,10 +469,13 @@ class ThresholdPanel(QWidget):
             self.cb_enable.blockSignals(False)
         self._refresh_numbers()
         self.thresholdChanged.emit(self.current_threshold())
-        self._emit_thresholds_changed()
+        self._emit_thresholds_changed(debounce=debounce)
 
     def _on_line_moved(self):
-        self._apply_threshold(float(self._line.value()))
+        # V0.7.4 二.1：真实拖线期间的广播走防抖（moving=拖线中；程序化
+        # setValue 立即广播，回归锁 PanelSignalTest 依赖同步语义）
+        self._apply_threshold(float(self._line.value()),
+                              debounce=bool(getattr(self._line, "moving", False)))
 
     def _on_spin_changed(self, v: float):
         self._apply_threshold(float(v))
@@ -464,12 +489,13 @@ class ThresholdPanel(QWidget):
         self.plot.addItem(self._line)
         key = self._current
         self._x_max, xs = self._plan_axis(key)
+        self._line.setBounds((0.0, float(self._x_max)))   # V0.7.4 二.1
         self._apply_fixed_axes(key)
         if self._scope == "unjudged":
             sw = sweep_unjudged(self._stats, key, xs, self._sweep_fixed())
             series = [("OK", _GREEN, sw["ok"]), ("NG", _RED, sw["ng"])]
         else:
-            # V0.7.2 真机勘误：曲线=**图口径**——该阈值下三组的图数，
+            # V0.7.2 实测修复：曲线=**图口径**——该阈值下三组的图数，
             # 与右侧分组/统计行完全同口径（正确 31/过检 53 即曲线读数）
             from .review_logic import sweep_group_counts
             from ..i18n import tr

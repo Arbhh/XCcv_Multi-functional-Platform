@@ -1,10 +1,102 @@
 # Changelog
 
-Notable changes to XCcv Community. The format follows
+Notable changes to the XCcv Multi-functional Platform. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
 Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## [0.8.0] - 2026-11-20
+
+> **Major update**: the project is renamed to **XCcv Multi-functional Platform**
+> and becomes **fully open source** from this release — the four previously
+> closed capabilities (deployment inference service, model tools, TensorRT/ONNX
+> export, classic vision operators) are now published with the source; the
+> weight encryption/decryption system is **removed** (training artifacts are now
+> plaintext `.pt` / `.engine`), and the external operator is redesigned as a
+> pluggable-backend architecture.
+
+### Added (full open source)
+
+- **Deployment platform & HTTP inference service** (`xccv/deploy_platform.py` +
+  `xccv/service/`): a FastAPI service loads models/flows as resident APIs
+  (LRU pool + per-model lock), with single / batch / overlay / WebSocket
+  binary-frame inference and `X-XCcv-Timing` per-stage timing; constant-time
+  API-key comparison, concurrency gating, model path whitelist, self-hosted
+  offline Swagger docs. The deployment platform provides the service console
+  (host/port, API-key reset, desktop island, GPU insight), a model-loading
+  window, a C# test card and a one-click local-vs-service consistency check.
+- **C# SDK and demo** (`xccv/service/csharp/`): single-file `XCcv.Vision.Sdk.cs`
+  thin client (.NET Framework 4.5+, compiled by the system csc, zero third-party
+  dependencies) plus a bilingual WinForms test program (drag-and-drop inference,
+  overlay preview).
+- **Model-tools platform** (`xccv/modeltools/modeltools_window.py`): structured
+  channel **pruning** (Torch-Pruning DepGraph; pre-training and post-training
+  modes, isolated subprocess with a RAM watchdog and emergency stop); **TensorRT
+  engine export** (YOLO via the native ultralytics path; classification via
+  in-memory ONNX→TRT; Mask R-CNN feature-segment acceleration, with a metadata
+  header recording classes/input size/build compute capability and a cross-GPU
+  precheck on load); the matching `.engine` production runtime
+  (`xccv/engine/trt_runtime.py`).
+- **Classic vision operators** (`xccv/engine/flow/ops/`): 17 preprocessing
+  (filtering/threshold/morphology/frequency/flat-field etc.), 7 locating
+  (blob analysis, template matching, find line/circle/corner, line pair,
+  rectangle fit), 2 measuring, 5 logic verdicts, 3 classic detection filters,
+  4 output, 6 crop — built-in operators grow from 39 to **57** (66 nodes), with
+  5 classic-vision flow templates (template-match prefilter, circle locate,
+  line-pair level, blob prefilter, crop export).
+- **External-operator plugin backend**: the `external_op` node is redesigned as
+  a pluggable-backend architecture (`ExternalEngine` protocol + registry); the
+  bundled OpenCV demo backend (mock) lets the node run end-to-end out of the
+  box; real vendor SDK backends plug in via the same interface with zero node
+  changes.
+- **Platform experience**: workbench card wall and page stack, deployment /
+  model-tools navigation, service-health capsule and desktop island, GPU
+  monitor, classic-operator workbench, operator editor, training page split
+  (`training/panels/`), double-click detection-result rendering, review-page
+  "Open Flowchart" jump.
+- **Test matrix**: five module behavior locks under `tests/modules/` and a
+  training-page snapshot lock; `tools/run_tests.py` per-module subprocess test
+  runner (a stable way to run the large suite on Windows).
+
+### Changed
+
+- **Renamed**: repository/docs renamed to XCcv Multi-functional Platform; the
+  `-community` version suffix is dropped; the first fully-open-source release
+  is 0.8.0.
+- **Removed the weight encryption system**: training / pruning / per-epoch
+  weights / flow packages / TensorRT exports are all plaintext (`best.pt`,
+  `best_pruned.pt`, `epoch_NNN.pt`, plaintext `.xvap` container, plaintext
+  `.engine`); loading a legacy `.xva/.xcs` container raises a clear migration
+  message.
+- The model-loading entry (registry) is refactored: routing by ckpt format /
+  `.engine` metadata; TensorRT engines now use the `.engine` suffix.
+- `requirements.txt` adds `torch-pruning`, `onnx`, `psutil`, `python-multipart`; `onnxruntime` is
+  kept for EfficientSAM-assisted annotation.
+- Testing-platform texts/filters referencing `.xva` now use the plaintext
+  `.pt` / `.engine` wording.
+
+### Removed
+
+- The weight encrypt/decrypt tool window (the "Weight Encrypt / Decrypt" card in
+  Model Tools) and the `engine/model_crypto.py` container implementation.
+- The HALCON / VisionMaster vendor bridge adapters (in-process invocations and
+  the HALCON operator migration mapper); the capability now lives behind the
+  external-operator plugin-backend interface and vendor adapters are no longer
+  distributed with the repository.
+
+### Tests
+
+- Full regression: unit tests (historical locks + module locks + page snapshot
+  locks) and per-platform offscreen self-tests; results are in the release
+  acceptance notes. Use `python tools/run_tests.py` to run per module.
+
+### Third-party license changes
+
+- New dependencies: Torch-Pruning (MIT), onnx (MIT), psutil (BSD-3-Clause),
+  swagger-ui static assets (Apache-2.0, self-hosted at the service /docs).
+- TensorRT is an optional external runtime (Apache-2.0), not distributed here.
+- Attribution and full texts: `THIRD_PARTY_NOTICES.md` / `licenses/`.
 
 ## [0.7.3-community] - 2026-11-18
 

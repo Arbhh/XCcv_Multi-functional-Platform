@@ -1,6 +1,6 @@
-"""A2（V0.7）：轻量 OCR 字符识别（CRNN + CTC，自增优化，用户指定优先）。
+"""轻量 OCR 字符识别（CRNN + CTC，自增优化，优先接入）。
 
-对照 VIMO"字符识别"的首期落地：标注平台 rectangle 标注、label=字符串
+对照商用视觉软件"字符识别"的首期落地：标注平台 rectangle 标注、label=字符串
 内容（标注工具零改动）→ 行裁剪训练 → 识别文本输出。
 
 - 模型：CRNN（CNN 特征 → BiLSTM → CTC logits），纯 torch；
@@ -224,7 +224,7 @@ class OcrModel(BaseModel):
         if getattr(self, "_best_state", None) is not None:
             self.net.load_state_dict(self._best_state)
 
-        # 收尾：最优权重评估值 + 权重落盘（平台自有明文 .pt 容器）
+        # 收尾：最优权重评估值 + 权重落盘（明文 best.pt）
         best_pt = Path(cfg.output_dir) / "best.pt"
         torch.save(self._ckpt(), best_pt)
         metrics = {
@@ -247,7 +247,7 @@ class OcrModel(BaseModel):
         n_ok, dist_sum, n_chars, n_ref = 0, 0, 0, 0
         for path, points, target in lines:
             gt = self._decode_ids(target)
-            img = imread_unicode(path)           # ndarray 判空禁真值（P150）
+            img = imread_unicode(path)           # ndarray 判空禁真值
             if img is None:
                 img = np.zeros((_LINE_H, _LINE_W, 3), np.uint8)
             x = _to_tensor(_crop_line(img, list(points))).unsqueeze(0).to(self.device)

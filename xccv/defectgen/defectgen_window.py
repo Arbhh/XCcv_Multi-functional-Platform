@@ -10,6 +10,8 @@
   与流程图 web 窗口同款纪律；关窗先销毁页面再退出（同款段错误防线）。
 """
 
+import logging
+log = logging.getLogger(__name__)
 import os
 import threading
 
@@ -39,7 +41,7 @@ class _Page(QWebEnginePage):
 
 # 固定优先端口：资产/历史存于浏览器 IndexedDB，按 origin（host:port）
 # 分区——端口每次启动漂移会让 origin 变化，资产表现成"每次重进都为空"
-#（第三批 2026-11-07）。优先绑定固定端口保持 origin 稳定；被占用时向后
+#。优先绑定固定端口保持 origin 稳定；被占用时向后
 # 顺延，全部失败才回退 OS 动态分配（该会话资产暂不可见，不影响功能）。
 _DEFECTGEN_PORT_PREFERRED = 39771
 # 本进程已分出、服务尚未退出的端口：探测绑定后立即释放，服务线程稍后才
@@ -194,7 +196,7 @@ class DefectGenWindow(QMainWindow):
         try:
             self._server.server.should_exit = True
         except Exception:  # noqa: BLE001
-            pass
+            log.warning("缺陷样本服务停止信号发送失败", exc_info=True)
         # QtWebEngine 页面先于应用退出销毁（段错误防线，同 flowgraph_web_window）；
         # closeEvent 可能二次触发（窗口重复 close），已删对象静默跳过
         try:

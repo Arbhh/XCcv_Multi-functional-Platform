@@ -1,0 +1,19 @@
+{
+ "template": "tmpl_template_match",
+ "title": "模板匹配定位（旋转搜索）",
+ "description": "载图 → 模板匹配（金字塔粗匹配 + 原图精匹配，支持 ±角度搜索）。先在算子工作台「模板录制」或属性面板填模板路径；产线大图务必用「搜索区」限定范围提速。输出 rotated_rect [cx, cy, w, h, 角度]。",
+ "last_node_id": 2, "last_link_id": 1,
+ "nodes": [
+  {"id": 1, "type": "xccv2/image_loader", "pos": [100, 200],
+   "properties": {"path": "", "is_grayscale": false},
+   "inputs": [], "outputs": [{"name": "image", "type": "image", "links": [1]}]},
+  {"id": 2, "type": "xccv2/template_match", "pos": [400, 200],
+   "properties": {"template_path": "", "roi": "", "angle_range": 10.0,
+                   "angle_step": 5.0, "max_matches": 1, "threshold": 0.8},
+   "inputs": [{"name": "image", "type": "image", "link": 1}],
+   "outputs": [{"name": "rect", "type": "geometry", "links": []},
+                {"name": "score", "type": "number", "links": []},
+                {"name": "centers", "type": "geometry", "links": []}]}
+ ],
+ "links": [[1, 1, 0, 2, 0]]
+}

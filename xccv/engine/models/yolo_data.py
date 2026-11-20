@@ -8,7 +8,7 @@
 - XccvYoloTrainer：覆盖 ultralytics 的数据装配（get_dataset / get_dataloader）
   与模型装配（get_model 支持从剪枝模型恢复），训练全程不产生 data.yaml；
 - 训练产物（best/last 权重、args.yaml、results.csv）属于输出而非数据，
-  仍写入训练输出目录，由 YoloModel 负责清理中间权重。
+  仍写入训练输出目录，由 YoloModel 负责瘦身与清理训练中间权重。
 """
 
 import logging
@@ -37,7 +37,7 @@ def build_labels_from_shapes(shapes: list, classes: list[str], task: str,
     """把变换后的平台 Shape 列表转成 ultralytics 标签字典（增强后重建用）。"""
     cls_list, boxes, segments = [], [], []
     for sh in shapes:
-        if sh.label == IGNORE_LABEL:  # O8：忽略区域不是训练目标（防御兜底）
+        if sh.label == IGNORE_LABEL:  # 忽略区域不是训练目标（防御兜底）
             continue
         ci = classes.index(sh.label) if sh.label in classes else -1
         if ci < 0:
@@ -88,7 +88,7 @@ class InMemoryYoloDataset(YOLODataset):
         self._samples = list(samples)
         self._classes = list(classes)
         self._task = task  # 平台任务名：detection / segmentation
-        self._gray = bool(grayscale)  # O5（V0.7）：灰度训练读图口径
+        self._gray = bool(grayscale)  # 灰度训练读图口径
         # resize 宽高对 YOLO 只决定网络输入尺寸（fit 取长边作 imgsz）；其
         # 非等比拉伸不进训练——混合长宽比数据集被拉到同一宽高会让训练几何
         # 偏离验证/推理（原图长宽比 + letterbox）

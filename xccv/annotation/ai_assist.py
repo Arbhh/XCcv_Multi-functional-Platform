@@ -5,7 +5,7 @@
 SAM 预测器，编码走 GPU/CPU 均可，与训练/推理共用同一依赖，无新 wheels）：
 - 默认质量档 **SAM2.1 Hiera-Tiny**（weights/sam/sam2.1_t.pt，~74MB）；
 - 轻量档 **MobileSAM**（weights/sam/mobile_sam.pt，~40MB）。
-权重缺失时 `available_models()` 为空、调用方按钮置灰并给中文指引（T5-3）。
+权重缺失时 `available_models()` 为空、调用方按钮置灰并给中文指引。
 
 性能契约（G-8 验收口径）：
 - **编码器按图缓存**：predictor.set_image 一次，之后逐次点提示只跑轻量解码器
@@ -25,6 +25,8 @@ SAM 预测器，编码走 GPU/CPU 均可，与训练/推理共用同一依赖，
 批量预标注走 QThread）——同一 predictor 并发调用不安全，加 threading.Lock。
 """
 
+import logging
+log = logging.getLogger(__name__)
 import itertools
 import threading
 from collections import OrderedDict
@@ -33,7 +35,13 @@ from pathlib import Path
 
 import numpy as np
 
-_WEIGHTS_DIR = Path(__file__).resolve().parents[2] / "weights" / "sam"
+from ..app_paths import app_root
+
+# SAM 权重随包 weights\sam：开发态 = 仓库根\weights\sam；安装态 = 环境根
+# （sys.prefix）\weights\sam——与 offline.WEIGHTS_DIR 同一落点，打包脚本
+# 统一复制到运行根 weights\（parents[2] 硬编码在编译形态会落到
+# site-packages\weights，打包时修正）
+_WEIGHTS_DIR = app_root() / "weights" / "sam"
 
 # 权重注册（name 与 labelme config `ai.default` 对齐的显示名见 TITLES）
 _MODELS = [
@@ -166,12 +174,12 @@ def _crop_state(cpred, weights, seq, rgb, x1, y1, x2, y2):
 _LOCK = threading.Lock()          # ultralytics predictor 非线程安全
 _ENGINES: dict = {}               # weights path -> predictor（进程内缓存）
 
-# —— 小目标放大裁剪重解（2026-11-05 测试批）——
+# —— 小目标放大裁剪重解——
 # 极小目标（如 7×20px）在 SAM 全图 1024 输入中仅 ~2px，得分远低于大
 # 背景块（实测 0.005 vs 0.77），按得分 argmax 仍选中整块背景。当落点
 # 命中"全图尺度大掩膜"时，以落点为中心裁窗局部重解（不再整体下采样），
 # 小目标在窗内放大 2 倍即可被正确分割。
-_ZOOM_TRIGGER = 0.05   # 更积极走裁剪重解（用户反馈：单锚偶取全图主体）   # 全图最佳掩膜 bbox 面积占比超过→触发裁剪重解
+_ZOOM_TRIGGER = 0.05   # 全图最佳掩膜 bbox 面积占比超过阈值→触发裁剪重解（单锚偶取全图主体，更积极走裁剪重解）
 _ZOOM_WIN = 256        # 裁剪窗边长（原图像素；SAM 输入 1024→4 倍放大，利于 4~10px 小目标）
 _ZOOM_KEEP = 0.7    # 窗内占比过半即保留全图结果 → 收紧为 0.7      # 窗内最佳掩膜占窗比超过→目标本就是大块，保留全图结果
 _LAST_RGB: dict = {}   # weights -> 最近编码原图（_engine_by_name 每次
@@ -406,7 +414,7 @@ class _UltralyticsSam:
                         float(_ys.max() - _ys.min()) >
                         float(_PARAMS.get("zoom_trigger", _ZOOM_TRIGGER))
                         * W * H):
-                    # 裁剪中心=首锚点（2026-11-06 锚点加权：首锚主导，
+                    # 裁剪中心=首锚点（锚点加权：首锚主导，
                     # 与加权提示的 points[0] 一致；原取末锚与首锚主导矛盾）
                     px = float(np.clip(float(points[0][0]), 0, W - 1))
                     py = float(np.clip(float(points[0][1]), 0, H - 1))
@@ -450,7 +458,7 @@ class _UltralyticsSam:
                               if hasattr(cup, "detach") else
                               np.asarray(cup)) > _mask_thr(cpred)
                     # 窗内候选选择与整图路径一致：包含首锚的候选中取
-                    # 面积最小（防窗内仍取大结构，2026-11-06 小目标优化）
+                    # 面积最小（防窗内仍取大结构，小目标优化）
                     _hit = []
                     try:
                         _cw2, _ch2 = cmasks.shape[1], cmasks.shape[2]
@@ -464,7 +472,7 @@ class _UltralyticsSam:
                         if _hit:
                             cbest = min(_hit)[1]
                     except Exception:  # noqa: BLE001
-                        pass
+                        log.debug("掩码最佳命中回退失败（按未命中处理）")
                     _big = False
                     if cmasks.ndim == 3:
                         cbest = int(np.argmax(cs_np)) \
@@ -514,11 +522,11 @@ class _UltralyticsSam:
                         cm = cmasks[cbest]
                         cys, cxs = np.nonzero(cm)
                         if len(cxs):
-                            # 采用判据（2026-11-06 修正）：窗内结果包含
+                            # 采用判据：窗内结果包含
                             # 首锚点 且 面积显著小于全图掩膜（<50%）→
                             # 用户点的是窗内缺陷，采用窗内结果。原
                             # "窗内 bbox 占比<KEEP 保留"在纹路密集区
-                            # 恒保留全图块（"单锚取全图主体"问题的根因）
+                            # 恒保留全图块
                             _carea = int(cm.sum())
                             _m0area = int(m0.sum())
                             _fx = min(max(int(points[0][0]) - x1, 0),
@@ -536,7 +544,7 @@ class _UltralyticsSam:
                                     [float(cs_np[cbest])
                                      if cs_np.size else 1.0])
                             elif _has_anchor and _carea < _m0area * 0.5:
-                                # 二段递归 zoom（2026-11-06 小目标/低对比
+                                # 二段递归 zoom（小目标/低对比
                                 # 优化）：窗内结果 bbox 仍占窗 >30% 时，
                                 # 以首锚为中心再裁 128 窗重解一次
                                 _cys0, _cxs0 = np.nonzero(cm)
@@ -626,7 +634,7 @@ class _UltralyticsSam:
     def decode(self, embedding: ImageEmbedding, points, labels,
                multimask: bool = True) -> Annotation | None:
         """点提示解码 → 最佳掩码（原图尺寸 bool）。"""
-        if points is None or len(points) == 0:   # P150：ndarray 禁真值判断
+        if points is None or len(points) == 0:   # ndarray 禁真值判断
             return None
         try:
             import torch
@@ -724,7 +732,7 @@ class _EfficientSamOnnx:
             from loguru import logger
             logger.warning("EfficientSAM 解码失败：{}", e)
             return None
-        # 候选选择（避免恒取首个=「取全图主体」）：在包含
+        # 候选选择（恒取首个候选会变成「取全图主体」）：在包含
         # 首锚点的候选中取面积最小——交互标注"点哪标哪"
         _t = _PARAMS.get("mask_threshold")
         cand = masks[0, 0] > (0.0 if _t is None else float(_t))  # (3, H, W)

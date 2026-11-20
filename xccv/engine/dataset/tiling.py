@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""切图训练纯逻辑（P9/T9-3，opt-in；R-CNN 家族）。
+"""切图训练纯逻辑（opt-in；R-CNN 家族）。
 
 大图小目标在整图训练口径下目标占比过小、检测头难学到；切图训练把每张
 原图按滑窗切成 tile 训练（与 T8-3 分块推理配对）。设计要点（与方案 §四.2.2
@@ -20,6 +20,8 @@
   「只见局部」的分布偏移）。
 """
 
+import logging
+log = logging.getLogger(__name__)
 import random
 from dataclasses import dataclass
 from itertools import product
@@ -110,7 +112,8 @@ def _boxes_of(s) -> list:
             try:
                 b = b()
             except Exception:
-                b = None
+                log.debug("形状 bbox 读取失败（回退 points 推导）")
+        b = None
         if b is None and hasattr(sh, "points") and sh.points:
             xs = [p[0] for p in sh.points]
             ys = [p[1] for p in sh.points]

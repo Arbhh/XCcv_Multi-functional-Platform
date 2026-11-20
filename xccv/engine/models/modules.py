@@ -192,7 +192,7 @@ def replace_convs_with_dcn(module: nn.Module, skip_classes: tuple = ()) -> int:
 
 
 def load_state_dict_compat(net: nn.Module, state_dict: dict) -> list[str]:
-    """兼容加载权重：旧版本产出的权重文件缺少少量键时按安全默认值补齐。
+    """兼容加载权重：旧版本产出的 ckpt 缺少少量键时按安全默认值补齐。
 
     允许缺失的键（均可安全补零，不改变推理语义）：
     - CBAM gate 门控（后新增参数，恒等初始化与旧行为最接近）；

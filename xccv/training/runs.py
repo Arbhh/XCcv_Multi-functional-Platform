@@ -12,6 +12,12 @@ from pathlib import Path
 from ..engine.epoch_weights import EPOCH_DIR_NAME
 from ..engine.io_utils import read_json
 
+# 模型储存目录下的保留子目录（有产出但不是训练记录，扫描时跳过）：
+# - epoch_weights：轮次权重共用文件夹（EPOCH_DIR_NAME）
+# - flow：流程图模板目录（阈值面板/复盘「生成流程图模板」落盘
+#   <模型存放文件夹>/flow/<时间>_<模型名>.json，见 threshold_flow）
+RESERVED_DIR_NAMES = frozenset({EPOCH_DIR_NAME, "flow"})
+
 STATUS_TEXT = {
     "completed": "已完成",
     "interrupted": "已中断",
@@ -105,14 +111,16 @@ def load_run(run_dir: Path) -> RunRecord | None:
 def scan_runs(model_dir) -> list[RunRecord]:
     """按时间倒序（目录名含时间戳前缀）列出全部训练记录。
 
-    跳过轮次权重共用文件夹（epoch_weights，非训练记录）与隐藏目录。
+    跳过保留子目录（RESERVED_DIR_NAMES：轮次权重共用文件夹与流程图
+    模板目录，非训练记录）与隐藏目录。
     """
     root = Path(model_dir)
     if not root.is_dir():
         return []
     runs = []
     for d in root.iterdir():
-        if d.is_dir() and not d.name.startswith(".") and d.name != EPOCH_DIR_NAME:
+        if (d.is_dir() and not d.name.startswith(".")
+                and d.name not in RESERVED_DIR_NAMES):
             rec = load_run(d)
             if rec is not None:
                 runs.append(rec)

@@ -76,7 +76,7 @@ def scan_labelme_dataset(dataset_dir: Path) -> tuple[list[Sample], list[str], bo
         ]
         from_file = True
     else:
-        # O8（V0.7）：`__ignore__` 是忽略区域标记不是类别，永不进类别表
+        # `__ignore__` 是忽略区域标记不是类别，永不进类别表
         classes = sorted({s.label for sample in samples for s in sample.shapes
                           if s.label != IGNORE_LABEL})
         from_file = False

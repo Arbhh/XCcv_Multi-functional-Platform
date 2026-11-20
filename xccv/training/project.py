@@ -1,8 +1,3 @@
-def migrate_history(recs) -> list:
-    """训练历史旧键名清理（社区版：历史记录无旧键，原样返回）。"""
-    return recs or []
-
-
 """训练项目管理：项目信息与配置的持久化。
 
 每个项目对应 platform_data/projects/<项目名>/project.json。
@@ -51,7 +46,7 @@ class Project:
     workers: int = 4              # 数据加载线程数
     use_pretrained: bool = True   # 是否使用预训练权重
     industrial_opt: bool = True   # 工业场景优化（注意力 + 改进损失）
-    transfer_file: str = ""       # 迁移学习：指定起始权重文件（.pt；空=不迁移）
+    transfer_file: str = ""       # 迁移学习：指定起始权重文件（.pt/.engine；空=不迁移）
     patience: int = 10            # 早停耐心（0 关闭）
     # ---- 训练加速（默认关闭；GPU 工控机上按需开启）----
     freeze_backbone: bool = False  # 冻结预训练骨干（快速迁移模式）
@@ -64,16 +59,17 @@ class Project:
     rcnn_optimizer: str = "adamw"
     rcnn_learning_rate: float = 0.0   # 0=自动
     rcnn_weight_decay: float = 0.05
-    train_input: int = 0           # T9-2 两段式缩放（R-CNN 家族 opt-in，0=跟随画布）
-    tiling: bool = False           # T9-3 切图训练（大图小目标；推理需配分块推理）
+    train_input: int = 0           # 两段式缩放（R-CNN 家族 opt-in，0=跟随画布）
+    tiling: bool = False           # 切图训练（大图小目标；推理需配分块推理）
     tile_size: int = 640           # 切图训练 tile 边长
     use_negatives: bool = True     # 负样本：OK/良品 等文件夹内未标注图作背景训练（压误检）
     p2_head: bool = False          # P2 小目标检测头（YOLO 家族，默认关；其他家族忽略）
-    color_mode: str = "color"      # O5（V0.7）：训练颜色模式 color/gray（灰度防颜色干扰）
-    deterministic: bool = False    # E3（V0.7）：确定性训练 opt-in（同机同种子可复现；有性能损失）
+    color_mode: str = "color"      # 训练颜色模式 color/gray（灰度防颜色干扰）
+    deterministic: bool = False    # 确定性训练 opt-in（同机同种子可复现；有性能损失）
     tf32: bool = True              # GPU 提速：TF32 + cuDNN 自动调优（仅 GPU 生效）
     save_epoch_weights: bool = True  # 逐轮保存权重到共用 epoch_weights 文件夹（覆盖式）
-    # 免训练范式自有参数（仅声明 support_k_shot 的模型消费；k-shot 上限 12）
+    # §四（V0.7.3）：免训练范式自有参数（仅 SubspaceAD 等声明 support_k_shot
+    # 的模型消费；k-shot 上限 12，既定口径——避免脱离免训练范畴）
     k_shot: int = 4
     aug_count: int = 30
     created_at: str = ""
@@ -118,7 +114,7 @@ def _project_touch_time(d: Path) -> float:
 
 
 def list_projects() -> list[str]:
-    """项目名列表，按最近更新时间倒序（更新越近越靠前，第三批要求）。"""
+    """项目名列表，按最近更新时间倒序（更新越近越靠前，要求）。"""
     if not PROJECTS_DIR.is_dir():
         return []
     dirs = [d for d in PROJECTS_DIR.iterdir()

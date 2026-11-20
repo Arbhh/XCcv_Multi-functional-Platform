@@ -3,12 +3,14 @@
 任意平台入口点击后立即（<500ms）显示：平台图标 + 名称 + "加载中…" +
 不确定进度动画；超过 20s 提示"仍在加载，可继续等待或查看日志"。
 平台窗口 show 之后由 finish() 关闭——先 setParent(None) 再 deleteLater，
-避免残影（坑 P134 教训）。
+避免残影。
 
 只依赖 PyQt5 与 ui_style，不引入任何重型库，可在毫秒级显示。
 绘制为圆角白色卡片 + 品牌色顶条，风格与主界面一致。
 """
 
+import logging
+log = logging.getLogger(__name__)
 from PyQt5.QtCore import QRectF, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QPainter, QPixmap, QPainterPath
 from PyQt5.QtWidgets import QApplication, QWidget
@@ -17,7 +19,7 @@ from .ui_style import ACCENT, FG, MUTED, PANEL
 
 _PATIENCE_SECONDS = 20  # 超过该时长提示可继续等待或查看日志
 
-_EARLY = None  # 入口顶部 show_early() 预显示的加载卡；show_splash() 接管（T1-3）
+_EARLY = None  # 入口顶部 show_early() 预显示的加载卡；show_splash() 接管
 
 
 def _alive(widget) -> bool:
@@ -26,6 +28,7 @@ def _alive(widget) -> bool:
 
         return widget is not None and not sip.isdeleted(widget) and widget.isVisible()
     except Exception:
+        log.debug("启动画面可用性探测失败（按不可用处理）")
         return False
 
 
@@ -109,7 +112,7 @@ class LoadingSplash(QWidget):
                 self.move(geo.center().x() - self.width() // 2,
                           geo.center().y() - self.height() // 2)
             except Exception:
-                pass
+                log.warning("启动屏居中定位失败", exc_info=True)
         self.setParent(None)
         self.deleteLater()
 

@@ -263,7 +263,7 @@ async function boot() {
   };
 
   // 构建标识：便于确认浏览器是否加载到最新前端（旧缓存会显示旧标识）
-  const buildTag = '构建 2026-11-05·r3';
+  const buildTag = '构建 r3';
   const tagEl = document.getElementById('buildTag');
   if (tagEl) tagEl.textContent = buildTag;
   window.__studio.buildTag = buildTag;

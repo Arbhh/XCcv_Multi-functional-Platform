@@ -48,7 +48,7 @@ def _rect(label: str, box) -> dict:
 # ================= 测试平台：阈值面板（任务 1/2/3） =================
 
 def _panel_stats():
-    """扫描曲线口径：per_image 带逐检出记录（与 dims 汇总一致）。
+    """V0.7.2 扫描曲线口径：per_image 带逐检出记录（与 dims 汇总一致）。
 
     语义：img1 两命中（0.9/0.8）；img2 一未命中检出（0.4，GT 1 未命中）；
     img3 OK 图一误检（0.6）。gt_total=3、n_unmatched=1。"""
@@ -77,7 +77,7 @@ def _panel_stats():
 
 
 class AxisPlanTest(unittest.TestCase):
-    """固定坐标轴规划（用户口径）：score 0~1；几何维 max 外扩取整。"""
+    """固定坐标轴规划（既定口径）：score 0~1；几何维 max 外扩取整。"""
 
     @classmethod
     def setUpClass(cls):
@@ -116,7 +116,7 @@ class AxisPlanTest(unittest.TestCase):
         self.assertEqual((x0, x1), (0.0, 10000.0))
 
     def test_axis_without_data_no_negative(self):
-        """未加载数据时坐标轴不出现负数（conf 出现 -0.2 的回归）。"""
+        """未加载数据时坐标轴不出现负数（conf 出现 -0.2）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -178,7 +178,7 @@ class SpinInputTest(unittest.TestCase):
         self.assertAlmostEqual(float(p.spin_thr.value()), 40.0)
 
     def test_score_never_negative(self):
-        """拖线拖出固定轴（负值）时钳回 0（V0.7.1 已知问题）。"""
+        """拖线拖出固定轴（负值）时钳回 0（V0.7.1 既有实测问题）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -188,7 +188,7 @@ class SpinInputTest(unittest.TestCase):
 
 
 class SmoothLineTest(unittest.TestCase):
-    """扫描曲线（用户重设计）：三条曲线=阈值处 正确/过检/漏检 总数。
+    """V0.7.2 扫描曲线（重设计）：三条曲线=阈值处 正常/过检/漏检 总数。
 
     score 维也有漏检线（gt_total−正常）；平滑散点直方图已被扫描曲线取代。"""
 
@@ -250,7 +250,7 @@ class SmoothLineTest(unittest.TestCase):
         self.assertEqual(names, {"正确", "过检", "漏检"})
 
     def test_score_has_missed_line_now(self):
-        """重设计：score 维同样有漏检曲线（旧版仅几何维度可画）。"""
+        """V0.7.2 重设计：score 维同样有漏检曲线（旧版仅几何维度可画）。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
         p = ThresholdPanel()
@@ -309,6 +309,16 @@ class MissedDimsTest(unittest.TestCase):
 class IouDefaultTest(unittest.TestCase):
     """全平台 IOU 默认 0.2；引擎默认值除外。"""
 
+    def test_ui_and_service_defaults(self):
+        from xccv.deploy_consistency import run_consistency_check
+        from xccv.service.config import ServiceConfig
+
+        self.assertEqual(ServiceConfig().infer_iou, 0.20)
+        import inspect
+
+        sig = inspect.signature(run_consistency_check)
+        self.assertEqual(sig.parameters["iou"].default, 0.20)
+
     def test_source_locks(self):
         cases = [
             ("xccv/testing/testing_window.py", '"IOU 阈值", 10, 90, 20'),
@@ -319,6 +329,7 @@ class IouDefaultTest(unittest.TestCase):
              'ParamSpec("iou", "IOU", "float", 0.20'),
             ("xccv/engine/flow/ops/listops.py",
              'ParamSpec("iou", "IOU", "float", 0.20'),
+            ("xccv/engine/trt_runtime.py", "iou: float = 0.20"),
             ("xccv/engine/tiled_infer.py", "iou: float = 0.20"),
         ]
         for f, needle in cases:
@@ -371,14 +382,16 @@ class TrainingWindowLockTest(unittest.TestCase):
         self.assertIn("700 - (time.monotonic()", src)
 
     def test_per_class_table_no_stretch(self):
-        src = Path("xccv/training/training_window.py").read_text(
+        # 0.7.6 P-1 拆分：逐类表构建在 panels/train_page.py（锁随迁）
+        src = Path("xccv/training/panels/train_page.py").read_text(
             encoding="utf-8")
         self.assertIn("setStretchLastSection(False)", src)
         self.assertIn("QHeaderView.ResizeToContents", src)
         self.assertIn("ScrollPerPixel", src)
 
     def test_split_donut_live_rebind(self):
-        src = Path("xccv/training/training_window.py").read_text(
+        # 0.7.6 P-1 拆分：划分环状图实时重绘在 panels/info_page.py（锁随迁）
+        src = Path("xccv/training/panels/info_page.py").read_text(
             encoding="utf-8")
         self.assertIn("par_train_ratio.valueChanged.connect("
                       "self._refresh_split_canvas)", src)
@@ -453,11 +466,12 @@ class PerClassTableOffscreenTest(unittest.TestCase):
         from PyQt5.QtWidgets import QApplication
 
         _app = QApplication.instance() or QApplication([])
-        src = Path("xccv/training/training_window.py").read_text(
+        # 0.7.6 P-1 拆分：锁随迁到逐类表所在面板
+        src = Path("xccv/training/panels/train_page.py").read_text(
             encoding="utf-8")
         self.assertNotIn("setStretchLastSection(True)", src)
         # offscreen 不构建 ProjectWindow（matplotlib 重）；以源码锁为准，
-        # 行为断言在 UI 验收中执行
+        # 行为断言在实测验收（清单 §九）执行
 
 
 class PreviewOpsTest(unittest.TestCase):

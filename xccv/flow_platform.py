@@ -21,6 +21,7 @@ if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再�
 
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -39,7 +40,7 @@ from .engine.io_utils import imread_unicode
 from .gui_utils import auto_cleanup_thread
 from .i18n import localize_widget_tree, tr  # 英文替换层
 from .ui_style import APP_QSS, apply_app_theme, bind_style, icon_path, token  # noqa: F401
-from .modeltools.flow_pack import (
+from .modeltools.flow_shared import (
     _EMPTY_FLOW, _materialize_xvap, _write_flow_json,
 )
 
@@ -139,7 +140,7 @@ class _FlowBatchThread(QThread):
                 except Exception as e:  # 单张失败不中断批量
                     log.error("批量推理失败 %s: %s", rel, e, exc_info=True)
                     results.append({"image": str(rel), "error": f"{type(e).__name__}: {e}"})
-                # 仪表化（E3 排查）：单图超 5 秒记录慢图；每 20 张记一次进度，
+                # 仪表化（排查）：单图超 5 秒记录慢图；每 20 张记一次进度，
                 # 若出现"卡死"，日志能定位停在即可疑的那张图
                 cost = time.perf_counter() - _t0
                 if cost > 5.0:
@@ -253,7 +254,7 @@ class _XcvBatchThread(QThread):
                         classes = (session.ctx.get("model_classes")
                                    or session.ctx.get("flow_class_names") or [])
                         # 与 result_output 节点共用 result_json 单一实现
-                        # （P91：分类流程的 classifications 不再丢失）
+                        # （分类流程的 classifications 不再丢失）
                         det_list = detection_rows(det, classes)
                         cls_list = classification_topk(det, classes)
                     payload = build_flow_result_json(
@@ -278,6 +279,7 @@ class _XcvBatchThread(QThread):
                         try:
                             rendered = overlay_result(base, last_outs)
                         except Exception:
+                            log.debug("结果可视化渲染失败（回退底图）")
                             rendered = base
                         out_img = vis_dir / rel
                         out_img.parent.mkdir(parents=True, exist_ok=True)
@@ -309,8 +311,8 @@ def _normalize_types(flow: dict) -> dict:
 
 
 class _TreeScanWorker(QThread):
-    """数据目录扫描工作线程（T2-3）：只产出相对路径列表，建树仍在主线程
-    （坑 P140 纪律：线程不碰任何 QWidget/QTreeWidgetItem）。"""
+    """数据目录扫描工作线程：只产出相对路径列表，建树仍在主线程
+    。"""
 
     done = pyqtSignal(list)
     failed = pyqtSignal(str)
@@ -323,6 +325,7 @@ class _TreeScanWorker(QThread):
         try:
             self.done.emit([str(p) for p in _list_images(self._root)])
         except Exception as e:
+            log.warning("流程后台执行异常（failed 信号已上报）: %s", e, exc_info=True)
             self.failed.emit(f"{type(e).__name__}: {e}")
 
 
@@ -342,7 +345,7 @@ class FlowPage(QWidget):
         self._batch_thread: _FlowBatchThread | None = None
         self._scan_thread: _TreeScanWorker | None = None   # T2-3 目录扫描线程
         self._scan_gen = 0                                  # 丢弃过期扫描结果
-        self._thumb_cache: dict = {}                        # path->QImage LRU（T2-3）
+        self._thumb_cache: dict = {}                        # path->QImage LRU
         self._thumb_cache_order: list = []
 
         root = QVBoxLayout(self)
@@ -424,8 +427,8 @@ class FlowPage(QWidget):
         self.model_dir_edit.setPlaceholderText("模型目录（流程 JSON / .xvap 所在位置）")
         self.model_dir_edit.returnPressed.connect(self._refresh_flow_combo)
         model_row.addWidget(self.model_dir_edit, stretch=1)
-        # 📁 emoji 在雅黑下被裁切（用户实测 Q6-1），改用文字按钮；
-        # 宽度不固定（用户回执 Q4：字号放大后固定 56px 会裁切"浏览/新建"）
+        # 📁 emoji 在雅黑下被裁切（实测 Q6-1），改用文字按钮；
+        # 宽度不固定（字号放大后固定 56px 会裁切"浏览/新建"）
         btn_model_dir = QPushButton("浏览")
         btn_model_dir.setToolTip("选择模型目录")
         btn_model_dir.clicked.connect(self._browse_model_dir)
@@ -468,8 +471,7 @@ class FlowPage(QWidget):
         batch_row.addWidget(self.btn_batch_stop)
         right_lay.addLayout(batch_row)
 
-        self.flow_hint = QLabel("「打包流程」把流程与所选模型一并封入"
-                                "单个 .xvap 文件，可在测试平台直接加载。")
+        self.flow_hint = QLabel("「打包流程」生成 .xvap 流程包，可在测试平台直接加载。")
         self.flow_hint.setObjectName("hint")
         self.flow_hint.setWordWrap(True)
         right_lay.addWidget(self.flow_hint)
@@ -492,7 +494,7 @@ class FlowPage(QWidget):
     def _load_data_root(self):
         d = Path(self.data_edit.text().strip())
         if not d.is_dir():
-            self.count_label.setText(f"{tr('图片数量')}: {tr('路径不存在')}")
+            self.count_label.setText("图片数量: 路径不存在")
             return
         self.data_root = d
         self._rebuild_tree()
@@ -503,14 +505,14 @@ class FlowPage(QWidget):
         self._thumb_cache_order.clear()
         if self.data_root is None:
             self._tree_total = 0
-            self.count_label.setText(f"{tr('图片数量')}: 0/0")
+            self.count_label.setText("图片数量: 0/0")
             return
         # T2-3：目录扫描移后台线程（千图目录不再冻结主线程）；
         # 完成后回主线程一次性建树（QTreeWidgetItem 只能在主线程创建）
-        self.count_label.setText(f"{tr('图片数量')}: {tr('扫描中…')}")
+        self.count_label.setText("图片数量: 扫描中…")
         self._scan_gen += 1
         gen = self._scan_gen
-        # 无父对象（T2-3）：页面可能在线程运行中被关闭（parented 运行线程
+        # 无父对象：页面可能在线程运行中被关闭（parented 运行线程
         # 会连带销毁——Qt 崩溃）；完成后经 finished→deleteLater 自清理
         worker = _TreeScanWorker(self.data_root)
         worker.done.connect(lambda rels, g=gen: self._fill_tree(rels, g))
@@ -594,7 +596,7 @@ class FlowPage(QWidget):
             for i in range(root_item.childCount()):
                 root_item.child(i).setHidden(False)
         self.count_label.setText(
-            f"{tr('图片数量')}: {self._tree_total if not text else visible}/{self._tree_total}")
+            f"图片数量: {self._tree_total if not text else visible}/{self._tree_total}")
 
     def _selected_image(self) -> Path | None:
         it = self.tree.currentItem()
@@ -606,7 +608,7 @@ class FlowPage(QWidget):
         return self.data_root / val
 
     def _pick_image_dialog(self) -> Path | None:
-        """无选图时的兜底：直接弹文件选择器。"""
+        """无选图时的兜底：直接弹文件选择器（替代无声卡顿）。"""
         start = str(self.data_root) if self.data_root is not None else ""
         path, _ = QFileDialog.getOpenFileName(
             self, "选择用于运行预览的图片", start,
@@ -725,7 +727,7 @@ class FlowPage(QWidget):
         self.flow_combo.blockSignals(False)
         if found:
             self.flow_combo.setCurrentIndex(0)
-            # 首项必须手动激活（Q4）：populate 期间信号被屏蔽，默认选中
+            # 首项必须手动激活：populate 期间信号被屏蔽，默认选中
             # 不会触发 currentIndexChanged → current_flow_path 为空，
             # "运行流程"必须重选一次才生效
             self._on_flow_selected(0)
@@ -746,6 +748,39 @@ class FlowPage(QWidget):
         else:
             self.current_flow_path = path
         self._sync_canvas_path()
+
+    def open_flow_file(self, path, open_canvas: bool = False) -> bool:
+        """外部跳转入口：载入指定流程文件并选中（V0.7.5 复盘页跳转）。
+
+        模板所在目录写入模型目录框并刷新下拉；下拉无该项（模板目录与
+        当前不同）时直接设 current_flow_path。open_canvas=True 时打开
+        HTML 画布窗（跳转语义=直接看到流程）。返回是否载入成功。
+        """
+        p = Path(path)
+        if not p.is_file():
+            return False
+        if p.suffix.lower() == ".xvap":
+            try:
+                p, _ = _materialize_xvap(p)
+            except Exception as e:
+                log.error("解包失败: %s", e, exc_info=True)
+                return False
+        self.model_dir_edit.setText(str(p.parent))
+        self._refresh_flow_combo()
+        idx = self.flow_combo.findData(str(p))
+        if idx >= 0:
+            self.flow_combo.setCurrentIndex(idx)   # 触发 _on_flow_selected
+        else:
+            self.current_flow_path = p
+            self._sync_canvas_path()
+        if open_canvas:
+            self._edit_flow()
+        w = self.window()
+        sb = getattr(w, "statusBar", None)   # 裸页面（测试）无主窗状态栏
+        if callable(sb):
+            sb().showMessage(tr("已由测试平台复盘页跳转打开") + f"：{p.name}",
+                             8000)
+        return True
 
     # ================= 六个动作 =================
     def _read_flow(self) -> dict | None:
@@ -791,16 +826,7 @@ class FlowPage(QWidget):
         flow = self._read_flow()
         if flow is None:
             return
-        try:
-            from .modeltools.flowgraph_web_window import FlowGraphWebWindow  # 惰性：QtWebEngine
-        except Exception as e:  # noqa: BLE001  常见为当前解释器缺 PyQtWebEngine
-            QMessageBox.critical(
-                self, "无法打开流程画布",
-                "当前 Python 环境缺少 QtWebEngine 组件，流程画布无法启动。\n\n"
-                f"具体错误：{type(e).__name__}: {e}\n\n"
-                "请用本仓库虚拟环境启动（run_main.bat 会自动优先使用 venv\\），\n"
-                "或安装依赖后重试：pip install PyQtWebEngine")
-            return
+        from .modeltools.flowgraph_web_window import FlowGraphWebWindow  # 惰性：QtWebEngine
 
         if self._canvas is None:
             self._canvas = FlowGraphWebWindow(on_closed=self._on_canvas_closed)
@@ -863,9 +889,10 @@ class FlowPage(QWidget):
                                   source_name=img_path.name,
                                   flow_name=flow_path.name if flow_path else "")
         except Exception as e:
+            log.warning("流程运行失败（状态栏已提示）: %s", e, exc_info=True)
             self.window().statusBar().showMessage(f"运行失败：{e}", 8000)
             return
-        # 结果可视化（用户批注 ToD1/ToD4 + v0.4.4 ToC2）：结果叠加收集
+        # 结果可视化：结果叠加收集
         # 【全部 ok 节点】的输出——末节点可能是「保存结果」（仅 saved 布尔），
         # 检出框/几何蒙版在中游节点上；此前只看末节点导致输出 JSON 后
         # 可视化"消失"。底图 = 末节点的图像输出（如转平归正），否则原图。
@@ -886,6 +913,7 @@ class FlowPage(QWidget):
             try:
                 rendered = overlay_result(base, list(all_outs.values()))
             except Exception:
+                log.debug("结果叠加渲染失败（回退底图）")
                 rendered = base
         if rendered is None:
             rendered = img
@@ -914,7 +942,8 @@ class FlowPage(QWidget):
         flow = self._read_flow()
         if flow is None:
             return
-        # 选图守卫必须先于模型加载（避免数十秒加载后才发现没选图）
+        # 选图守卫必须先于模型加载（旧链分支此前先同步加载
+        # 模型——数十秒无提示——之后才发现没选图，用户感知为"空运行卡死"）
         img_path = self._selected_image()
         if img_path is None:
             ret = QMessageBox.question(
@@ -931,6 +960,7 @@ class FlowPage(QWidget):
         try:
             model = self._resolve_model(flow)
         except Exception as e:
+            log.warning("模型加载失败（状态栏已提示）: %s", e, exc_info=True)
             self.window().statusBar().showMessage(
                 f"模型加载失败: {type(e).__name__}: {e}", 6000)
             return
@@ -969,7 +999,7 @@ class FlowPage(QWidget):
         flow = self._read_flow()
         if flow is None:
             return
-        from .modeltools.flow_pack import _show_pack_problems, \
+        from .modeltools.flow_shared import _show_pack_problems, \
             validate_flow_for_pack
 
         problems = validate_flow_for_pack(flow)
@@ -989,7 +1019,7 @@ class FlowPage(QWidget):
                 self.window().statusBar().showMessage(
                     "流程中没有已选择权重文件的模型节点", 6000)
                 return
-            # 纯传统算子流程（用户批注 F2/Q7）：允许打包为不含模型的 .xvap
+            # 纯传统算子流程：允许打包为不含模型的 .xvap
         dst, _ = QFileDialog.getSaveFileName(
             self, "打包流程", "flow.xvap", "流程包 (*.xvap)")
         if not dst:
@@ -1030,7 +1060,7 @@ class FlowPage(QWidget):
             self.window().statusBar().showMessage("数据路径下没有图片", 4000)
             return
         out_dir = self.current_flow_path.parent / f"批量结果_{time.strftime('%Y%m%d_%H%M%S')}"
-        # 批量设置弹窗（用户批注 ToC5：与测试平台批量一致，可改各项信息）
+        # 批量设置弹窗
         from .testing.batch_dialog import BatchSettingsDialog
 
         dlg = BatchSettingsDialog(self.window(), folder=str(self.data_root))
@@ -1077,7 +1107,7 @@ class FlowPage(QWidget):
                 f"批量推理 {done} / {total} …"))
         self._batch_thread.finished_ok.connect(self._on_batch_done)
         self._batch_thread.failed.connect(self._on_batch_failed)
-        auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3（T2-6）
+        auto_cleanup_thread(self, "_batch_thread", self._batch_thread)  # A-3
         self.btn_batch.setEnabled(False)
         self.btn_batch_stop.setEnabled(True)
         self._batch_thread.start()
@@ -1102,10 +1132,14 @@ class FlowPage(QWidget):
 def main():
     from .platform_entry import run_platform
 
-    run_platform("flowmain", "流程图平台", lambda: _wrap_window())
+    # argv[1] 携带流程文件路径（复盘页「前往流程图界面」跳转）→
+    # 独立流程图窗口启动即载入并打开画布
+    arg = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") \
+        else None
+    run_platform("flowmain", "流程图平台", lambda: _wrap_window(arg))
 
 
-def _wrap_window():
+def _wrap_window(open_file: str | None = None):
     from PyQt5.QtWidgets import QMainWindow
 
     class _Win(QMainWindow):
@@ -1115,8 +1149,22 @@ def _wrap_window():
             self.setWindowIcon(QIcon(str(icon_path("flow.png"))))   # v0.5.5追加 独立图标
             self.resize(1280, 780)
             apply_app_theme(self)
+            self._page = FlowPage()
+            self.setCentralWidget(self._page)
             localize_widget_tree(self)
-            self.setCentralWidget(FlowPage())
+            if open_file:
+                from PyQt5.QtCore import QTimer
+
+                QTimer.singleShot(0, lambda: self._page.open_flow_file(
+                    open_file, open_canvas=True))
+
+        def on_platform_message(self, args):
+            """单实例激活携带业务参数：args[0]=流程文件路径 → 载入。"""
+            if args:
+                self._page.open_flow_file(args[0], open_canvas=True)
+            self.show()
+            self.raise_()
+            self.activateWindow()
 
     return _Win()
 

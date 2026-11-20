@@ -42,7 +42,7 @@ class TrainConfig:
     image_size: int = 0         # 0 表示用模型默认值（方形）；被宽高指定覆盖
     image_width: int = 0        # 训练输入宽（>0 且高>0 时生效，与增强 resize 统一）
     image_height: int = 0       # 训练输入高
-    train_input: int = 0        # T9-2 两段式缩放（R-CNN 家族 opt-in）：0=跟随
+    train_input: int = 0        # 两段式缩放（R-CNN 家族 opt-in）：0=跟随
     # 画布（默认现状）；显式设 32 的倍数且<画布短边时，画布增强保持画布口径，
     # 入网前由 GeneralizedRCNNTransform keep_ratio 缩到该尺寸
     device: str = "auto"
@@ -65,7 +65,7 @@ class TrainConfig:
     tf32: bool = True              # GPU 提速：TF32 + cuDNN 自动调优（Ampere+ 显卡，CPU 无影响）
     save_epoch_weights: bool = True  # 每轮保存权重到共用 epoch_weights 文件夹（覆盖式）
     resume_from_pruned: bool = False  # 从项目自有的剪枝预训练模型开始训练（不重建网络）
-    # ---- T9-3 切图训练（opt-in，R-CNN 家族；验证集始终整图评估）----
+    # ---- 切图训练（opt-in，R-CNN 家族；验证集始终整图评估）----
     tiling: bool = False          # 启用切图训练（需配合推理侧分块 tiled_infer）
     tile_size: int = 640          # tile 边长（像素）
     tile_overlap: float = 0.2     # 相邻 tile 重叠比例
@@ -74,13 +74,13 @@ class TrainConfig:
     mix_full_view: float = 0.1    # 整图混入比例（防"只见局部"分布偏移）
     # ---- 负样本（检测/分割全家族）----
     use_negatives: bool = True    # 负样本文件夹（OK/良品/负样本/背景…）内未标注图作背景训练
-    # ---- 范式自有参数（§四）：免训练范式的支持集张数/增强样本数等 ----
+    # ---- 范式自有参数（V0.7.3 §四）：免训练范式的支持集张数/增强样本数等 ----
     model_params: dict = field(default_factory=dict)  # {"k_shot": 4, "aug_count": 30, ...}
     # ---- YOLO 家族 ----
     p2_head: bool = False         # P2 小目标检测头（stride 4 第四检测层；其他家族忽略）
-    # ---- O5（V0.7）颜色模式 ----
+    # ---- 颜色模式 ----
     color_mode: str = "color"     # "color"=彩色（现状）；"gray"=训练读图转灰再复制 3 通道
-    # ---- E3（V0.7）确定性训练 ----
+    # ---- 确定性训练 ----
     deterministic: bool = False   # opt-in：种子全集+确定性算法开关（同机同种子结果可复现）
 
 
@@ -201,7 +201,7 @@ class BaseModel(ABC):
     family: str = ""                 # "yolo" | "coco" | "folder"
     supported_tasks: tuple = ()
     default_image_size: int = 640
-    # 对外分数语义元数据——测试平台/复盘面板/部署
+    # V0.7.3 §三：对外分数语义元数据——测试平台/复盘面板/部署
     # 服务读此元数据渲染提示，新增范式接入即自带语义（杜绝隐式口径）。
     # key: conf=检出置信度(0~1)；z=OK 分布标定 z 分数（无上界）；prob=分类
     # softmax 概率(0~1)。range[1] 为 None 表示无上界（阈值轴按数据动态规划）。
@@ -266,9 +266,9 @@ class BaseModel(ABC):
 
             _random.seed(cfg.seed)
             if getattr(cfg, "deterministic", False):
-                # E3（V0.7）opt-in 确定性训练：种子全集 + 确定性算法开关。
+                # 确定性训练：种子全集 + 确定性算法开关。
                 # warn_only=True：个别算子不支持确定性实现时降级告警而非中断
-                # （VIMO FAQ"个别算子不支持"口径）；性能有损失，默认关。
+                # （厂商 FAQ"个别算子不支持"口径）；性能有损失，默认关。
                 import os as _os
 
                 _os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
@@ -281,7 +281,7 @@ class BaseModel(ABC):
             _with_run_meta(metrics, cfg, started, datetime.now(),
                            status="interrupted" if reporter.stop_requested else "completed")
             save_json(cfg.output_dir / "metrics.json", metrics)
-            # E2（V0.7）：run_manifest.json（环境/数据指纹 + 完整参数快照）
+            # run_manifest.json（环境/数据指纹 + 完整参数快照）
             from .manifest import write_run_manifest
 
             write_run_manifest(cfg, metrics, cfg.output_dir)

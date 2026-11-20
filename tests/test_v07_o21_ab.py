@@ -114,9 +114,9 @@ class CompareBatchTest(unittest.TestCase):
         records = [{"gt": 1, "a": {"n": 1, "hit": 1, "fp": 0},
                     "b": {"n": 0, "hit": 0, "fp": 0}, "verdict": "A优",
                     "gt_available": True, "path": "x", "file": "x.png"}]
-        payload = build_compare_payload("a.xva", "b.xva", 0.25, 0.5, records)
+        payload = build_compare_payload("a.pt", "b.pt", 0.25, 0.5, records)
         self.assertEqual(payload["schema"], 1)
-        self.assertEqual(payload["model_a"], "a.xva")
+        self.assertEqual(payload["model_a"], "a.pt")
         self.assertIn("records", payload)
         with tempfile.TemporaryDirectory() as td:
             from xccv.testing.model_compare import save_compare_json
@@ -142,7 +142,7 @@ class DialogSmokeTest(unittest.TestCase):
         results_a = [{"file": "a.png", "path": "Z:/no/a.png",
                       "detections": [_det("黑点", 0.9, (0, 0, 100, 100))]}]
         dlg = ModelCompareDialog(results_a, None, 0.25, 0.5, None, ["黑点"],
-                                 model_a_name="a.xva")
+                                 model_a_name="a.pt")
         records = [{"gt": 1, "a": {"n": 1, "hit": 1, "fp": 0},
                     "b": {"n": 0, "hit": 0, "fp": 0}, "verdict": "A优",
                     "gt_available": True, "path": "Z:/no/a.png", "file": "a.png"}]

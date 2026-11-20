@@ -1,4 +1,4 @@
-// Defect Augment Studio — EN dictionary (V0.7.3 i18n rebuild, 2026-11-17).
+// Defect Augment Studio — EN dictionary (i18n rebuild).
 // key = rendered zh text (exact, trimmed), value = en. Keys containing
 // ${...} / %s / %d are matched as patterns with captured groups ($1..$n).
 // Loaded only by js/i18n_runtime.js; zh mode never calls it (zero cost).
@@ -27,7 +27,7 @@ window.__DG_I18N = {
   "网格尺寸": "Grid size",
   "表面平滑度适宜度热力图（梯度能量越低越适合贴缺陷）": "Surface-smoothness suitability heatmap (lower gradient energy = better for placement)",
   "放置时自动吸附到最近的平滑区域（Alt 拖拽绕过）": "Snap to nearest smooth region on placement (Alt-drag bypasses)",
-  "快捷键帮助 (F1)": "Shortcut help (F1)",
+  "快捷键帮助 ": "Shortcut help ",
   "回放/导入 Recipe (Ctrl+S 保存)": "Replay/import recipe (Ctrl+S to save)",
   "后端状态": "Backend",
   "跳过引擎，直接用选区作为掩码（配合笔刷修正）": "Skip engine, use selection as mask directly (refine with brush)",
@@ -99,7 +99,7 @@ window.__DG_I18N = {
   "帮助": "Help",
   "后端正常": "Backend OK",
   "后端不可达：抠图/泊松/批量功能不可用": "Backend unreachable: extract/Poisson/batch disabled",
-  "构建 2026-11-05·r3": "Build 2026-11-05·r3",
+  "构建 r3": "Build r3",
   "）. 使用 window.__studio 进行脚本化操作。": "). Script via window.__studio.",
   "[DAS] 启动失败:": "[DAS] startup failed:",
   "不支持 Web Worker": "Web Worker not supported",

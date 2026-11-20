@@ -1,0 +1,29 @@
+{
+ "template": "tmpl_line_level",
+ "title": "直线定位 → 转平归正",
+ "description": "载图 → 卡尺找直线（亚像素）→ 由线角度生成仿射矩阵 → 图像转平。经典的「定位归正」前置链：转平后的图再交给测量或 AI 检出，姿态一致精度更高。",
+ "last_node_id": 4, "last_link_id": 4,
+ "nodes": [
+  {"id": 1, "type": "xccv2/image_loader", "pos": [60, 200],
+   "properties": {"path": "", "is_grayscale": false},
+   "inputs": [], "outputs": [{"name": "image", "type": "image", "links": [1, 3]}]},
+  {"id": 2, "type": "xccv2/find_line", "pos": [340, 320],
+   "properties": {"target": "edge", "scan": "vertical", "roi": "",
+                   "num_calipers": 32, "polarity": "any", "min_contrast": 20.0},
+   "inputs": [{"name": "image", "type": "image", "link": 1}],
+   "outputs": [{"name": "line", "type": "geometry", "links": [2]},
+                {"name": "residual", "type": "number", "links": []}]},
+  {"id": 3, "type": "xccv2/geometry_to_affine", "pos": [620, 320],
+   "properties": {"mode": "rotate_level"},
+   "inputs": [{"name": "geometry", "type": "geometry", "link": 2},
+               {"name": "image", "type": "image", "link": null}],
+   "outputs": [{"name": "matrix", "type": "measure", "links": [4]},
+                {"name": "angle", "type": "number", "links": []}]},
+  {"id": 4, "type": "xccv2/affine_transform", "pos": [900, 200],
+   "properties": {"matrix": "1,0,0,0,1,0", "interp": "linear"},
+   "inputs": [{"name": "image", "type": "image", "link": 3},
+               {"name": "matrix_in", "type": "measure", "link": 4}],
+   "outputs": [{"name": "image", "type": "image", "links": []}]}
+ ],
+ "links": [[1, 1, 0, 2, 0], [2, 2, 0, 3, 0], [3, 1, 0, 4, 0], [4, 3, 0, 4, 1]]
+}

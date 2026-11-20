@@ -59,7 +59,7 @@ class LabelFile(object):
             else:
                 format = "PNG"
             if format == "JPEG":
-                # 高保真重存（2026-11-06）：默认 q75+4:2:0 使 imageData 与
+                # 高保真重存：默认 q75+4:2:0 使 imageData 与
                 # 原图平均差 ~21 灰度，AI(SAM) 编码在小目标上把重压缩噪声
                 # 当纹理 → 解出大背景块；q95 + 4:4:4 差异回落到 ~1
                 image_pil.save(f, format=format, quality=95,

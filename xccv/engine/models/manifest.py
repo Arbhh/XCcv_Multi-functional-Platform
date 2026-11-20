@@ -1,9 +1,9 @@
-"""E2（V0.7）：训练 run_manifest.json——权重可追溯元数据。
+"""训练 run_manifest.json——权重可追溯元数据。
 
 工业现场必问的三件事：这个权重由哪份数据、哪个环境、哪套依赖训出来的。
 训练收尾写入输出目录 run_manifest.json：
 - environment：python/torch/torchvision/ultralytics/tensorrt/CUDA 版本 +
-  GPU 名称与算力（替代建议书的 git commit 字段——主区无 git，铁律 4）；
+  GPU 名称与算力（替代 git commit 字段——代码树无 git）；
 - lock：requirements.lock 的 sha1（存在时；路径可用 XCCV_LOCK_PATH 覆盖，
   E1 生成物默认 E:\\zcode\\XCcv_dist\\build_tools\\requirements.lock）；
 - dataset：数据集指纹（复用 dataset_fingerprint）+ 路径；
@@ -25,7 +25,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-_LOCK_DEFAULT = Path(__file__).resolve().parents[3] / "requirements.lock"
+_LOCK_DEFAULT = Path(__file__).resolve().parents[2] / "requirements.txt"
 
 
 def _lock_hash() -> str | None:

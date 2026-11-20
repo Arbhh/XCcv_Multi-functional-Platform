@@ -1,10 +1,11 @@
-"""流程图打包格式 .xvap（社区版：明文容器）：流程图（节点/连线/参数，含所选
-模型引用）+ 引用的模型文件本体，打包为单一 .xvap 文件。
+"""流程图打包格式 .xvap：流程图（节点/连线/参数，含所选模型引用）+ 引用的
+模型文件本体，打包为单一文件（明文容器，可直接分发）。
 
 payload 布局：
     b"XVAP" + <I json 长度> + <I 模型个数>
-    + JSON（流程图：nodes/links/参数；模型节点记录 model_file 文件名）
-    + 每个模型: <H 文件名长> 文件名 <I 数据长> 数据（模型文件原字节）
+    + JSON（流程图：nodes/links/参数；模型节点记录模型文件名）
+    + 每个模型: <H 文件名长> 文件名 <I 数据长> 数据（模型文件原字节，如
+      best.pt / .engine）
 """
 
 import json
@@ -14,9 +15,8 @@ from pathlib import Path
 
 _MAGIC = b"XVAP"
 
-# 模型引用参数键（预留扩展接口）：旧链模型节点用 model_file，新引擎 AI
-# 节点（xccv2/model_*）用 model_path——收集/解包改写一律遍历本表，新增
-# 引用键时只改这里。
+# 模型引用参数键（预留扩展接口）：两代流程 AI 节点分别用 model_file /
+# model_path——收集/解包改写一律遍历本表，新增引用键时只改这里。
 MODEL_PARAM_KEYS = ("model_file", "model_path")
 
 
@@ -28,7 +28,7 @@ def _model_refs(node: dict) -> list[tuple[str, str]]:
 
 
 def pack_xvap(flow: dict, models: dict[str, bytes]) -> bytes:
-    """流程图 + 模型文件字节 → .xvap 明文 payload（调用方直接落盘）。"""
+    """流程图 + 模型文件字节 → .xvap payload 字节。"""
     flow_b = json.dumps(flow, ensure_ascii=False).encode("utf-8")
     parts = [_MAGIC, struct.pack("<II", len(flow_b), len(models)), flow_b]
     for name, data in models.items():
@@ -60,7 +60,7 @@ def unpack_xvap(payload: bytes) -> tuple[dict, dict[str, bytes]]:
 
 
 def save_xvap(path, flow: dict, models: dict[str, bytes]) -> None:
-    """打包落盘为 .xvap（社区版明文容器）。"""
+    """打包落盘为 .xvap（明文容器，流程与模型文件原字节保存）。"""
     payload = pack_xvap(flow, models)
     Path(path).write_bytes(payload)
 
@@ -73,8 +73,8 @@ def load_xvap(path) -> tuple[dict, dict[str, bytes]]:
 def collect_model_files(flow: dict) -> dict[str, bytes]:
     """扫描流程中模型节点引用的模型文件，读取字节（用于打包）。
 
-    同时识别旧链 model_file 与新引擎 model_path（P87：此前只认 model_file，
-    新引擎 AI 流程打包会静默丢权重）。
+    同时识别两代 AI 节点的引用键（model_file / model_path），只认单一
+    键会静默丢权重。
     """
     models: dict[str, bytes] = {}
     for node in flow.get("nodes", []):

@@ -14,6 +14,8 @@ if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再�
 
     early_splash("annotation", "标注平台")
 
+import logging
+log = logging.getLogger(__name__)
 import os
 import sys
 
@@ -30,17 +32,17 @@ def build_window(dataset=None):
     from labelme.config import get_default_config
 
     window = MainWindow(config=get_default_config())
-    try:   # 第三批补充：恢复用户上次「切换图片时保持缩放」选择（默认关）
+    try:   # 恢复用户上次「切换图片时保持缩放」选择（默认关）
         from ..ui_widgets import load_prefs
 
         window.enableKeepPrevScale(
             bool(load_prefs().get("keep_prev_scale", False)))
     except Exception:  # noqa: BLE001  偏好读取失败走默认
-        pass
+        log.warning("标注偏好读取失败，走默认设置", exc_info=True)
     from PyQt5.QtGui import QIcon
     from ..ui_style import icon_path
     window.setWindowIcon(QIcon(str(icon_path("annotation.png"))))
-    # v0.5.4 状态栏分层：标注平台徽章（labelme 为子目录，从外部挂）
+    # v0.5.4 状态栏分层：标注平台徽章（labelme 子目录，从外部挂）
     from ..status_bus import attach_platform_status
 
     attach_platform_status(window, "标注平台", "annotation")
@@ -58,7 +60,7 @@ def build_window(dataset=None):
             lambda: _open_stats_dialog(window))
         menu.addAction(act_stats)
     except Exception:  # noqa: BLE001  菜单挂载失败不影响标注主功能
-        pass
+        log.warning("标注统计菜单挂载失败", exc_info=True)
     if dataset:
         window.importDirImages(dataset, load=True)
     return window
@@ -73,7 +75,7 @@ def _open_auto_annotate(parent):
 
 
 def _open_stats_dialog(parent):
-    # 批注第二批 F8：数量统计面板（当前图/文件夹每类计数）
+    # 批注F8：数量统计面板（当前图/文件夹每类计数）
     from .stats_dialog import StatsDialog
 
     dlg = StatsDialog(parent)

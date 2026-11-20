@@ -1,11 +1,13 @@
-"""O19+O20（V0.7）：批量结果复判与回流对话框（Qt 层）。
+"""批量结果复判与回流对话框（Qt 层）。
 
 纯逻辑在 batch_review.py（状态持久化/建议/回流计划与执行），本模块只做
 表格展示与按钮接线。非模态窗口，宿主测试窗口持有单实例；offscreen 自动
-化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属真机验证项。
+化只走纯逻辑函数，模态交互（回流确认弹窗/目录选择）属实测验证项。
 """
 
 from __future__ import annotations
+import logging
+log = logging.getLogger(__name__)
 
 from datetime import datetime
 from pathlib import Path
@@ -135,7 +137,7 @@ class BatchReviewDialog(QDialog):
         try:
             save_review(self._review_path, self._review)
         except Exception:  # noqa: BLE001  落盘失败不阻塞界面状态
-            pass
+            log.warning("复盘结果落盘失败", exc_info=True)
         self._reload_table()
 
     def _reflow_selected(self):

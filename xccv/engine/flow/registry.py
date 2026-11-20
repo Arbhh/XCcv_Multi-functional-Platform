@@ -1,7 +1,7 @@
 """节点注册表：NAME → 节点类。算子经 @register_node 完成注册。
 
 注册时做完整性检查（端口类型合法、参数默认值过 schema），保证
-list_nodes() 下发给前端的节点库数据自洽（批次十九的 schema 面板数据源）。
+list_nodes() 下发给前端的节点库数据自洽（的 schema 面板数据源）。
 """
 
 from .ir import PORT_TYPES

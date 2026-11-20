@@ -1,6 +1,6 @@
-"""A1（V0.7）：PatchCore-lite 无监督异常检测（自增优化，用户指定优先）。
+"""PatchCore-lite 无监督异常检测（自增优化，优先接入）。
 
-对照 VIMO"无监督"：只用 OK/良品图建特征记忆库，输出异常热力图/检出——
+无监督口径：只用 OK/良品图建特征记忆库，输出异常热力图/检出——
 命中"缺陷样本稀缺、正常样本充足"的工业主场景。纯 torch 实现（骨干
 torchvision resnet18 离线权重，不新增 pip 依赖）。
 
@@ -142,7 +142,7 @@ class AnomalyModel(BaseModel):
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
         self.task = TaskType.ANOMALY
-        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        # §三（V0.7.3）：图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
         self.score_semantics = {
             "key": "z", "name": "图像分数", "range": [0.0, None],
             "higher": "分数越高越异常（OK 分布 z 标定）",
@@ -164,12 +164,8 @@ class AnomalyModel(BaseModel):
         if use_pretrained:
             try:
                 weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
-                return torchvision.models.resnet18(weights=weights)
-            except Exception:  # 旧 torchvision 或离线无缓存：退化为随机骨干
-                log.warning("ResNet18 预训练权重不可用（离线/旧版本），异常检测"
-                            "改用随机初始化骨干；建议预置 torchvision 权重缓存",
-                            exc_info=True)
-                return torchvision.models.resnet18(weights=None)
+            except Exception:  # 旧 torchvision 兜底
+                weights = "IMAGENET1K_V1"
         return torchvision.models.resnet18(weights=weights)
 
     # ---- 预处理 ----
@@ -264,7 +260,7 @@ class AnomalyModel(BaseModel):
                 continue
             _, sc = self._patch_dists(img)
             ok_scores.append(sc)
-            if reporter is not None:      # 阶段化进度：2=标定
+            if reporter is not None:      # §四 阶段化进度：2=标定
                 reporter.on_train_progress(2, _ci, _n_cal)
         if len(ok_scores) >= 5:
             self.score_mu = float(np.mean(ok_scores))
@@ -280,7 +276,7 @@ class AnomalyModel(BaseModel):
                 scores.append(self._patch_dists(img)[1])
                 labels.append(1)
             _v_done += 1
-            if reporter is not None:      # 阶段化进度：3=验证评估
+            if reporter is not None:      # §四 阶段化进度：3=验证评估
                 reporter.on_train_progress(3, _v_done, _n_val)
         for s in val_ok:
             img = imread_unicode(s.image_path)
@@ -296,7 +292,7 @@ class AnomalyModel(BaseModel):
         n_fp = sum(1 for s, l in zip(scores, labels)
                    if l == 0 and (s - self.score_mu) / self.score_sigma >= z25)
         n_ok_v = sum(1 for l in labels if l == 0)
-        # 权重落盘：平台自有明文容器 best.pt（社区版不加密）
+        # 权重落盘：明文 best.pt
         best_pt = Path(cfg.output_dir) / "best.pt"
         self.save_weights(best_pt)
         metrics = {
@@ -363,7 +359,7 @@ class AnomalyModel(BaseModel):
 
     # ---- 权重 ----
     def save_weights(self, path: Path) -> None:
-        """xccv-anomaly 容器（平台自有明文 .pt 权重）。"""
+        """xccv-anomaly 容器（明文 torch.save）。"""
         ckpt = {
             "format": "xccv-anomaly",
             "classes": self.classes,
@@ -377,7 +373,7 @@ class AnomalyModel(BaseModel):
         torch.save(ckpt, path)
 
     def load_weights(self, source) -> None:
-        """source：明文路径 / 解密后的 ckpt dict（registry 统一入口语义）。"""
+        """source：权重路径 / ckpt dict（registry 统一入口语义）。"""
         if isinstance(source, dict):
             ckpt = source
         else:

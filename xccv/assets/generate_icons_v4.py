@@ -6,7 +6,7 @@
 - annotation ：四角取景框 + 中央准星 + 顶点圆点（标注语义）
 - training   ：三根递升柱 + 上升折线箭头（全手绘，层次递进）
 - testing    ：放大镜 + 镜内准星十字 + 角部小 bbox
-- tools      ：齿轮环（衬底）+ 密钥主字形
+- tools      ：齿轮环（衬底）+ 扳手主字形
 - deploy     ：云上传 + 底部服务器横线 ×3 + 信号点
 - csharp_demo：终端窗口框 + 三个窗口点 + 提示符线
 
@@ -35,7 +35,7 @@ SPECS = [
     ("annotation",  "fa5s.crosshairs",        "#7fb0ff", "#3f5fe8"),
     ("training",    None,                     "#ffbc63", "#ec7412"),
     ("testing",     "fa5s.search",            "#5edcae", "#17a768"),
-    ("tools",       "fa5s.key",               "#b795ff", "#7243e2"),
+    ("tools",       "fa5s.wrench",            "#b795ff", "#7243e2"),
     ("csharp_demo", "fa5s.terminal",          "#5edcae", "#17a768"),
 ]
 
@@ -212,7 +212,7 @@ def deco_testing(img):
 
 
 def deco_tools(img):
-    """工具：衬底齿轮环 + 密钥主字形。"""
+    """工具：衬底齿轮环 + 扳手主字形。"""
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     cx, cy, r = S * 0.34, S * 0.34, S * 0.16

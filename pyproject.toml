@@ -1,14 +1,15 @@
 # 项目元数据（供 GitHub / 工具识别）。
 # 运行环境以 requirements.txt 为准（含 torch 安装源说明），本文件不参与 pip 安装。
 [project]
-name = "xccv-community"
-version = "0.7.3"
-description = "XCcv 社区版：离线工业视觉平台（标注 / 训练 / 测试 / 缺陷样本合成 / 流程图）"
+name = "xccv-multi-functional-platform"
+version = "0.8.0"
+description = "XCcv Multi-functional Platform：离线工业视觉平台（标注 / 训练 / 测试 / 部署服务 / 模型工具 / 流程图 / 缺陷样本合成）"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "XCcv Community" }]
-keywords = ["industrial-vision", "defect-detection", "yolo", "labelme", "pyqt5", "anomaly-detection", "ocr"]
+authors = [{ name = "Arbhh" }]
+keywords = ["industrial-vision", "defect-detection", "yolo", "labelme", "pyqt5",
+            "anomaly-detection", "ocr", "tensorrt", "fastapi", "inference-service"]
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Operating System :: Microsoft :: Windows",
@@ -16,5 +17,5 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/Arbhh/XCcv_community"
-Changelog = "https://github.com/Arbhh/XCcv_community/blob/master/CHANGELOG.md"
+Repository = "https://github.com/Arbhh/XCcv_Multi-functional-Platform"
+Changelog = "https://github.com/Arbhh/XCcv_Multi-functional-Platform/blob/master/CHANGELOG.md"

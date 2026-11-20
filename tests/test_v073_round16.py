@@ -1,4 +1,4 @@
-"""0.7.3 回归锁：复盘弱 GT、分数语义、免训练范式与 SubspaceAD。
+"""回归锁：遗留待办 §二/§三/§四 + SubspaceAD。
 
 - §二 复盘统一口径：batch_match ANOMALY 图像级弱 GT（OK 过检/NG 漏检/
   NG 检出=正确）、分类对错分组；review_logic 徽章/统计行随任务改字；
@@ -27,9 +27,9 @@ _WATCHER_KEEPER: list = []
 
 
 class LangWatcherCacheTest(unittest.TestCase):
-    """P258（第十六轮实机定位）：语言偏好文件是跨进程共享状态，watcher
+    """语言偏好文件是跨进程共享状态，watcher
     _fire 曾走 lang() 进程缓存——非"保存"进程缓存恒为旧值，平台窗口
-    永不重建（实机：主界面切 EN 后训练/测试平台纹丝不动）。"""
+    永不重建。"""
 
     def test_external_file_change_fires_rebuild(self):
         from PyQt5.QtWidgets import QApplication
@@ -43,7 +43,7 @@ class LangWatcherCacheTest(unittest.TestCase):
         w = install_language_watcher(lambda: fired.append(1), parent=None)
         if w is None:
             self.skipTest("环境不可监听")
-        _WATCHER_KEEPER.append(w)           # 进程结束前不析构
+        _WATCHER_KEEPER.append(w)           #1429进程结束前不析构
         try:
             # 模拟另一进程保存 EN：直写文件（不经本进程 set_lang）
             _LANG_FILE.write_text(json.dumps({"lang": "en"}), encoding="utf-8")
@@ -54,7 +54,7 @@ class LangWatcherCacheTest(unittest.TestCase):
             self.assertTrue(fired, "外部改语言文件未触发重建（P258 回归）")
             self.assertEqual(lang(), "en")  # 进程缓存已同步（重建渲染 EN 的前提）
         finally:
-            set_lang("zh")                  # P241：复位偏好与缓存
+            set_lang("zh")                  #1937复位偏好与缓存
 
 
 
@@ -93,8 +93,8 @@ class AnomalyImageLevelTest(unittest.TestCase):
                          ["b", "c"])             # OK 低分 + NG 检出
         self.assertEqual(len(groups["unjudged_list"]), 1)
         self.assertEqual(stats_line(groups, "evaluated", "anomaly").count("过检"), 1)
-        # 第十六轮实机修复锁：OK 图检出记录 matched=False（误报不进 TP）——
-        # 否则精确率/召回率把 OK 误报计成命中（实机 1.0/1.5 假象）
+        # 回归锁：OK 图检出记录 matched=False（误报不进 TP）——
+        # 否则精确率/召回率把 OK 误报计成命中
         ok_entry = next(e for e in stats["per_image"] if e["path"].endswith("a.png"))
         self.assertFalse(ok_entry["dets"][0][1])
 

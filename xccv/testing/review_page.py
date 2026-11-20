@@ -1,12 +1,12 @@
-"""项目复盘页（用户勘误 2026-11-13）：选项目 + 训练记录 → 自动对训练数据集
+"""项目复盘页：选项目 + 训练记录 → 自动对训练数据集
 批量推理一次 → 分组缩略网格 + 维度阈值复用调整。
 
-与「标准」页的分工（界面解耦勘误）：
+与「标准」页的分工（界面解耦）：
 - 本页不可自由选模型/图片，只按 项目 → 训练记录 定位权重，默认批量运行
   该项目的训练数据集；批量参数（conf/iou/检出流程）在控制行暴露可改；
 - 一次加载只推理一次，结果（match_stats）落临时缓存文件；关闭平台或
   重新选择项目/记录时清理；此后拖维度阈值只复用结果重新分组，零重推理；
-- V0.7.2 任务③：已评估/未评估解耦——「已评估」显示 正确/漏检/过检 三组
+- 已评估/未评估解耦——「已评估」显示 正确/漏检/过检 三组
   （过检 > 漏检 > 正确，见 review_logic），「未评估」显示无标注生产图按
   检出过阈与否分 OK/NG 两组；左侧阈值曲线随范围同步换口径；
 - 缩略网格样式与训练平台数据网格同源（懒加载 + LRU，双击系统看图打开）。
@@ -69,7 +69,7 @@ class ReviewThread(QThread):
             classes = list(model.classes or [])
             task = getattr(model, "task", None)
             task_v = str(getattr(task, "value", task) or "") if task is not None else ""
-            # §二：ANOMALY/分类按数据集目录当弱 GT——类别目录名
+            # §二（V0.7.3）：ANOMALY/分类按数据集目录当弱 GT——类别目录名
             # 集合由数据集扫描得出（与训练平台 scan_classification_dataset 同源）
             weak_classes = None
             if task_v in ("anomaly", "classification"):
@@ -167,7 +167,7 @@ class ReviewThread(QThread):
             self.failed.emit(f"{type(e).__name__}: {e}")
 
     def _save_cache(self, stats: dict) -> None:
-        """临时结果文件（勘误：一次加载一份；重新加载/关闭时清理）。"""
+        """临时结果文件（一次加载一份；重新加载/关闭时清理）。"""
         try:
             _CACHE_DIR.mkdir(parents=True, exist_ok=True)
             _CACHE_FILE.write_text(json.dumps({
@@ -223,7 +223,7 @@ class ProjectReviewPage(QWidget):
         self.cmb_project = QComboBox()
         self.cmb_project.currentIndexChanged.connect(self._on_project_changed)
         self.cmb_run = QComboBox()
-        # 再勘误①（2026-11-13）：复盘数据集默认=项目训练数据集，可浏览
+        # 复盘数据集默认=项目训练数据集，可浏览
         # 换成任意文件夹（如新生产图目录）；换目录即清缓存清结果
         self.fld_dataset = QLineEdit()
         self.fld_dataset.setReadOnly(True)
@@ -445,7 +445,7 @@ class ProjectReviewPage(QWidget):
         self.cmb_run.blockSignals(False)
 
     def _browse_dataset(self):
-        """再勘误①：复盘数据集可换任意文件夹（如新生产图；无需 GT）。"""
+        """复盘数据集可换任意文件夹（如新生产图；无需 GT）。"""
         path = QFileDialog.getExistingDirectory(self, "选择复盘数据集文件夹",
                                                 self.fld_dataset.text())
         if not path:
@@ -470,6 +470,7 @@ class ProjectReviewPage(QWidget):
     def _clear_results(self):
         self._results = []
         self._stats = {}
+        self._result_by_path = {}
         self._items_by_path.clear()
         for lst in self.grids.values():
             lst.clear()
@@ -576,6 +577,8 @@ class ProjectReviewPage(QWidget):
         self._stats = stats
         self._classes = classes
         self._weights = weights
+        # V0.7.4 二.2：按路径索引结果（双击渲染直接取用，零重推理）
+        self._result_by_path = {str(r.get("path")): r for r in results}
         # §二：按本次模型任务口径调整组名/行可见性（stats.task 为准）
         self._apply_task_mode(str(stats.get("task") or "detection"),
                               stats.get("score_semantics"))
@@ -653,7 +656,7 @@ class ProjectReviewPage(QWidget):
     def _start_thumbs(self):
         """懒加载缩略：只解码当前可见条目（LRU 缓存命中即跳过）。
 
-        V0.7.1：缓存命中的条目直接回贴图标（重建列表项后不会经过缩略线程，
+        缓存命中的条目直接回贴图标（重建列表项后不会经过缩略线程，
         不回贴会一直显示占位灰块）。"""
         if self._thumb_worker is not None:
             self._thumb_worker.stop()
@@ -688,11 +691,23 @@ class ProjectReviewPage(QWidget):
                 item.setIcon(icon)
 
     def _open_image(self, item):
+        """双击缩略图：有复盘结果时叠加渲染检测框（绿=过阈/红=被过滤），
+        无结果（未复盘/异常）退回系统看图。V0.7.4 bug-优化项二.2。"""
+        path = str(item.data(Qt.UserRole))
+        entry = getattr(self, "_result_by_path", {}).get(path)
+        if entry is not None:
+            from .result_view import ResultViewDialog
+
+            dlg = ResultViewDialog(
+                self, entry, self.threshold_panel.enabled_dims(),
+                task=str(self._stats.get("task") or "detection"))
+            dlg.show()
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(item.data(Qt.UserRole)))
 
     # ---------- 收尾 ----------
     def shutdown(self):
-        """窗口关闭：停线程 + 清理临时缓存（勘误要求）。"""
+        """窗口关闭：停线程 + 清理临时缓存。"""
         if self._thumb_worker is not None:
             self._thumb_worker.stop()
             self._thumb_worker = None

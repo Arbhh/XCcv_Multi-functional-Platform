@@ -1,4 +1,4 @@
-"""V0.7 O2 扩展（用户追加）：多维度阈值——算子/统计/生成器/面板回归锁。"""
+"""V0.7 O2 扩展（追加）：多维度阈值——算子/统计/生成器/面板回归锁。"""
 
 import json
 import tempfile
@@ -166,7 +166,7 @@ class ThresholdGraphTest(unittest.TestCase):
 
         load_all()   # 注册全部算子（含新增 3 个）
         g = build_threshold_graph(
-            "C:/m/best.xva", "斑点检测",
+            "C:/m/best.pt", "斑点检测",
             {"conf": 0.35, "area": 500, "short": 12, "fg_ratio": 0.1})
         types = [n["type"] for n in g["nodes"]]
         self.assertEqual(types, ["xccv2/image_loader", "xccv2/model_detection",
@@ -174,7 +174,7 @@ class ThresholdGraphTest(unittest.TestCase):
                                  "xccv2/filter_foreground", "xccv2/result_output"])
         model = g["nodes"][1]["properties"]
         self.assertEqual(model["conf"], 0.35)
-        self.assertEqual(model["model_path"], "C:/m/best.xva")
+        self.assertEqual(model["model_path"], "C:/m/best.pt")
         # 链路双端一致 + 静态校验全过（结构/类型/环）
         for n in g["nodes"]:
             for inp in n["inputs"]:
@@ -193,7 +193,7 @@ class ThresholdGraphTest(unittest.TestCase):
         Executor({"nodes": bare["nodes"], "links": g["links"]}).validate()
 
     def test_long_merges_into_side_node(self):
-        g = build_threshold_graph("w.xva", "m", {"short": 8, "long": 200})
+        g = build_threshold_graph("w.pt", "m", {"short": 8, "long": 200})
         types = [n["type"] for n in g["nodes"]]
         self.assertEqual(types.count("xccv2/filter_bbox_side"), 1)
         props = next(n["properties"] for n in g["nodes"]
@@ -206,7 +206,7 @@ class ThresholdGraphTest(unittest.TestCase):
         self.assertTrue(name.split("_", 2)[2].endswith("模型.json"))
         with tempfile.TemporaryDirectory() as td:
             path = save_threshold_flow(td, "斑点检测",
-                                       {"conf": 0.4, "area": 300}, "w.xva")
+                                       {"conf": 0.4, "area": 300}, "w.pt")
             self.assertEqual(path.parent.name, "flow")
             self.assertIn("斑点检测", path.name)
             g = json.loads(path.read_text(encoding="utf-8"))
@@ -243,7 +243,7 @@ class PanelSmokeTest(unittest.TestCase):
         p = ThresholdPanel()
         p.set_stats(self._stats(), 0.25)
         # 维度下拉：score + 有数据的几何/灰度维度（long 无数据不出现；
-        # V0.7.1 前景占比按用户指示从面板移除，引擎 dims 表仍保留该列）
+        # V0.7.1 前景占比按定稿从面板移除，引擎 dims 表仍保留该列）
         keys = [p.cmb_dim.itemData(i) for i in range(p.cmb_dim.count())]
         self.assertEqual(keys, ["score", "area", "short", "gray_diff"])
         self.assertNotIn("fg_ratio", keys)

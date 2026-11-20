@@ -5,8 +5,7 @@ rem   1) XCCV_PY environment variable
 rem   2) python_path.txt in this folder (one line: full path to python.exe)
 rem   3) python on PATH
 rem   4) py launcher (-3)
-rem   5) C:\XCcv\venv (the product environment, if present)
-rem   6) .\venv and .\.venv in this folder (optional, last resort)
+rem   5) .\venv and .\.venv in this folder (optional, last resort)
 rem Each candidate is accepted only if it can import PyQt5.QtWebEngineWidgets.
 setlocal EnableExtensions
 set "ROOT=%~dp0"
@@ -21,7 +20,6 @@ call :try "%XCCV_PY%" ""
 call :try "%PYCFG%" ""
 call :try "python" ""
 call :try "py" "-3"
-call :try "C:\XCcv\venv\Scripts\python.exe" ""
 call :try "%ROOT%venv\Scripts\python.exe" ""
 call :try "%ROOT%.venv\Scripts\python.exe" ""
 if not defined PYEXE goto nogui
@@ -44,14 +42,14 @@ echo.
 echo [XCcv] No usable Python found (PyQtWebEngine is required).
 echo         Candidates tried, in order:
 echo           XCCV_PY, python_path.txt, python on PATH, py -3,
-echo           C:\XCcv\venv, .\venv, .\.venv
+echo           .\venv, .\.venv
 echo.
 echo         How to fix (either one):
 echo           1) Tell XCcv which interpreter to use - create python_path.txt
 echo              in this folder with one line, e.g.:
-echo                C:\XCcv\venv\Scripts\python.exe
+echo                C:\Python311\python.exe
 echo              or set an environment variable before launching:
-echo                set XCCV_PY=C:\XCcv\venv\Scripts\python.exe
+echo                set XCCV_PY=C:\Python311\python.exe
 echo           2) Install the dependencies into your own Python 3.11:
 echo                pip install -r requirements.txt
 echo.

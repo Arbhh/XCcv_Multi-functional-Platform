@@ -1,4 +1,4 @@
-"""0.7.2 回归锁（测试平台四项 + 平台总体两项）。
+"""V0.7.2 回归锁。
 
 测试平台：
 - ① x 轴刻度挤字根因（bottom.setWidth 钳死轴宽）——渲染级回归；
@@ -6,9 +6,8 @@
 - ③ 已评估/未评估解耦：范围切换按钮 + OK/NG 分组 + 面板曲线口径联动；
 - ④ A/B 比对缓存复用 + 总体优劣比例条；
 平台总体：
-- ① 界面双语（中文/English 一键切换）：tr 替换层、localize_widget_tree
-  树遍历、语言持久化、复判与 A/B 对话框 zh 模式构造即崩回归锁；
-- ② 文案精简源码锁（流程图页啰嗦说明已删）。
+- ① i18n：tr 回退/查表、localize_widget_tree 树遍历替换、语言持久化；
+- ② 文案精简源码锁（部署页两句啰嗦说明已删）。
 """
 
 import json
@@ -21,10 +20,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 def _review_stats():
     """带 per_image 逐检出的合成 match_stats（与 test_v071_fixes 同口径）。"""
-    try:
-        from tests.test_v071_fixes import _panel_stats
-    except ImportError:   # discover 布局：tests 不是包，按顶层模块导入
-        from test_v071_fixes import _panel_stats
+    from tests.test_v071_fixes import _panel_stats
 
     return _panel_stats()
 
@@ -100,7 +96,7 @@ class SweepTest(unittest.TestCase):
         ]
         stats = collect_match_stats(results, iou_thr=0.5)
         self.assertFalse(stats["gt_available"])
-        # 未评估图检出照记（OK/NG 扫描曲线与分组的数据源）
+        # 未评估图检出照记（OK/NG 曲线与分组的数据源）
         by = {Path(e["path"]).name: e for e in stats["per_image"]}
         self.assertEqual(len(by["p0.png"]["dets"]), 1)
         sw = sweep_unjudged(stats, "score", [0.0, 0.5, 0.9])
@@ -194,7 +190,7 @@ class CompareCacheTest(unittest.TestCase):
                                    None, [], model_a_name="A.pt",
                                    cache=cache)
             cache[d._cache_key("B.pt")] = {"records": records,
-                                           "payload": payload}
+                                            "payload": payload}
             self.assertTrue(d._try_restore("B.pt"))
             self.assertEqual(d.table.rowCount(), 1)
             self.assertIn("已复用缓存", d.lbl_summary.text())
@@ -296,7 +292,7 @@ class I18nTest(unittest.TestCase):
             i18n.set_lang("zh")
 
     def test_lang_switch_in_settings(self):
-        """语言切换入口在主界面设置对话框（不在各窗口头部）。"""
+        """语言切换入口在主界面设置对话框。"""
         from xccv.i18n import restart_current_platform  # noqa: F401（可导入）
 
         src = Path("xccv/app.py").read_text(encoding="utf-8")
@@ -313,7 +309,7 @@ class I18nTest(unittest.TestCase):
                              encoding="utf-8"))
 
     def test_axis_stable_across_scope_switch(self):
-        """已评估/未评估切换不重排坐标轴（轴只随数据集变化），
+        """实测修复修复：已评估/未评估切换不重排坐标轴（轴只随数据集变化），
         阈值线与输入框不再被切出视图。"""
         from xccv.testing.threshold_panel import ThresholdPanel
 
@@ -325,7 +321,7 @@ class I18nTest(unittest.TestCase):
         p = ThresholdPanel(compact=True)
         p.set_stats(stats, 0.25)
         p.cmb_dim.setCurrentIndex(p.cmb_dim.findData("area"))
-        p._line.setValue(5000.0)   # 轴内取值（>x_max 会被钳位逻辑拉回）
+        p._line.setValue(5000.0)   # 轴内取值（>x_max 会被 V0.7.1 钳位逻辑拉回）
         self.app.processEvents()
         x_before = p._x_max
         p.set_scope("unjudged")
@@ -356,8 +352,8 @@ class I18nTest(unittest.TestCase):
         self.i18n.set_lang("en")
         w = None
         try:
-            # TestingWindow 在 __init__ 末尾自 localize——这里直接验收
-            # 常驻文案的翻译结果（不再数替换次数）
+            # TestingWindow 在 __init__ 末尾自 localize——
+            # 这里直接验收常驻文案的翻译结果（不再数替换次数）
             w = TestingWindow()
             self.assertEqual(w.windowTitle(), "XCcv Testing Platform")
             self.assertEqual(w.btn_mode_std.text(), "Standard")
@@ -379,17 +375,30 @@ class I18nTest(unittest.TestCase):
 
 
 class TextTrimLockTest(unittest.TestCase):
-    """平台总体②：啰嗦文案精简源码锁（详细说明归使用文档）。"""
+    """平台总体②：啰嗦文案精简源码锁（详细说明归操作手册）。"""
+
+    def test_deploy_page_sub_and_hint_trimmed(self):
+        src = Path("xccv/deploy_platform.py").read_text(encoding="utf-8")
+        self.assertNotIn("三个独立模块", src)
+        self.assertNotIn("各模块窗口独立运行", src)
+        self.assertIn("推理服务 / 模型加载 / C# 测试，均以独立进程打开", src)
+        self.assertIn("推理服务窗口关闭只最小化到托盘", src)
 
     def test_flow_hints_trimmed(self):
         src = Path("xccv/flow_platform.py").read_text(encoding="utf-8")
         self.assertNotIn("流程以 .json 保存于磁盘", src)
-        self.assertNotIn("便于分发与复用", src)
+        # 旧版独立编辑器弃用归档，提示语修剪断言改挂 flow_shared
+        self.assertFalse(
+            Path("xccv/modeltools/flowgraph_main_window.py").exists(),
+            "旧版流程图编辑器应已归档（_archive/）")
+        src2 = Path("xccv/modeltools/flow_shared.py").read_text(
+            encoding="utf-8")
+        self.assertNotIn("流程以 .json 保存于磁盘", src2)
 
 
 class TrImportLockTest(unittest.TestCase):
-    """复判与回流 / A/B 比对对话框在 zh 模式构造即崩回归锁
-    （动态文案用 tr 而模块漏导入 → NameError）。
+    """P248 回归锁：复判与回流 / A/B 比对对话框在 zh 模式构造即崩
+    （tr 漏导入 NameError 导致的崩溃）。
     构造即触发 _reload_table→_refresh_stats 与 lbl_a 文案两条崩溃路径。"""
 
     @classmethod
@@ -408,7 +417,7 @@ class TrImportLockTest(unittest.TestCase):
         try:
             set_lang("zh")
             stats = _review_stats()
-            review_path = Path(tempfile.gettempdir()) / "review_zh_lock.json"
+            review_path = Path(tempfile.gettempdir()) / "p248_review.json"
             dlg = BatchReviewDialog(
                 stats.get("per_image") or [], stats, review_path,
                 dataset_dir=None, parent=None)
@@ -437,40 +446,22 @@ class TrImportLockTest(unittest.TestCase):
             set_lang(prev)
 
     def test_no_tr_use_without_import(self):
-        """静态兜底：全库 AST 扫描"调用 tr 却未导入 tr"（converters.py 的
-        局部变量 tr 为已知误报，跳过）。"""
-        import ast
-        import io
+        """静态兜底：runs/audit_tr_import.py 全库扫描 tr 漏导入（仅引擎
+        converters 的局部变量 tr 为已知误报）。"""
+        import subprocess
+        import sys
 
-        offenders = []
-        for py in sorted(Path("xccv").rglob("*.py")):
-            if py.as_posix() == "xccv/engine/dataset/converters.py":
-                continue   # 局部变量 tr（训练/验证拆包），已知误报
-            with io.open(py, "r", encoding="utf-8", errors="replace") as f:
-                src = f.read()
-            try:
-                tree = ast.parse(src)
-            except SyntaxError:
-                continue
-            imported = False
-            used = False
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ImportFrom):
-                    for a in node.names:
-                        if a.name == "tr" or a.asname == "tr":
-                            imported = True
-                elif isinstance(node, ast.Import):
-                    for a in node.names:
-                        if a.name == "tr" or a.asname == "tr":
-                            imported = True
-                elif (isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Name)
-                        and node.func.id == "tr"):
-                    used = True
-            if used and not imported:
-                offenders.append(py.as_posix())
+        script = Path("runs/audit_tr_import.py")
+        if not script.is_file():
+            self.skipTest("audit script not present")
+        r = subprocess.run([sys.executable, str(script)], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+        text = Path("runs/tr_import_audit.txt").read_text(encoding="utf-8")
+        offenders = [ln for ln in text.splitlines() if ln.strip()
+                     and "converters.py" not in ln]
+        self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(offenders, [],
-                         "tr 漏导入文件：%s" % "; ".join(offenders[:5]))
+                         "tr 漏导入雷点：%s" % "; ".join(offenders[:5]))
 
 
 if __name__ == "__main__":

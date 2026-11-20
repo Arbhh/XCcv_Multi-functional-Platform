@@ -1,4 +1,4 @@
-"""英文语言表：键 = 源码中文文案（精确匹配）。
+"""英文语言表（V0.7.2 平台总体①）：键 = 源码中文文案（精确匹配）。
 
 范围口径（v1）：常驻界面文案（窗口标题/页面标题/组标题/按钮/标签/复选/
 页签/下拉项/表头/占位符）+ 高频动态消息前缀；tooltip、一次性弹窗正文、
@@ -116,7 +116,7 @@ TABLE = {
     "调维度阈值不会重新推理": "threshold changes never re-run inference",
     "该项目暂无训练记录；请先在训练平台完成训练":
         "No training run in this project; train it first",
-    "该训练记录没有 best.xva 权重": "This run has no best.xva weights",
+    "该训练记录没有 best.pt 权重": "This run has no best.pt weights",
     "数据集目录不存在：": "Dataset folder not found: ",
     "项目读取失败：": "Failed to read project: ",
     "复盘失败：": "Review failed: ",
@@ -237,8 +237,8 @@ TABLE = {
     "负样本训练（OK 图降误检，检测/分割）":
         "Negative-sample training (cut FPs; det/seg)",
     "确定性训练（可复现，默认关）": "Deterministic training (off by default)",
-    "保存每轮权重（轮次权重文件夹，加密保存、新训练覆盖）":
-        "Save per-epoch weights (encrypted, overwritten next run)",
+    "保存每轮权重（轮次权重文件夹，新训练覆盖）":
+        "Save per-epoch weights (overwritten next run)",
     "迁移学习（从已有模型权重开始训练）":
         "Transfer learning (start from existing weights)",
     "迁移学习起始权重文件路径": "Transfer start-weights path",
@@ -258,7 +258,7 @@ TABLE = {
     "开发者选项（体检 / 预检阈值）": "Developer options (health/preflight)",
     "开始训练前执行预检（推荐开启；仅有警告时才弹窗）":
         "Preflight before training (recommended)",
-    "预检仅发现提示级问题时也弹窗提示（用户回执 A5）":
+    "预检仅发现提示级问题时也弹窗提示":
         "Also warn on hint-level preflight findings",
     "所有检查仅分「提示 / 警告」两档，不会阻止训练。":
         "Checks are hint/warning only and never block training.",
@@ -288,8 +288,8 @@ TABLE = {
     "服务进程启动失败，已退出（退出码": "Service process exited (code",
     "原因（service.log 尾部）：": "Reason (service.log tail):",
     "● 推理服务运行中：": "● Service running: ",
-    "（加载/推理在服务进程内完成，加密权重不出进程）":
-        " (load/inference inside the service process; encrypted weights never leave it)",
+    "（加载/推理在服务进程内完成，权重文件不出进程）":
+        " (load/inference inside the service process; weight files never leave it)",
     "✔ 一致：本地与服务均": "✔ Consistent: both local & service found",
     "个检出（IoU≥0.98、同类别、分数差<0.02）——加载/环境无异常":
         "detections (IoU≥0.98, same class, score Δ<0.02) — load/env OK",
@@ -331,8 +331,8 @@ TABLE = {
     "XCcv 推理服务": "XCcv Inference Service",
     "XCcv 模型加载": "XCcv Model Loading",
     "XCcv C# 测试": "XCcv C# Test",
-    "模型（.xva/.xcs/.pt）或流程包（.xvap/.json）":
-        "Model (.xva/.xcs/.pt) or flow package (.xvap/.json)",
+    "模型（.pt/.engine）或流程包（.xvap/.json）":
+        "Model (.pt/.engine) or flow package (.xvap/.json)",
     "加载新模型 / 流程包（模型加载输入）": "Load model / flow package",
     "加载到服务": "Load to Service",
     "卸载": "Unload",
@@ -380,15 +380,15 @@ TABLE = {
         "Pick an image to preview; run the flow and check Visualization",
     "模型目录（流程 JSON / .xvap 所在位置）":
         "Model dir (flow JSON / .xvap location)",
-    "「打包流程」生成加密 .xvap，可在测试平台直接加载。":
-        "Package Flow writes an encrypted .xvap loadable in the Testing Platform.",
+    "「打包流程」生成 .xvap 流程包，可在测试平台直接加载。":
+        "Package Flow writes a .xvap package loadable in the Testing Platform.",
     "图片数量: 0/0": "Images: 0/0",
     # ---- 模型工具 ----
     "XCcv 模型工具": "XCcv Model Tools",
     "TensorRT 引擎导出": "TensorRT Engine Export",
     "▶ 导出 TensorRT 引擎": "▶ Export TensorRT Engine",
-    "选择要加速的权重文件（加密 .xva 自动解密）":
-        "Weights to accelerate (.xva auto-decrypted)",
+    "选择要加速的权重文件（.pt）":
+        "Weights to accelerate (.pt)",
     "FP16 半精度（推荐：体积小、速度快）": "FP16 (recommended: smaller, faster)",
     "FP32 全精度（精度优先：体积大）": "FP32 (accuracy first: larger)",
     "剪枝模式": "Prune Mode",
@@ -403,17 +403,14 @@ TABLE = {
     "▶ 生成剪枝模型": "▶ Generate Pruned Model",
     "▶ 执行": "▶ Run",
     "■ 紧急终止剪枝": "■ Abort Pruning",
-    "加密 / 解密（.xva 私有格式）": "Encrypt / Decrypt (.xva)",
-    "选择要处理的权重文件（.xva / .xcs / .pt 等）":
-        "Weights to process (.xva / .xcs / .pt)",
     "即将上线": "Coming soon",
     "640 或 高x宽（如 586x1920）": "640 or HxW (e.g. 586x1920)",
     "流程图编辑器": "Flow Editor",
     "流程运行结果": "Flow Run Result",
     "当前流程：（未打开）": "Current flow: (none)",
     "无法打包：请先解决以下问题": "Cannot package: fix the issues below",
-    "「打包流程图」生成加密 .xvap，可在测试平台直接加载运行。":
-        "Package writes an encrypted .xvap loadable in the Testing Platform.",
+    "「打包流程图」生成 .xvap 流程包，可在测试平台直接加载运行。":
+        "Package writes a .xvap package loadable in the Testing Platform.",
     # ---- 算子实验室（主界面内嵌） ----
     "单算子试跑": "Single Op Test",
     "▶ 试跑所选算子": "▶ Test Selected Op",
@@ -550,8 +547,6 @@ TABLE = {
     "读取失败": "Read failed",
     "运行流程图": "Run Flow",
     # 模型工具
-    "▶ 加密导出": "▶ Encrypt Export",
-    "▶ 解密还原": "▶ Decrypt Restore",
     "⚠️ 导出失败（详见平台日志 logs/tools.log）":
         "⚠️ Export failed (see logs/tools.log)",
     "任务失败": "Task failed",
@@ -636,8 +631,8 @@ TABLE = {
         "Flow batches do not support A/B compare (AI models only)",
     "复判": "Re-judge",
     "应用阈值": "Apply Threshold",
-    "当前模型未关联权重文件（无法定位模型存放文件夹）；请通过「加载模型」选择 .xva/.xcs 权重后再生成":
-        "Current model has no weights file; load .xva/.xcs weights first",
+    "当前模型未关联权重文件（无法定位模型存放文件夹）；请通过「加载模型」选择权重文件后再生成":
+        "Current model has no weights file; load weights via Load Model first",
     "当前模型未关联训练项目（无法定位检出流程文件）；请通过「加载该项目最新模型」或权重所在项目再应用":
         "Current model has no linked project; load its latest model first",
     "批量 GT 匹配统计失败": "Batch GT match stats failed",
@@ -740,7 +735,7 @@ TABLE = {
         "Det/seg: warn when a class has fewer instances",
     "疑似重复图判定：dHash 汉明距离 ≤ 该值视为高度相似":
         "Duplicate: dHash hamming ≤ this counts as highly similar",
-    "类别不均衡判定：最小类别的实例数占整体比例低于该值时警告（默认 5%，用户回执 Q3 保守化口径）":
+    "类别不均衡判定：最小类别的实例数占整体比例低于该值时警告（默认 5%）":
         "Class imbalance: warn when the smallest class share is below this "
         "(default 5%)",
     "重复图检测最多处理的图片数（大集合跳过该项保证体检速度）":
@@ -947,8 +942,8 @@ TABLE = {
         "Rectangles / polygons with auto-saved labelme json; one-click class archiving",
     "项目管理、数据集可视化、增强策略、参数配置与实时训练曲线":
         "Project management, dataset visuals, augmentation policies, params & live curves",
-    "剪枝、权重加解密、TensorRT 加速等模型后处理工具":
-        "Post-training tools: pruning, weight encrypt/decrypt, TensorRT acceleration",
+    "剪枝、TensorRT 加速等模型后处理工具":
+        "Post-training tools: pruning, TensorRT acceleration",
     "加载模型推理，置信度 / IOU 实时调节，bbox 与掩码可视化":
         "Load models and infer; live conf/IOU tuning, bbox & mask visualization",
     "设置": "Settings",
@@ -1131,7 +1126,7 @@ TABLE = {
         "Validate every N epochs (YOLO validates every epoch)",
     "连续 N 轮验证无提升则提前停止训练；0 = 关闭早停":
         "Early stop after N validations without gain; 0 = off",
-    "每轮加密保存（": "Per-epoch encrypted save (",
+    "每轮保存（": "Per-epoch save (",
     "每轮重复学习": "Repeat per epoch",
     "训练中…": "Training…",
     "已取消训练": "Training cancelled",
@@ -1180,7 +1175,6 @@ TABLE = {
     "重复图检测上限（张）": "Duplicate scan cap (imgs)",
     # 模型工具
     "模型剪枝": "Model Pruning",
-    "权重加密 / 解密": "Weight Encrypt / Decrypt",
     "模型加速（TensorRT）": "Model Acceleration (TensorRT)",
     "缺陷生成": "Defect Generation",
     "点击打开窗口 →": "Click to open →",
@@ -1188,18 +1182,13 @@ TABLE = {
     "结构化通道剪枝：压缩参数量、提升推理速度；剪后副本可在测试平台与原模型直接对比":
         "Structured channel pruning: fewer params, faster inference; the "
         "pruned copy compares head-to-head in Testing",
-    "平台输出的模型默认已是加密 .xva；支持把外部明文权重加密，或解密还原出明文副本":
-        "Platform models ship as encrypted .xva; encrypt external plain "
-        "weights or decrypt to a plain copy",
-    "导出 TensorRT 引擎，产线推理提速数倍；支持分类 / YOLO / Mask R-CNN（特征段加速），单文件加密 .xcs":
+    "导出 TensorRT 引擎，产线推理提速数倍；支持分类 / YOLO / Mask R-CNN（特征段加速），单文件 .engine":
         "Export TensorRT engines for multi-fold production speedups; "
-        "cls/YOLO/Mask R-CNN (feature-segment), single encrypted .xcs",
+        "cls/YOLO/Mask R-CNN (feature-segment), single .engine",
     "DefectAugmentStudio：在背景板上合成缺陷样本（抠图/融合/批量），扩充训练集":
         "DefectAugmentStudio: composites defect samples onto boards "
         "(cutout/blend/batch) to expand the training set",
     "源权重": "Source Weights",
-    "加密导出": "Encrypt Export",
-    "解密还原": "Decrypt Restore",
     "执行剪枝": "Prune",
     "执行操作": "Run",
     "保存结果": "Save Result",
@@ -1220,18 +1209,9 @@ TABLE = {
     "剪枝失败，详见结果区": "Pruning failed; see the result panel",
     "已按源权重自动填入输入尺寸": "Input size auto-filled from source weights",
     "（已剪枝）": "(pruned)",
-    "（明文副本）": "(plain copy)",
-    "best.pt（原始模型·明文）": "best.pt (original · plain)",
-    "best.xva（原始模型·加密）": "best.xva (original · encrypted)",
-    "best.xcs（TensorRT 引擎·加密）": "best.xcs (TensorRT engine · encrypted)",
-    "best_pruned.pt（剪枝模型·明文）": "best_pruned.pt (pruned · plain)",
-    "best_pruned.xva（剪枝模型·加密）":
-        "best_pruned.xva (pruned · encrypted)",
-    "best_pruned.xcs（剪枝模型引擎·加密）":
-        "best_pruned.xcs (pruned engine · encrypted)",
     "✅ 剪枝完成：": "✅ Pruned: ",
     "✅ 剪枝模型已生成：": "✅ Pruned model: ",
-    "✅ 加密引擎导出完成：": "✅ Encrypted engine: ",
+    "✅ 引擎导出完成：": "✅ Engine export finished: ",
     "❌ 剪枝失败：": "❌ Pruning failed: ",
     "🛑 剪枝已终止：": "🛑 Pruning aborted: ",
     "完成：": "Done: ",
@@ -1239,9 +1219,7 @@ TABLE = {
     "剪枝中…（ratio=": "Pruning… (ratio=",
     # 部署平台模型加载 / 推理服务
     "选择模型 / 流程包": "Choose model / flow package",
-    "模型权重 (*.xva *.xcs *.pt *.engine *.onnx);;所有文件 (*)":
-        "Model weights (*.xva *.xcs *.pt *.engine *.onnx);;All files (*)",
-    "权重 (*.xva *.xcs *.pt)": "Weights (*.xva *.xcs *.pt)",
+    "权重 (*.pt *.engine)": "Weights (*.pt *.engine)",
     "已加载": "Loaded ",
     "服务上暂无已加载模型/流程": "No models/flows loaded on the service",
     "服务返回": "Service returned",
@@ -1251,8 +1229,8 @@ TABLE = {
     "XCcv 部署平台": "XCcv Deployment",
     "启动/停止推理服务，GPU 与接口一览；桌面灵动岛常驻屏幕顶部":
         "Start/stop the inference service; GPU & API overview; desktop Island",
-    "把 .xva/.xcs/.pt 模型或 .xvap/.json 流程包加载为常驻 API，多 API 并行":
-        "Load .xva/.xcs/.pt models or .xvap/.json packages as resident APIs",
+    "把 .pt/.engine 模型或 .xvap/.json 流程包加载为常驻 API，多 API 并行":
+        "Load .pt/.engine models or .xvap/.json packages as resident APIs",
     "运行 C# Demo（WinForms）：加载模型→推理→直接查看接口返回的 JSON 原文":
         "Run the C# demo (WinForms): load → infer → view raw JSON",
     # 流程图平台（Qt 侧）
@@ -1352,7 +1330,7 @@ TABLE = {
     "逐图推理": "Per-image Inference",
     "逐图执行算子": "Per-image Op",
     "结果合并": "Merge Results",
-    "外部算子（HALCON/VM）": "External (HALCON/VM)",
+    "外部算子（插件后端）": "External Operator (Plugin Backends)",
     "拟合矩形": "Fit Rectangle",
     "线对定位": "Line-pair Locate",
     "数值判定": "Value Judge",
@@ -1408,7 +1386,7 @@ TABLE = {
     "是": "Yes",
     "否": "No",
     "当前": "current",
-    "每轮加密保存": "Per-epoch save",
+    "每轮保存": "Per-epoch save",
     "训练集比例": "Train ratio",
     "验证集比例": "Val ratio",
     "确定性训练": "Deterministic training",
@@ -1473,9 +1451,9 @@ TABLE = {
     "打包取消：流程校验未通过（见弹窗清单）": "Packaging cancelled: flow validation failed (see dialog list)",
     "（纯算子流程，不含模型）": " (pure-op flow, no model)",
     "选择文件": "Select file",
-    "图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.xva *.xcs *.pt *.json *.xvap);;所有文件 (*)": "Image/model/flow (*.jpg *.jpeg *.png *.bmp *.xva *.xcs *.pt *.json *.xvap);;All files (*)",
+    "图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.engine *.json *.xvap);;所有文件 (*)": "Image/model/flow (*.jpg *.jpeg *.png *.bmp *.pt *.engine *.json *.xvap);;All files (*)",
     "选择模型文件": "Select model file",
-    "模型权重 (*.xva *.xcs *.pt);;XCcv 加密模型 (*.xva *.xcs);;所有文件 (*)": "Model weights (*.xva *.xcs *.pt);;XCcv encrypted (*.xva *.xcs);;All files (*)",
+    "模型权重 (*.pt *.engine);;所有文件 (*)": "Model weights (*.pt *.engine);;All files (*)",
     "选择用于框选区域的图片": "Select image for region drawing",
     "图片 (*.jpg *.jpeg *.png *.bmp)": "Images (*.jpg *.jpeg *.png *.bmp)",
     "读取图片失败: ": "Failed to read image: ",
@@ -1499,8 +1477,8 @@ TABLE = {
     "图片 (*.jpg *.jpeg *.png *.bmp *.webp)": "Images (*.jpg *.jpeg *.png *.bmp *.webp)",
     "流程过滤后": "after flow",
     "参数：": "Parameters:",
-    "模型权重/流程包 (*.pt *.xva *.xcs *.xvap *.json);;流程包 (*.xvap);;XCcv 加密模型 (*.xva *.xcs);;所有文件 (*)": "Weights/flows (*.pt *.xva *.xcs *.xvap *.json);;Flows (*.xvap);;XCcv encrypted (*.xva *.xcs);;All files (*)",
-    "的模型储存目录下没有可加载的模型权重（best.xva），": "'s model dir has no loadable weights (best.xva); ",
+    "模型权重/流程包 (*.pt *.engine *.xvap *.json);;流程包 (*.xvap);;所有文件 (*)": "Weights/flows (*.pt *.engine *.xvap *.json);;Flows (*.xvap);;All files (*)",
+    "的模型储存目录下没有可加载的模型权重（best.pt），": "'s model dir has no loadable weights (best.pt); ",
     "请先在训练平台完成训练。": "finish a training run in the training platform first.",
     "选择图片": "Select image",
     "选择图片文件夹（含子文件夹）": "Select image folder (with subfolders)",
@@ -1541,17 +1519,15 @@ TABLE = {
     "（终止是安全的：源权重不受影响，半截输出不会落盘）": "(Safe to kill: source weights untouched, partial output not written)",
     "数据集路径不存在：": "Dataset path does not exist: ",
     "请在训练平台的项目信息中检查。": "Check it in the training platform's project info.",
-    "明文副本已生成，可被任意第三方软件读取，请妥善保管。": "Plaintext copy created — readable by any third-party software; keep it safe.",
-    "该文件只能被 XCcv 平台加载（测试平台 / 模型工具自动识别解密）。": "This file loads only inside XCcv (Testing/Model Tools decrypt automatically).",
-    "加密引擎导出完成": "Encrypted engine export finished",
+    "引擎导出完成": "Engine export finished",
     "耗时": "took",
-    "引擎与构建环境（GPU/TensorRT 版本）绑定，请在同款工控机部署使用；": "The engine is bound to the build environment (GPU/TensorRT); deploy on the same machine spec. ",
-    "测试平台可直接加载 .xcs 预测。": "Testing platform loads .xcs for prediction directly.",
+    "引擎与构建环境（GPU/TensorRT 版本）绑定，请在同款部署环境使用；": "The engine is bound to the build environment (GPU/TensorRT); deploy on the same machine spec. ",
+    "测试平台可直接加载 .engine 预测。": "Testing platform loads .engine for prediction directly.",
     "导出自定义算子": "Export Custom Op",
     "XCcv 自定义算子 (*.xcvop)": "XCcv custom op (*.xcvop)",
     "已导出：": "Exported: ",
     "选择模型权重": "Select model weights",
-    "模型 (*.xva *.pt *.xcs)": "Models (*.xva *.pt *.xcs)",
+    "模型 (*.pt *.engine)": "Models (*.pt *.engine)",
     "请选择有效的模型权重文件": "Pick a valid model weights file",
     "请选择图片文件夹": "Pick an image folder",
     "AI 批量预标注": "AI Batch Pre-annotation",
@@ -1615,15 +1591,15 @@ TABLE = {
     "冻结预训练骨干，只训练分类头/检测头与工业模块（CBAM/ECA/DCN 仍参与训练）；\n每轮迭代提速约 40~60%，小数据集精度通常持平；\n领域差距极大（红外/医学等）时精度可能受限，可关闭回退；\n未使用预训练权重时该选项自动忽略": "Freezes the pretrained backbone; only heads and industrial modules (CBAM/ECA/DCN) train;\n~40-60% faster per epoch, accuracy usually holds on small datasets;\nwith extreme domain gaps (infrared/medical) accuracy may suffer — turn off to fall back;\nignored when no pretrained weights are used",
     "掩码头 4 层 256 通道 → 2 层 128 通道：掩码分支更快、更省显存；\n工业缺陷不需要像素级细腻边缘时几乎无精度损失，可随时关闭回退": "Mask head 4-layer 256ch → 2-layer 128ch: faster mask branch, less VRAM;\nnear-zero accuracy loss when pixel-fine edges are not needed; toggle off anytime",
     "锚框金字塔底径=入网短边/80（默认 32 针对大目标设计，\n工业小缺陷与最小锚 IoU 过低会导致 RPN 正样本稀少）；\n小目标数据集建议开启；切图训练时按 tile 边长取底径": "Anchor pyramid base = net short side / 80 (default 32 targets large objects;\ntiny defects score too low IoU vs the smallest anchor and starve RPN positives);\nrecommended for small-object datasets; with tiling, base follows the tile edge",
-    "T9-5 slim 头：FPN 64 通道+两层 256 FC+4×64 掩码头（约 12.5M 参数），\n可加载 mmdet 预训练权重；\n显存占用约为标准头一半，小数据集收敛更快。仅在使用 maskrcnn18 时生效": "T9-5 slim head: FPN 64ch + two 256 FC + 4×64 mask head (~12.5M params),\nloads mmdet pretrained weights;\nabout half the VRAM of the standard head, converges faster on small data. maskrcnn18 only",
+    "slim 头：FPN 64 通道+两层 256 FC+4×64 掩码头（约 12.5M 参数），\n可加载 mmdet 预训练权重；\n显存占用约为标准头一半，小数据集收敛更快。仅在使用 maskrcnn18 时生效": "slim head: FPN 64ch + two 256 FC + 4×64 mask head (~12.5M params),\nloads mmdet pretrained weights;\nabout half the VRAM of the standard head, converges faster on small data. maskrcnn18 only",
     "在所选 YOLO 模型（n/s，检测/分割）上增加 stride 4 的第四检测层，\n面向短边 ≤8px 的微小缺陷；骨干/颈部/原检测分支继承官方预训练，\n仅新增的 P2 分支从头学习，建议适当增加训练轮次；\n显存约为普通模型的 2 倍（1920 输入 n-seg 批量 4 约 13 GiB），\n显存不足请减小批量；训练产物自带结构，测试/部署无需再勾选；\n迁移学习/从剪枝模型继续训练时沿用起始权重的结构，本开关不生效。\nR-CNN 与分类模型忽略该选项": "Adds a stride-4 fourth detection layer to the chosen YOLO (n/s, det/seg)\nfor defects ≤8px on the short side; backbone/neck/original heads inherit official pretrain,\nonly the new P2 branch trains from scratch — consider more epochs;\n~2x VRAM of the normal model (1920 input n-seg batch 4 ≈ 13 GiB),\nreduce batch if VRAM is tight; the structure ships inside the weights — testing/deployment need no extra flag;\nignored when transferring from weights that already define the structure.\nR-CNN and classification ignore it",
     "TF32：Ampere 及以上 NVIDIA 显卡对 FP32 计算零成本加速（约 1.5~2 倍）；\ncuDNN 自动调优：固定输入尺寸训练时自动搜索并缓存最优卷积算法（约 1.1~1.3 倍）；\n无 GPU 或较老显卡时不生效，可放心保持开启": "TF32: zero-cost FP32 speedup on Ampere+ NVIDIA GPUs (~1.5-2x);\ncuDNN autotune: searches and caches best conv algorithms for fixed-size training (~1.1-1.3x);\nno-op without a modern GPU — safe to leave on",
-    "每次训练共用「模型储存路径\\epoch_weights」文件夹，逐轮保存加密权重：\n训练开始时清空旧训练的轮次权重（覆盖式，只占最近一次训练的空间）；\n明文权重全程不落盘（内存加密后直接写 .xva）；\n轮次权重可在测试平台直接加载对比，也可在模型工具解密还原": "All runs share 「模型储存路径\\epoch_weights」, saving encrypted weights each epoch:\ncleared at each training start (only the latest run occupies space);\nplaintext weights never touch disk (encrypted in memory, written straight to .xva);\nepoch weights load directly in Testing for comparison, or decrypt in Model Tools",
-    "把原图按滑窗切成 tile 训练：小目标占画面比例更大、更易学到；\n背景 tile 按 15% 保留、10% 原图整图混入、验证集始终整图评估；\n**推理必须配合分块**：测试平台「4K 大图分块推理」或服务 tiled=true\n（与 T9-2 两段式缩放互斥使用更清晰：切图训练时不建议再设网络输入尺寸）": "Slices originals into tiles for training: small objects occupy a larger fraction and learn better;\n15% of background tiles kept, 10% full originals mixed in, validation always full-image;\n**Inference must tile too**: Testing's \"4K tiled inference\" or service tiled=true\n(with T9-2 two-stage scaling it is clearer to pick one — avoid setting net input size together)",
+    "每次训练共用「模型储存路径\\epoch_weights」文件夹，逐轮保存权重：\n训练开始时清空旧训练的轮次权重（覆盖式，只占最近一次训练的空间）；\n轮次权重可在测试平台直接加载对比": "All runs share 「模型储存路径\\epoch_weights」, saving weights each epoch:\ncleared at each training start (only the latest run occupies space);\nepoch weights load directly in Testing for comparison",
+    "把原图按滑窗切成 tile 训练：小目标占画面比例更大、更易学到；\n背景 tile 按 15% 保留、10% 原图整图混入、验证集始终整图评估；\n**推理必须配合分块**：测试平台「4K 大图分块推理」或服务 tiled=true\n（与两段式缩放互斥使用更清晰：切图训练时不建议再设网络输入尺寸）": "Slices originals into tiles for training: small objects occupy a larger fraction and learn better;\n15% of background tiles kept, 10% full originals mixed in, validation always full-image;\n**Inference must tile too**: Testing's \"4K tiled inference\" or service tiled=true\n(with two-stage scaling it is clearer to pick one — avoid setting net input size together)",
     "数据集中「OK / 良品 / 正常 / 合格 / 负样本 / 背景」等文件夹里的\n未标注图片会作为纯背景样本参与训练与验证（默认开启）：\n模型学到「这些图上什么都不该检出」，直接压低误检率；\n训练日志与历史记录会给出负样本张数与 OK 图误检率指标；\n标注图划分不受影响；负样本图数超过标注图数时会自动抽样到 1:1": "Unannotated images in OK/良品/正常/合格/负样本/背景-style folders\njoin training and validation as pure background (on by default):\nthe model learns \"nothing should fire here\", directly cutting false alarms;\nlogs and run history report negative counts and OK-image FP rate;\nlabeled splits unchanged; negatives are down-sampled to 1:1 when they outnumber labeled images",
     "开启后训练读图统一转灰度（复制 3 通道，骨干零改动），\n推理/部署侧按权重内记录自动同口径转灰；\n适合颜色不携带判别信息、打光颜色易漂移的工业场景；\n对检测/分割/分类家族生效（YOLO 推理侧加速导出暂不透传该标记）": "Training reads images as grayscale (3-channel copy, backbone untouched),\ninference/deployment auto-grayscales from the flag stored in the weights;\nsuited to scenes where color carries no signal or lighting color drifts;\nworks for det/seg/cls (YOLO export-accelerated inference does not pass the flag yet)",
     "开启后固定全部随机种子并启用确定性算法（CUBLAS_WORKSPACE_CONFIG\n:4096:8 + torch.use_deterministic_algorithms）：同机同种子同依赖\n版本两次训练指标一致，run_manifest.json 标记 deterministic=true；\n代价：训练速度下降、个别算子不支持确定性实现时降级告警（不中断）": "Fixes all seeds and enables deterministic algorithms (CUBLAS_WORKSPACE_CONFIG\n:4096:8 + torch.use_deterministic_algorithms): same machine/seed/deps give\nidentical metrics across runs; run_manifest.json marks deterministic=true;\ncost: slower training, degraded-op warnings (non-blocking) when an op lacks a deterministic kernel",
-    "两段式缩放（可选，默认 0=跟随增强画布=现状）：\n显式设 32 的倍数且小于画布短边时启用——画布增强保持画布口径，\n入网前按比例缩到该尺寸（小目标占画面比例更大、显存更省）；\n仅 R-CNN 家族生效；推理侧请配合测试平台「4K 大图分块推理」\n或服务 tiled=true（与切图训练 T9-3 配对使用效果最佳）": "Two-stage scaling (optional; 0 = follow the augment canvas = status quo):\nset a multiple of 32 below the canvas short side to enable — canvas augmentation keeps canvas scale,\nthen scales to this size before the network (small objects relatively larger, less VRAM);\nR-CNN family only; pair with Testing's \"4K tiled inference\"\nor service tiled=true (best with tiled training T9-3)",
+    "两段式缩放（可选，默认 0=跟随增强画布=现状）：\n显式设 32 的倍数且小于画布短边时启用——画布增强保持画布口径，\n入网前按比例缩到该尺寸（小目标占画面比例更大、显存更省）；\n仅 R-CNN 家族生效；推理侧请配合测试平台「4K 大图分块推理」\n或服务 tiled=true（与切图训练配对使用效果最佳）": "Two-stage scaling (optional; 0 = follow the augment canvas = status quo):\nset a multiple of 32 below the canvas short side to enable — canvas augmentation keeps canvas scale,\nthen scales to this size before the network (small objects relatively larger, less VRAM);\nR-CNN family only; pair with Testing's \"4K tiled inference\"\nor service tiled=true (best with tiled training)",
     "OK 负样本：": "OK negatives: ",
     "OK 负样本 ": "OK negatives ",
     "__ignore__ ": "__ignore__ ",
@@ -1654,14 +1630,14 @@ TABLE = {
     "在设定比例区间内随机缩放": "Random scale within the set range",
     "生成中…（{model}，扫描数据集类别后预剪枝，视模型规模约需数秒到数分钟）": "Generating… ({model}; scans dataset classes before pre-pruning; seconds to minutes by model size)",
     "剪枝中…（ratio={r}，独立子进程执行；追踪依赖图为重负载阶段，可随时紧急终止）": "Pruning… (ratio={r}; separate subprocess; dependency tracing is the heavy stage — kill anytime)",
-    "模型与流程 (*.xva *.xcs *.pt *.xvap *.json);;XCcv 加密权重 (*.xva *.xcs);;流程包 (*.xvap *.json);;所有文件 (*)": "Models & flows (*.xva *.xcs *.pt *.xvap *.json);;XCcv encrypted weights (*.xva *.xcs);;Flow packages (*.xvap *.json);;All files (*)",
+    "模型与流程 (*.pt *.engine *.xvap *.json);;流程包 (*.xvap *.json);;所有文件 (*)": "Models & flows (*.pt *.engine *.xvap *.json);;Flow packages (*.xvap *.json);;All files (*)",
     "图片质量": "Image quality",
     "「导出 JSON」与「保存渲染图片」至少勾选一项，否则批量运行没有产出": "Check at least one of \"Export JSON\" / \"Save rendered images\" — otherwise a batch run produces nothing",
     "请选择有效的图片文件夹": "Pick a valid image folder",
     "工程优化": "Engineering optimization",
     "选中类别后，画布与列表只显示该目标": "After picking a class, canvas and list show only that class",
     "结果显示标签": "Show labels",
-    "整图缩到模型输入会把小目标缩没；分块推理保持模型原生口径逐块检出后合并去重（同类 NMS）。小图自动回退整图推理；分类任务不适用。\n与训练平台「切图训练」（T9-3）配对使用效果最佳。": "Downscaling a whole image shrinks small targets away; tiled inference keeps native scale per tile then merges with per-class NMS. Small images fall back to full-frame; not for classification.\nPairs best with the training platform's tiled training (T9-3).",
+    "整图缩到模型输入会把小目标缩没；分块推理保持模型原生口径逐块检出后合并去重（同类 NMS）。小图自动回退整图推理；分类任务不适用。\n与训练平台「切图训练」配对使用效果最佳。": "Downscaling a whole image shrinks small targets away; tiled inference keeps native scale per tile then merges with per-class NMS. Small images fall back to full-frame; not for classification.\nPairs best with the training platform's tiled training.",
     "整体优劣占比：A优 / B优 / 一致 / 未评估": "Overall verdict share: A / B / equal / unjudged",
     "（无）": "(none)",
     "失败原因：": "Failure reason: ",
@@ -1669,7 +1645,7 @@ TABLE = {
     "已启用随机裁剪兜底（宽高比": "Random-crop fallback enabled (aspect",
     "项": "item(s)",
     "种样本": " ratio(s)",
-    "说明：模型只在服务进程内解密，接口永不返回权重；每个已加载模型/流程是一个可并行的 API（按 id 寻址）。流程包内嵌的 AI 模型在首次推理时自动加载并常驻复用。输出为统一检出 JSON（schema_version=1）。": "Note: models decrypt only inside the service process; the API never returns weights. Each loaded model/flow is a parallel API addressed by id. AI models embedded in flow packages auto-load on first inference and stay resident. Output is unified detection JSON (schema_version=1).",
+    "说明：模型在服务进程内加载，接口不返回权重文件；每个已加载模型/流程是一个可并行的 API（按 id 寻址）。流程包内嵌的 AI 模型在首次推理时自动加载并常驻复用。输出为统一检出 JSON（schema_version=1）。": "Note: models load inside the service process; the API never returns weight files. Each loaded model/flow is a parallel API addressed by id. AI models embedded in flow packages auto-load on first inference and stay resident. Output is unified detection JSON (schema_version=1).",
     "图片数量": "Images",
     "扫描失败": "scan failed",
     "未保存：": "Not saved: ",
@@ -1680,14 +1656,13 @@ TABLE = {
     "无模型；选择图片即运行，「批量运行…」可导出统一 JSON 与可视化": "no model; runs on image selection; \"Batch Run…\" exports unified JSON and visuals",
     "传统流程：": "Classic flow: ",
     "正在加载": "Loading",
-    "（加密解密与网络构建需要数秒）": "(decryption and network build take a few seconds)",
+    "（权重加载与网络构建需要数秒）": "(weights loading and network build take a few seconds)",
     "无法读取：": "Cannot read: ",
     "检出流程应用失败（已跳过过滤），详见日志": "Detection flow failed to apply (filtering skipped); see log",
     "结果可视化失败（已显示原图），详见日志": "Result visualization failed (original shown); see log",
     "（模型 A：本次批量所用权重）": "(Model A: weights used by this batch)",
     "未执行剪枝：": "Pruning not run: ",
     "剪枝失败：": "Pruning failed: ",
-    "（.xva 加密）": " (.xva encrypted)",
     "实验对比": "Run Comparison",
     "条记录": "runs",
     "曲线对比（左：损失；右：评估指标）": "Curves (left: loss; right: metrics)",
@@ -1697,8 +1672,8 @@ TABLE = {
     "选择模型与文件夹后点「开始」": "Pick a model and a folder, then click Start",
     "取消中…（当前图完成后停止）": "Cancelling… (stops after the current image)",
     "已重新载入流程": "Flow reloaded",
-    ".xva / .pt / .xcs 权重": ".xva / .pt / .xcs weights",
-    ".xva / .pt / .xcs 权重（检测/分割/分类均可）": ".xva / .pt / .xcs weights (det/seg/cls all fine)",
+    ".pt / .engine 权重": ".pt / .engine weights",
+    ".pt / .engine 权重（检测/分割/分类均可）": ".pt / .engine weights (det/seg/cls all fine)",
     "0 = 不去重；分块重叠推理建议 0.5": "0 = no dedup; 0.5 recommended for tiled overlap inference",
     "0 = 不限上限": "0 = no upper bound",
     "0 = 不限下限": "0 = no lower bound",
@@ -1718,9 +1693,9 @@ TABLE = {
     "FFT 频域滤波": "FFT Frequency Filter",
     "FFT 频域滤波：去除周期性纹理/摩尔纹（低通/高通/带阻）。": "FFT filtering: removes periodic texture/moiré (low/high/band-stop).",
     "Gamma 校正：out = 255×(in/255)^γ（γ<1 提亮暗部，γ>1 压暗亮部）。": "Gamma: out = 255×(in/255)^γ (γ<1 lifts shadows, γ>1 darkens highlights).",
-    "HALCON 算子名（如 mean_image）或 .hdvp 过程文件；VisionMaster 为 .sol 方案文件": "HALCON operator name (e.g. mean_image) or .hdvp procedure file; VisionMaster uses a .sol solution file",
-    "HALCON 算子：JSON 数组按顺序；过程：JSON 对象按参数名": "HALCON operator: JSON array in order; procedure: JSON object by parameter name",
-    "HALCON 过程名（留空=文件名）；VM 流程名（如 Flow1）": "HALCON procedure name (empty = file name); VM flow name (e.g. Flow1)",
+    "算子名（如 mean_image / threshold）或过程/方案文件路径": "Operator name (e.g. mean_image / threshold) or procedure/solution file path",
+    "算子：JSON 数组按顺序；过程/方案：JSON 对象按参数名": "Operator: JSON array in order; procedure/solution: JSON object by parameter name",
+    "过程/流程名（留空=文件名）": "Procedure/flow name (empty = file name)",
     "ROI 提取：rect 裁剪 / annulus 环形掩膜 / polygon 几何掩膜。": "ROI extraction: rect crop / annulus mask / polygon geometry mask.",
     "Sobel 梯度": "Sobel Gradient",
     "Sobel 梯度：dx/dy 至少一个为 1；同时为 1 时取两方向幅值。": "Sobel: at least one of dx/dy is 1; if both, the gradient magnitude is used.",
@@ -1777,7 +1752,7 @@ TABLE = {
     "关闭则每次覆盖": "off = overwrite every run",
     "几何结果": "geometry result",
     "分块推理建议设为目标尺寸的一半，避免目标被切断": "half the target size recommended for tiled inference, avoiding cut targets",
-    "分类任务权重（.xva/.pt）": "classification weights (.xva/.pt)",
+    "分类任务权重（.pt）": "classification weights (.pt)",
     "分类模型：载入分类权重输出整图类别与置信度（image → detection，": "Classification model: loads cls weights, outputs image-level class and confidence (image → detection,",
     "判定a": "verdict a",
     "判定b": "verdict b",
@@ -1803,7 +1778,7 @@ TABLE = {
     "圆定位：粗定位中心 → 同心卡尺（射线）取边界点（亚像素）→ 椭圆拟合。": "Circle locate: coarse center → concentric calipers (rays) take sub-pixel edge points → ellipse fit.",
     "增益 α：>1 拉开明暗差": "gain α: >1 stretches contrast",
     "复判得分的展示口径，不二次过滤": "display scale for re-check scores; no second filtering",
-    "外部算子：直接运行本机已安装的 HALCON 算子/过程（.hdvp）或 VisionMaster 方案流程（.sol）。": "External op: runs a locally installed HALCON operator/procedure (.hdvp) or VisionMaster solution flow (.sol).",
+    "外部算子：调用外部引擎后端的算子（如 mean_image）或过程/方案文件。": "External op: calls an operator (e.g. mean_image) or a procedure/solution file of the pluggable backend.",
     "多区域以 ; 分隔：x1,y1,x2,y2（矩形，可加 rect: 前缀）／circle:cx,cy,r／polygon:x1,y1,x2,y2,x3,y3…；数值>1 为像素，否则 0~1 归一化（圆半径按短边）": "regions separated by ';': x1,y1,x2,y2 (rect, optional rect: prefix) / circle:cx,cy,r / polygon:x1,y1,x2,y2,x3,y3…; values >1 are pixels, else 0~1 normalized (circle radius follows the short side)",
     "多路测量聚合：allpass / anypass / count_ng / mean / max / min。": "Multi-measure aggregation: allpass / anypass / count_ng / mean / max / min.",
     "如 _ok；留空则与来源图同名": "e.g. _ok; empty = same name as source",
@@ -1873,7 +1848,7 @@ TABLE = {
     "短边（px）低于该值的检出被过滤；0=不限": "detections with short side (px) below are filtered; 0 = unlimited",
     "类别过滤（旧链 class_filter 的薄委托）。": "Class filter (thin wrapper of legacy class_filter).",
     "线对定位：两个测量区各用卡尺找一条边/线，输出两线、间距与夹角。": "Line-pair locate: each measure zone finds one edge/line via calipers; outputs both lines, spacing and angle.",
-    "结果 JSON 中 detections.label 的对外暴露名称（用户批注 ToQ1：可自定义）": "exposed name for detections.label in the result JSON (customizable)",
+    "结果 JSON 中 detections.label 的对外暴露名称（可自定义）": "exposed name for detections.label in the result JSON (customizable)",
     "结果2": "result 2",
     "结果3": "result 3",
     "结果4": "result 4",
@@ -1899,7 +1874,7 @@ TABLE = {
     "距离": "distance",
     "距离测量：点-点/点-线/线-线距离、直线长度、圆直径（自动按几何种类）。": "Distance measure: point-point/point-line/line-line, line length, circle diameter (auto by geometry kind).",
     "输出结果：流程的**不落盘**出口——结果进入运行摘要与测试平台/服务，": "Result view: the flow's non-disk output — results go to the run summary and Testing/service,",
-    "过程/流程接收图像的输入参数名（VM 为图像源模块名）": "input parameter name receiving the image (VM: image-source module name)",
+    "过程/方案接收图像的输入参数名": "input parameter name receiving the image in the procedure/solution",
     "过程/流程的数值输出名，逗号分隔": "number output names of the procedure/flow, comma-separated",
     "过程的图像输出参数名；留空=透传输入图": "image output parameter name; empty = pass the input through",
     "逐图执行算子：对图像列表的每一张执行同一个传统算子（如 find_circle、": "Op-per-image: runs the same classic op on every image of a list (e.g. find_circle,",
@@ -1926,12 +1901,12 @@ TABLE = {
     "服务已就绪：": "Service ready: ",
     "（关闭窗口即停止）": " (closes with the window)",
     "保存文件": "Save file",
-    # ---- 语言切换重建提示 ----
+    # ---- additions9（语言切换重建提示补录） ----
     "任务运行中，语言重开窗口后生效":
         "Task running; reopen the window to switch language.",
     "重建失败，语言重开窗口后生效":
         "Rebuild failed; reopen the window to switch language.",
-    # ---- 新范式适配 ----
+    # ---- additions10（新范式适配） ----
     "错误": "Wrong",
     "错": "W",
     "阶段": "Stage",
@@ -1949,51 +1924,231 @@ TABLE = {
         "higher = more anomalous (z-calibrated on OK distribution)",
     "SubspaceAD 异常检测（少样本 PCA 子空间）":
         "SubspaceAD anomaly (few-shot PCA subspace)",
-    # ---- 忙因细化/项目窗跟随 ----
+    # ---- additions11（忙因细化/项目窗跟随） ----
     "已加载模型，语言重开窗口后生效":
         "Model loaded; reopen the window to switch language.",
-    # ---- 社区版补充 ----
-    "测量与判定": "Measurement & Verdict",
-    "XCcv 视觉模型训练平台（社区版）": "XCcv Vision Training Platform (Community)",
-    "标注 → 训练 → 测试，三步完成模型落地（另附缺陷样本合成工具）": "Annotate → Train → Test (plus a defect sample synthesis tool)",
-    "缺陷样本合成工具：把缺陷贴图自然融合到良品图，扩充训练样本": "Defect Sample Synthesis: blend defect patches onto good-part images to expand training data",
-    "关于 XCcv Community": "About XCcv Community",
-    "标注 → 训练 → 测试（另附缺陷样本合成工具）": "Annotate → Train → Test (plus a defect sample synthesis tool)",
-    "本版本为社区版，基于 AGPL-3.0 开源。": "This is the community edition, open-sourced under AGPL-3.0.",
-    "未找到本地文档（docs/quickstart.md）。": "Local docs not found (docs/quickstart.md).",
-    "请查阅仓库 README 与 docs 目录。": "See the repository README and the docs folder.",
-    "启动失败：": "Failed to launch: ",
-    "打开失败：": "Failed to open: ",
-    "保存每轮权重（轮次权重文件夹，新训练覆盖）": "Save per-epoch weights (shared folder, overwritten by new runs)",
-    "每次训练共用「模型储存路径\\epoch_weights」文件夹，逐轮保存权重：\n训练开始时清空旧训练的轮次权重（覆盖式，只占最近一次训练的空间）；\n轮次权重可在测试平台直接加载对比": "Every run writes into the shared \"model folder\\epoch_weights\" directory, one file per epoch:\nold epochs are cleared at training start (overwrite style, only the latest run is kept);\nper-epoch weights can be loaded in the testing platform for comparison",
-    "每轮保存": "Saved every epoch ",
-    "的模型储存目录下没有可加载的模型权重（best.pt），": " has no loadable weights (best.pt) in its model folder, ",
-    "该训练记录没有 best.pt 权重": "This training run has no best.pt weights",
-    "选择迁移学习起始权重": "Choose transfer-learning starting weights",
-    "模型权重 (*.pt);;所有文件 (*)": "Model weights (*.pt);;All files (*)",
-    "模型 (*.pt)": "Models (*.pt)",
-    "模型权重（.pt）": "Model weights (.pt)",
-    "图片文件夹": "Image folder",
-    "当前模型未关联权重文件（无法定位模型存放文件夹）；": "The current model has no weight file (cannot locate the model folder); ",
-    "请通过「加载模型」选择权重后再生成": "load a model via \"Load Model\" before generating",
-    "请先加载模型，再批量运行": "Load a model first, then run the batch",
-    "（网络构建需要数秒）": " (network build takes a few seconds)",
-    "路径不存在": "path not found",
-    "扫描中…": "scanning…",
-    "开始": "Start",
-    "取消运行": "Cancel run",
-    "AP": "AP",
-    "AUROC": "AUROC",
-    "CER": "CER",
-    "精确匹配": "Exact match",
-    "字符准确率": "Character accuracy",
-    "OK 误报率": "OK false-alarm rate",
-    "mAP": "mAP",
-    "mAP@50": "mAP@50",
-    "mAP@50-95": "mAP@50-95",
-    "mAR": "mAR",
-    "图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;所有文件 (*)": "Images/Models/Flows (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;All files (*)",
-    "「打包流程」把流程与所选模型一并封入单个 .xvap 文件，可在测试平台直接加载。": "\"Pack Flow\" bundles the flow and the selected model into one .xvap file that the testing platform can load directly.",
-    "conf→图像分数 z=1/conf−1（0.25→z=3）；拖维度阈值面板调分": "conf→image score z=1/conf−1 (0.25→z=3); drag the threshold panel to adjust",
-    "批量推理的预测概率下限（拖线调整的下限）": "Lower bound of the predicted probability for batch inference (adjustable by dragging)",
+    # ---- additions12（数据体检/预检/智能推荐/Loss 判读/快速配置免训练卡） ----
+    "项警告": " warnings",
+    "项提示": " hints",
+    "警告": "Warning",
+    "已套用预设": "Preset applied:",
+    "快速建库": "Quick Build",
+    "均衡建库": "Balanced Build",
+    "高质量建库": "High-Quality Build",
+    "2 张支持集 · 小增强\n最少样本快速出结果":
+        "2 support images · light augment\nfastest result from fewest samples",
+    "4 张支持集 · 标准增强\n精度与样本量兼顾":
+        "4 support images · standard augment\nbalanced accuracy and sample size",
+    "8 张支持集 · 大增强\n追求最佳精度，耗时更长":
+        "8 support images · heavy augment\nbest accuracy, longer runtime",
+    "30 轮 · 冻结骨干\n小样本快速出结果":
+        "30 epochs · frozen backbone\nquick results on small datasets",
+    "100 轮 · 工业优化\n精度与速度兼顾":
+        "100 epochs · industrial opts\nbalanced accuracy and speed",
+    "300 轮 · 全量加速\n追求最佳精度，耗时更长":
+        "300 epochs · full acceleration\nbest accuracy, longer runtime",
+    "口径说明：\n· TP/FP/FN 来自 IoU≥0.5 同类匹配混淆矩阵（训练收尾统计）；\n· 精确率=TP/检出，召回率=TP/GT 实例；检出=TP+FP，GT 实例=TP+FN；\n· AP@50 为 COCO 口径逐类平均（与汇总 mAP@50 同口径）；\n· 曲线/摘要的 mAP・mAR 为宽松口径（IoU 0.10/0.25/0.50 三档平均），\n  两套口径并存，调优时先确认目标再对号入座；\n· \"-\" 表示该类无样本或无有效评估组合。":
+        "Metric notes:\n· TP/FP/FN come from the IoU≥0.5 same-class confusion matrix "
+        "(computed at training end);\n· precision=TP/detections, recall=TP/GT instances; "
+        "detections=TP+FP, GT instances=TP+FN;\n· AP@50 is the COCO per-class average "
+        "(same as the summary mAP@50);\n· mAP・mAR in curves/summary use the loose "
+        "metric (mean of IoU 0.10/0.25/0.50); both coexist — pick by goal;\n· \"-\" means "
+        "the class has no samples or no valid evaluation combination.",
+    "训练输入尺寸与上方增强策略的 resize 宽×高一致：图像拉伸到该尺寸训练\n（比例随设定改变，预览所见即训练所见）。\n未启用 resize 时使用模型默认尺寸，由各模型自行缩放（YOLO letterbox /\nR-CNN 短边缩放 / 分类拉伸方形）——长宽比极端的图片建议保持 resize 启用":
+        "Training input size equals the resize width×height of the augmentation "
+        "strategy above: images are stretched to this size for training\n(the ratio "
+        "follows the setting; the preview is what training sees).\nWithout resize the "
+        "model default applies and each model scales its own way (YOLO letterbox / "
+        "R-CNN short-edge / classification stretch) — keep resize enabled for "
+        "extreme aspect ratios",
+    "支持集张数 k-shot：用多少张 OK 图建正常子空间（1~12，上限防止脱离免训练范畴）；仅 SubspaceAD 使用":
+        "Support size k-shot: how many OK images build the normal subspace "
+        "(1~12, capped to stay training-free); SubspaceAD only",
+    "增强样本数：每张支持图生成的随机旋转增强张数（0=关闭）；仅 SubspaceAD 使用":
+        "Augment count: random-rotation variants per support image (0=off); "
+        "SubspaceAD only",
+    # 数据体检（data_health.py）
+    "类别数量不均衡": "Class counts imbalanced",
+    "最少类「{lo}」{n} 个，仅占整体 {share:.1%}（阈值 {thr:.0%}）；最多类「{hi}」{m} 个。":
+        "Smallest class \"{lo}\" has {n} instances, {share:.1%} of the total "
+        "(threshold {thr:.0%}); largest class \"{hi}\" has {m}.",
+    "工业场景建议开启「工业场景优化」（会自动启用 Focal 类改进损失）；可能时补充稀少类别样本。":
+        "For industrial scenes enable \"Industrial optimization\" (applies Focal-style "
+        "improved loss); add samples for rare classes when possible.",
+    "部分类别样本过少": "Some classes have too few samples",
+    "建议每类至少 {n} {unit}，当前偏少：{few}。":
+        "At least {n} {unit} per class recommended; currently low: {few}.",
+    " 等 {n} 类": " and {n} more classes",
+    "样本过少的类别不易学好；可补充采集，或在训练设置中增大「数据倍增倍数」并配合数据增强。":
+        "Classes with few samples are hard to learn; collect more data or raise "
+        "\"Repeat per epoch\" together with augmentation in training settings.",
+    "张样本": "images",
+    "个实例": "instances",
+    "部分类别未进入验证集": "Some classes missing from validation set",
+    "按当前验证集比例（{ratio:.0%}）划分后，这些类别没有验证样本：{names}。":
+        "With the current validation ratio ({ratio:.0%}) these classes have no "
+        "validation samples: {names}.",
+    "验证集看不到该类别时，mAP 指标不覆盖它；可增大验证集比例，或保持「训练集 100% + 验证集 20%」的重叠划分方式。":
+        "mAP does not cover classes absent from validation; raise the validation "
+        "ratio, or keep the overlapping split \"train 100% + val 20%\".",
+    "存在未标注的图片": "Unannotated images found",
+    "{n} 张图片没有同名 .json 标注，不会参与训练。":
+        "{n} images have no matching .json annotation and will not join training.",
+    "如需使用请到标注平台补标注；若为背景图/废片可忽略。":
+        "Annotate them in the annotation platform if needed; ignore if they are "
+        "background or discarded shots.",
+    "重复图检测已跳过": "Duplicate scan skipped",
+    "图片数 {n} 超过检测上限 {cap}（可在开发者选项调整）。":
+        "Image count {n} exceeds the scan cap {cap} (adjustable in Developer options).",
+    " 等 {n} 组": " and {n} more pairs",
+    "疑似重复图": "Suspected duplicate images",
+    "{n} 张图片高度相似（{example}{more}）。":
+        "{n} images look highly similar ({example}{more}).",
+    "同款工件多角度拍摄可能被误报；确认冗余后删除副本可降低过拟合风险。":
+        "Multi-angle shots of the same part can be false positives; removing "
+        "confirmed duplicates reduces overfitting risk.",
+    "存在尺寸离群的图片": "Outlier-sized images found",
+    "{n} 张图片面积明显偏离中位数（>{k:g}×MAD）：{names}{more}。":
+        "{n} images deviate strongly from the median area (>{k:g}×MAD): "
+        "{names}{more}.",
+    " 等 {n} 张": " and {n} more",
+    "极端尺寸可能影响训练稳定性；确认是误拍/废片可删除，或启用增强策略「调整图像大小」统一输入尺寸。":
+        "Extreme sizes can destabilize training; delete confirmed mis-shots, or "
+        "enable the \"Resize\" augmentation to unify input size.",
+    "存在 __ignore__ 忽略区域": "__ignore__ regions present",
+    "数据集共有 {n} 个忽略区域；训练/评估时将剔除与其重叠率>50% 的 GT 实例 {m} 个（近似语义：区域内背景仍参与学习，区域内检出不计误检）。":
+        "The dataset has {n} ignore regions; training/evaluation will drop {m} GT "
+        "instances overlapping them >50% (approximate semantics: background inside "
+        "still trains, detections inside do not count as false alarms).",
+    "适用于反光、丝纹等界限模糊区域：标注平台画矩形/多边形、标签填 __ignore__ 即可；若非故意标注请删除该标签。":
+        "For blurry-boundary areas (glare, brushed texture): draw a rectangle/"
+        "polygon in the annotation platform with label __ignore__; delete the label "
+        "if it was accidental.",
+    "未利用 OK 负样本": "OK negatives not used",
+    "当前 {n} 张含标注图片参与训练，OK 背景图 0 张。":
+        "Currently {n} annotated images join training, with 0 OK background images.",
+    "工业场景误检风险高：建议建一个名为 OK/良品/正常 的子文件夹放入良品图（无需标注），训练时保持「负样本训练」勾选。":
+        "False-alarm risk is high in industrial scenes: create a subfolder named "
+        "OK/良品/正常 with good-part images (no annotation needed) and keep "
+        "\"Negative-sample training\" checked.",
+    "OK 图与缺陷图比例偏离建议区间": "OK:defect ratio outside the recommended range",
+    "OK 图 {a} 张、含标注缺陷图 {b} 张（约 {ratio:.1%}）；经验建议区间 OK:缺陷 ≈ 1:1~1:2。":
+        "{a} OK images vs {b} annotated defect images (about {ratio:.1%}); "
+        "rule of thumb OK:defect ≈ 1:1~1:2.",
+    "OK 过少防误检收益有限；OK 过多会稀释缺陷样本（训练侧超量自动按种子抽样、验证侧全保留用于误检率统计）。":
+        "Too few OK images limits false-alarm suppression; too many dilutes defect "
+        "samples (training side samples surplus by seed; validation keeps all for "
+        "FP-rate statistics).",
+    # 预检 + 智能推荐（preflight.py）
+    "最大类别样本仅 {n}（<500）：冻结骨干可降低过拟合并提速 40~60%":
+        "Largest class has only {n} samples (<500): freezing the backbone reduces "
+        "overfitting and speeds up 40~60%",
+    "小样本工业场景建议开启工业优化（注意力 + 改进损失）":
+        "Small-sample industrial scenes benefit from industrial optimization "
+        "(attention + improved loss)",
+    "小样本场景建议把已启用增强算子的概率提高到 0.7 增加样本多样性":
+        "For small samples, raise enabled augmentation probabilities to 0.7 for "
+        "more sample diversity",
+    "最大类别样本 {n}（<300）且当前仅 {cur} 轮：建议 60 轮（小样本收敛慢，早停耐心兜底防过训）":
+        "Largest class has {n} samples (<300) and only {cur} epochs set: 60 epochs "
+        "recommended (small samples converge slowly; early-stop patience guards "
+        "against over-training)",
+    "R-CNN 家族建议削减 RPN 候选框（工业单图目标少，几乎无精度损失且更快更省显存）":
+        "For the R-CNN family consider reduced RPN proposals (few targets per "
+        "industrial image; near-zero accuracy loss, faster and lighter on VRAM)",
+    "无 GPU：关闭 AMP 混合精度（CPU 下本不生效）":
+        "No GPU: disable AMP mixed precision (it has no effect on CPU anyway)",
+    "数据集大图占比高（P90 最长边 {n:.0f}px）：整图口径下小目标占比过小易漏检，可考虑启用「切图训练」（数据与验证分区），推理侧配合测试平台「4K 大图分块推理」或服务 tiled=true。":
+        "Large images dominate the dataset (P90 longest side {n:.0f}px): small "
+        "targets shrink too much for whole-image training and get missed — consider "
+        "\"Tiled training\" (data & validation section), with the testing platform's "
+        "\"4K tiled inference\" or service tiled=true on the inference side.",
+    "早停耐心（{p} 轮）不小于训练轮次（{e} 轮），早停不会触发，等同关闭。":
+        "Early-stop patience ({p} epochs) is not smaller than the epoch count "
+        "({e} epochs): early stopping will never trigger, same as disabled.",
+    "设为 {n} 轮": "Set to {n} epochs",
+    "已启用 P2 小目标检测头：新增 stride 4 检测层，显存占用约为普通模型的 2 倍以上（实测 1920 输入下 yolo11n-seg + P2 batch4 约 13 GiB）——显存不足时优先减小批量或输入尺寸；新增分支从零学，建议适当增加训练轮次。":
+        "P2 small-object head enabled: adds a stride-4 detection layer, VRAM about "
+        "2× a normal model (measured yolo11n-seg + P2 batch4 ≈ 13 GiB at 1920) — "
+        "reduce batch or input size first if VRAM is tight; the new branch trains "
+        "from scratch, consider more epochs.",
+    "P2 小目标检测头仅对 YOLO 家族生效，当前模型 {name} 不受影响。":
+        "The P2 small-object head only applies to the YOLO family; {name} is "
+        "unaffected.",
+    "学习率 {lr:g} 与模型推荐值 {rec:g} 相差 10 倍以上（迁移学习时可刻意调低；从零训练时易不收敛或发散）。":
+        "Learning rate {lr:g} differs from the recommended {rec:g} by 10× or more "
+        "(intentional for transfer learning; from-scratch training may diverge or "
+        "not converge).",
+    "恢复推荐值 {v:g}": "Restore recommended {v:g}",
+    "验证集比例为 0：验证集复用训练集，指标曲线可能偏乐观。":
+        "Validation ratio is 0: validation reuses the training set; metric curves "
+        "may look optimistic.",
+    "批量大小 {n} 对分类任务偏小，建议 16~32。":
+        "Batch size {n} is small for classification; 16~32 recommended.",
+    "设为 16": "Set to 16",
+    "批量大小 {n} 对检测/分割偏大，大分辨率下显存压力大（平台会自动降批量，但训练变慢）。":
+        "Batch size {n} is large for detection/segmentation; VRAM pressure is high "
+        "at large resolutions (the platform auto-reduces batch, but training slows).",
+    "设为 8": "Set to 8",
+    "训练轮次仅 {n} 轮，模型可能欠拟合；小数据集建议 12~30 轮。":
+        "Only {n} epochs: the model may underfit; 12~30 epochs recommended for "
+        "small datasets.",
+    "数据集图片长宽比差异较大（约 {r:g}×）且未启用「调整图像大小」：各图保持原生比例进入训练，建议启用 resize 统一输入。":
+        "Aspect ratios vary a lot (about {r:g}×) and \"Resize\" is off: images "
+        "train at native ratios — enable resize to unify the input.",
+    "启用 640×640": "Enable 640×640",
+    "训练设备指定为 GPU，但未检测到 NVIDIA GPU，训练将失败或回退 CPU。":
+        "Device is set to GPU but no NVIDIA GPU was detected; training will fail "
+        "or fall back to CPU.",
+    "改回自动": "Back to auto",
+    "当前无 GPU：AMP 混合精度会自动关闭（CPU 训练不受影响）。":
+        "No GPU present: AMP mixed precision turns off automatically (CPU training "
+        "is unaffected).",
+    "数据倍增倍数 {n} 较大：训练时间近似线性增加，小数据集建议 2~5 配合增强策略。":
+        "Repeat per epoch is high ({n}): training time grows near-linearly; 2~5 "
+        "with augmentation recommended for small datasets.",
+    # Loss 判读（loss_diagnosis.py）
+    "训练损失出现 NaN/Inf——数值不稳定：建议降低学习率、检查标注数据（空/损坏样本），或在开发者选项开启「确定性训练」复现问题":
+        "Training loss hit NaN/Inf — numerically unstable: lower the learning rate, "
+        "check annotations (empty/corrupt samples), or enable \"Deterministic "
+        "training\" in Developer options to reproduce",
+    "轮次不足 {n} 轮，损失形态判读意义有限":
+        "Fewer than {n} epochs — loss shape reads are of limited value",
+    "疑似过拟合：验证指标较最佳回落 {pct:.0%}（最佳在第 {best} 轮，当前第 {cur} 轮），建议采用 best 轮次权重（默认已选）或减少轮次":
+        "Suspected overfitting: the validation metric fell {pct:.0%} from its best "
+        "(best at epoch {best}, current epoch {cur}); use the best-epoch weights "
+        "(selected by default) or reduce epochs",
+    "疑似欠拟合：训练损失末段仍在明显下降（近 {n} 轮斜率为负），建议增加训练轮次":
+        "Suspected underfitting: training loss still dropping clearly at the end "
+        "(negative slope over the last {n} epochs); consider more epochs",
+    "训练收敛正常（损失与验证指标形态无异常）":
+        "Training converged normally (no anomalies in loss or validation metric)",
+    # ---- additions13（V0.7.4 二.2/二.3 双击渲染 + 流程图跳转） ----
+    "检测结果": "Detection Result",
+    "过阈": "above threshold",
+    "绿=过阈检出，红=被阈值过滤的检出；渲染取自复盘保存的结果，不重新推理":
+        "green = detections above threshold, red = detections filtered out by "
+        "the threshold; rendered from saved review results, no re-inference",
+    "用系统看图打开": "Open in system viewer",
+    "图片读取失败": "Failed to read the image",
+    "无图像分数": "No image score",
+    "预测": "Predicted",
+    "前往流程图界面": "Open Flow Editor",
+    "知道了": "Got it",
+    "已写入项目默认检出流程 conf={v:.2f}，可前往流程图界面查看":
+        "Written to the project default detection flow conf={v:.2f}; open the "
+        "Flow Editor to inspect it",
+    "流程图平台启动失败：": "Failed to start the Flow Editor: ",
+    "流程图模板已生成，可前往流程图界面打开运行":
+        "Flow template generated; open it in the Flow Editor to run",
+    # ---- 分数语义 / 复盘 / 跳转（补充） ----
+    "conf→图像分数 z=1/conf−1（0.25→z=3）":
+        "conf → image score z = 1/conf − 1 (0.25 → z = 3)",
+    "conf→图像分数 z=1/conf−1（0.25→z=3）；拖维度阈值面板调分":
+        "conf → image score z = 1/conf − 1 (0.25 → z = 3); "
+        "tune the score in the dimension threshold panel",
+    "批量推理的预测概率下限（拖线调整的下限）":
+        "Predicted-probability floor for batch inference (adjusted by dragging)",
+    "已由测试平台复盘页跳转打开":
+        "Opened via the jump from the Testing Platform review page",
 }

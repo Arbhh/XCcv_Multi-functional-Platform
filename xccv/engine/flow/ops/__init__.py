@@ -12,7 +12,7 @@
 
 
 def ensure_odd(value: int, ctx, label: str) -> int:
-    """核数类参数自动补奇（任务书约定：非奇数 +1，并记录人话警告）。"""
+    """核数类参数自动补奇（非奇数 +1，并给出可读警告）。"""
     v = int(value)
     if v % 2 == 0:
         v += 1
@@ -43,7 +43,8 @@ def load_all() -> None:
     注册（懒加载同一时机）；之后由工作台「刷新」显式热重载。
     """
     from . import (  # noqa: F401
-        ai_bridge, crop, det_filters, listops, logic, output, source,
+        ai_bridge, crop, det_filters, external_ops, listops, locate, logic,
+        measure, output, preprocess, source,
     )
     from .. import custom_ops
 

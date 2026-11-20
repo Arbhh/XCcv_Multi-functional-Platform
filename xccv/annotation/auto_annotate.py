@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """AI 批量预标注（V0.6 T5-4）：对文件夹逐图跑检测/分割模型 → labelme JSON。
 
-- 模型走 engine.models.registry.load_model 唯一入口（.pt；GPU 可用自动用）；
+- 模型走 engine.models.registry.load_model 唯一入口（.pt/.engine；GPU 可用自动用）；
 - 形状映射：检出框→rectangle；分割掩码→多边形（cv2.findContours + approxPolyDP，
   eps 控制简化程度）；每图一个 JSON（不内嵌 imageData，与 T5-1 瘦身一致）；
 - 跳过已有同名 JSON 的图（可关）；进度/取消由调用方（窗口 QThread）驱动；
@@ -48,7 +48,7 @@ def prediction_to_shapes(pred, classes: list, eps_ratio: float = 0.002) -> list:
     labels = [] if pred.labels is None else list(pred.labels)
     scores = [] if pred.scores is None else list(pred.scores)
     masks = getattr(pred, "masks", None)
-    masks = [] if masks is None else list(masks)   # P150：不用真值判空
+    masks = [] if masks is None else list(masks)   # 不用真值判空
     for i, box in enumerate([] if pred.boxes is None else pred.boxes):
         x1, y1, x2, y2 = (float(v) for v in box)
         lid = int(labels[i]) if i < len(labels) else 0

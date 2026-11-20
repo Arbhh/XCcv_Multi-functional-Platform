@@ -11,33 +11,6 @@ import random
 from .base import Sample, Shape
 
 
-def split_counts(n: int, val_ratio: float,
-                 train_ratio: float | None = None) -> tuple[int, int]:
-    """与 split_samples 完全同口径的数量推算（不抽样，仅算个数）。
-
-    → (n_train, n_val)。训练平台划分环状图按当前参数实时推算用；
-    n=0 或比例越界时返回 (0, 0) 兜底。
-    """
-    if n <= 0:
-        return 0, 0
-    if train_ratio is None:
-        train_ratio = 1.0 - val_ratio
-    train_ratio = min(max(float(train_ratio), 0.0), 1.0)
-    val_ratio = min(max(float(val_ratio), 0.0), 1.0)
-    overlap = train_ratio + val_ratio > 1.0 + 1e-9
-    if overlap:
-        n_val = round(n * val_ratio) if val_ratio > 0 else 0
-        n_train = round(n * train_ratio)
-    else:
-        n_train = round(n * train_ratio)
-        rest = n - n_train
-        frac = val_ratio / (1.0 - train_ratio) if train_ratio < 1.0 else 0.0
-        n_val = round(rest * frac) if val_ratio > 0 else 0
-    if val_ratio <= 0:
-        n_val = n_train   # 与 split_samples 同口径：验证集复用训练集
-    return n_train, n_val
-
-
 def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
                   stratify: bool = False, train_ratio: float | None = None,
                   stratify_labels: bool = False):
@@ -46,7 +19,7 @@ def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
     stratify=True 时按 sample.label 分层抽样，保证小数据集下每个类别都进验证集。
     stratify_labels=True（检测/分割，图含多类别标注）按「图的类别组合」分层——
     稀有类别所在图按同比例进验证集，避免验证集缺类导致该类 AP 恒为空
-    （2026-11-06 R-CNN 收敛实测：随机划分下缩水类验证实例=0）。
+    。
     val_ratio=0 时验证集直接复用训练集，保证指标曲线可用。
     train_ratio：训练集占比（0~1）；None 时 = 1-val_ratio（旧口径，划分结果
     与历史版本完全一致）。train_ratio + val_ratio > 1 时允许重叠——验证集
@@ -89,7 +62,7 @@ def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
             train += tr
             val += va
     elif stratify_labels:
-        groups: dict[frozenset, list[Sample]] = {}
+        groups = {}
         for s in samples:
             key = frozenset(sh.label for sh in s.shapes if sh.label) \
                 or frozenset({""})
@@ -103,7 +76,7 @@ def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
             val += va
         # 稀有类兜底：某类别在验证集完全缺席（组内图太少、20% 取整为 0）
         # 时，把训练集中含该类的一张图移入验证集——否则该类 AP 恒为空，
-        # 收敛指标失去参照（2026-11-06 D1 实测：缩水 12 实例验证=0）。
+        # 收敛指标失去参照。
         val_cls = {sh.label for s in val for sh in s.shapes if sh.label}
         all_cls = set()
         for k in groups:
@@ -124,6 +97,33 @@ def split_samples(samples: list[Sample], val_ratio: float, seed: int = 42,
     if not val:
         val = list(train)
     return train, val
+
+
+def split_counts(n: int, val_ratio: float,
+                 train_ratio: float | None = None) -> tuple[int, int]:
+    """与 split_samples 完全同口径的数量推算（不抽样，仅算个数）。
+
+    → (n_train, n_val)。训练平台划分环状图按当前参数实时推算用；
+    n=0 或比例越界时返回 (0, 0) 兜底。
+    """
+    if n <= 0:
+        return 0, 0
+    if train_ratio is None:
+        train_ratio = 1.0 - val_ratio
+    train_ratio = min(max(float(train_ratio), 0.0), 1.0)
+    val_ratio = min(max(float(val_ratio), 0.0), 1.0)
+    overlap = train_ratio + val_ratio > 1.0 + 1e-9
+    if overlap:
+        n_val = round(n * val_ratio) if val_ratio > 0 else 0
+        n_train = round(n * train_ratio)
+    else:
+        n_train = round(n * train_ratio)
+        rest = n - n_train
+        frac = val_ratio / (1.0 - train_ratio) if train_ratio < 1.0 else 0.0
+        n_val = round(rest * frac) if val_ratio > 0 else 0
+    if val_ratio <= 0:
+        n_val = n_train   # 与 split_samples 同口径：验证集复用训练集
+    return n_train, n_val
 
 
 def _class_index(classes: list[str], label: str) -> int:

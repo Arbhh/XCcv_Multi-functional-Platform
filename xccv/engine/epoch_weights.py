@@ -2,12 +2,12 @@
 
 - 目录：<模型储存路径>/epoch_weights，同一项目所有训练共用一个文件夹；
 - 训练启动时清空旧文件（新训练直接覆盖旧权重，磁盘占用只保留最近一次训练）；
-- 每轮结束把权重内存序列化 → torch.save 写 .pt；
-- 产出为标准 .pt 文件，测试平台可直接加载对比。
+- 每轮结束把权重序列化为明文 .pt（原子写：先写 .part 再替换，进程中断不留
+  半截文件）。
 """
 
 import logging
-import torch
+import os
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ EPOCH_DIR_NAME = "epoch_weights"
 
 
 class EpochWeightStore:
-    """轮次权重写入器：reset() 清空共用目录，save() 序列化落盘。"""
+    """轮次权重写入器：reset() 清空共用目录，save() 明文落盘。"""
 
     def __init__(self, model_dir):
         self.dir = Path(model_dir) / EPOCH_DIR_NAME
@@ -34,14 +34,22 @@ class EpochWeightStore:
             log.info("轮次权重文件夹已清空旧内容: %s（%s 个文件）", self.dir, n)
 
     def save(self, epoch: int, payload) -> Path:
-        """保存第 epoch 轮权重：内存序列化 → torch.save 写 .pt。
+        """保存第 epoch 轮权重为明文 .pt（原子替换）。
 
         目录可能被外部清理（用户删除、同步盘冲突）：自动重建，保证训练
         不因轮次存档中断。
         """
+        import torch
+
         self.dir.mkdir(parents=True, exist_ok=True)
-        dst = self.dir / f"epoch_{epoch:03d}.pt"
-        torch.save(payload, dst)
+        path = self.dir / f"epoch_{epoch:03d}.pt"
+        tmp = path.with_name(path.name + ".part")
+        try:
+            with open(tmp, "wb") as f:
+                torch.save(payload, f)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
         log.debug("轮次权重已保存: %s (%.1f MB)",
-                  dst.name, dst.stat().st_size / 1e6)
-        return dst
+                  path.name, path.stat().st_size / 1e6)
+        return path

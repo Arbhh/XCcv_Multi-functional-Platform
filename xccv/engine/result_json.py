@@ -1,4 +1,4 @@
-"""统一检出结果 JSON（schema_version=1）——用户回执 Q1/Q2/Q5 的对外契约。
+"""统一检出结果 JSON（schema_version=1）——平台对外结果契约。
 
 单一出口 build_result_json()：测试平台批量、流程图平台页批量、后续
 C# 接口/独立推理服务共用同一份 schema。原则：
@@ -99,7 +99,7 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
         boxes = [] if boxes is None else boxes   # 判空不用真值（ndarray 歧义，P150）
         # 分类样预测（携带类别概率且无检出框）按分类口径导出——流程链
         # task="flow" 的分类模型此前走 detections 分支，classifications
-        # 恒为空（第五批用户复现：resnet18 九色分类 json 空）
+        # 恒为空（resnet18 九色分类 json 空）
         if task_v == "classification" or (probs and not boxes):
             classifications = classification_topk(prediction, classes)
         else:
@@ -131,7 +131,7 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
         "error": error,
     }
     if score_semantics:
-        # §三additive 键：分数语义元数据（schema 只增不改）
+        # §三（V0.7.3）additive 键：分数语义元数据（schema 只增不改）
         payload["score_semantics"] = {
             "key": str(score_semantics.get("key") or "conf"),
             "name": str(score_semantics.get("name") or "置信度"),
@@ -147,7 +147,7 @@ def build_flow_result_json(*, source: dict, detections: list | None = None,
                            measurements: list | None = None,
                            flow_name: str = "", error: str | None = None,
                            verdict: dict | None = None) -> dict:
-    """传统算法/流程图的统一结果 JSON（用户指令：各类型模型输出保持一致、
+    """传统算法/流程图的统一结果 JSON（各类型模型输出保持一致、
     剔除无效信息）。
 
     与 build_result_json 同一 schema_version 契约（全 ASCII snake_case、
@@ -332,13 +332,13 @@ def batch_summary(results: list, costs_ms: list | None = None) -> dict:
     latency = None
     slow_outliers = None
     if costs:
-        # O13（V0.7）：min/avg 补齐（VIMO 推理页口径：最小/平均/最大耗时）
+        # min/avg 补齐（统一结果口径：最小/平均/最大耗时）
         latency = {"min_ms": round(costs[0], 1),
                    "p50_ms": round(statistics.median(costs), 1),
                    "avg_ms": round(sum(costs) / len(costs), 1),
                    "max_ms": round(costs[-1], 1)}
-        # O15（V0.7）：耗时离散度——单图耗时 > 中位数×3 视为疑似 GPU
-        # 掉频/热节流信号（VIMO 显卡掉频专项口径）
+        # 耗时离散度——单图耗时 > 中位数×3 视为疑似 GPU
+        # 掉频/热节流信号（显卡掉频专项口径）
         med = statistics.median(costs)
         n_out = sum(1 for c in costs if c > med * 3)
         slow_outliers = {"count": n_out, "median_ms": round(med, 1),
@@ -371,7 +371,7 @@ def verdict_from_count_check(flow_info: dict | None) -> dict | None:
 def verdict_from_node_results(results: dict) -> dict | None:
     """流程执行器节点结果 → verdict（扫描全部 ok 节点的判定输出）。
 
-    修复循环 3 起判定节点统一输出 result 端口（值=布尔）：
+    判定节点统一输出 result 端口（值=布尔）：
     - compare_value / bool_op / result_merge：outputs["result"] 为 bool；
     - filter_count_check：结果对象 extra["verdict"] 为 bool（检出本体继续
       向下传递）；旧图的 "passed" 端口仍兼容扫描。

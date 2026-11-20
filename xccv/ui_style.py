@@ -8,16 +8,19 @@ v0.5 UI 升级（2026-09）：主题从「一坨 QSS 字符串」升级为 Token
 2. build_qss(theme)：由 _QSS_TEMPLATE 按 Token 生成全局 QSS
    （APP_QSS = build_qss()，既有 import 不变）；
 3. 兼容别名：BG/PANEL/CARD/BORDER/FG/MUTED/ACCENT/ACCENT2/OK/DANGER/GRID
-   保留（图表、splash 等仍在用）。
+   保留（图表、splash、modeltools 等仍在用）。
 
 约束不放松：QSS 字号下限 15px（test_batch11_ui.FontSizeAuditTest 正则锁）；
 QSS 规则顺序即优先级——列表选中态四态显式声明，hover 必须写在 selected 之后
-的顺序保持不变（用户回执 E1 前科）。
+的顺序保持不变（历史回归教训）。
 """
 
 import json
+import logging as _logging
 import os
 from pathlib import Path
+
+_LOG = _logging.getLogger(__name__)
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
@@ -32,7 +35,7 @@ def icon_path(name: str) -> Path:
 # ============================================================
 
 class C:
-    """颜色 Token。primary 系主色 = 青蓝 #5ec6dd（用户选定 D2）。"""
+    """颜色 Token。primary 系主色 = 青蓝 #5ec6dd（定稿 D2）。"""
 
     # ---- 背景三层 ----
     surface = "#f4f7fb"        # 窗口底层
@@ -169,13 +172,14 @@ def active_theme() -> str:
         theme = str(data.get("theme", "light"))
         return theme if theme in ("light", "dark") else "light"
     except Exception:
+        _LOG.debug("主题偏好读取失败（回退浅色主题）")
         return "light"
 
 
 ACTIVE_THEME = active_theme()
 
 
-# 兼容别名（图表 / splash / dialogs 等既有 import 不变）。
+# 兼容别名（图表 / splash / modeltools / dialogs 等既有 import 不变）。
 # 跟随激活主题取值（暗色下 ACCENT/文字/网格等切到可读的亮色变体）。
 _OVERLAY = _dark_overlay() if ACTIVE_THEME == "dark" else {}
 
@@ -383,7 +387,7 @@ QListWidget, QTreeWidget {
 }
 QListWidget::item { padding: 9px 11px; border-radius: 6px; }
 /* 选中态四态显式声明：hover 规则写在 selected 之后会覆盖其背景，导致
-   "白字 + 浅底"不可见（用户回执 E1/ToE3）；窗口失焦（如对比窗口打开后
+   "白字 + 浅底"不可见）；窗口失焦（如对比窗口打开后
    切回训练页）用 :!active 给出深字浅底的可读组合 */
 QListWidget::item:selected { background: @primary_tint_deep; color: @primary_deep; }
 QListWidget::item:selected:!active { background: @primary_tint; color: @text_1; }
@@ -580,7 +584,7 @@ APP_QSS = build_qss()
 
 
 # ============================================================
-# 3. 主题实时切换（V0.6 F2-5：用户要求浅/暗切换不再需要重启）
+# 3. 主题实时切换（V0.6 F2-5：浅/暗切换无需重启）
 # ============================================================
 # 机制：
 # - set_theme(name)：重算别名常量与 APP_QSS → ThemeBus.theme_changed 广播；
@@ -591,12 +595,10 @@ APP_QSS = build_qss()
 # - install_theme_watcher()：每个平台进程入口挂 QFileSystemWatcher 监听
 #   ui_prefs.json（操作系统文件通知，非轮询——不违反"无常驻负载"红线），
 #   主界面设置里切换 → 已打开的各平台进程同步变色。
-import logging as _logging
 import weakref as _weakref
 
 from PyQt5.QtCore import QObject as _QObject, pyqtSignal as _pyqtSignal
 
-_LOG = _logging.getLogger(__name__)
 _THEMED = _weakref.WeakSet()
 _BUS = None
 _WATCHER = None
@@ -714,6 +716,7 @@ def _on_theme_changed(_name: str) -> None:
         app = QApplication.instance()
         widgets = app.allWidgets() if app is not None else []
     except Exception:
+        _LOG.debug("主题刷新目标收集失败（跳过本轮刷新）")
         widgets = []
     for w in widgets:
         fn = getattr(w, "refresh_theme", None)
@@ -741,6 +744,7 @@ def _prefs_theme():
         theme = str(data.get("theme", "light"))
         return theme if theme in ("light", "dark") else None
     except Exception:
+        _LOG.debug("主题监听路径收集失败（跨进程同步跳过）")
         return None
 
 

@@ -1,6 +1,6 @@
-"""AI 桥接算子（批次十八建立，v0.4.2 按用户批注 Q5 重构）。
+"""AI 桥接算子（建立，v0.4.2 按重构）。
 
-- DetectionPlus：检出扩展字段的**组合式包装**（用户决策 D3：Prediction
+- DetectionPlus：检出扩展字段的**组合式包装**（决策 D3：Prediction
   保持冻结）。__getattr__ 委托内部 Prediction，下游过滤节点/apply_flow
   可直接消费；经旧链过滤后 extra 会丢失（展平为普通 Prediction，属预期）。
 - 模型节点**按任务拆分为三个**（Q5：像旧版一样分模型暴露流程步骤）：
@@ -60,10 +60,10 @@ def _load_model_session(ctx, path: str, device: str = "cpu"):
 
 
 class AiModelBase(VisionNode):
-    """AI 模型节点基类（按任务拆分为三个节点，Q5：流程步骤对外暴露清晰）。
+    """AI 模型节点基类（按任务拆分为三个节点，流程步骤对外暴露清晰）。
 
-    模型加载走 engine.models.registry.load_model 唯一入口（D5），支持
-    .pt；加载后校验任务类型与节点一致；模型按路径会话缓存
+    模型加载走 engine.models.registry.load_model 唯一入口，支持
+    .pt/.engine；加载后校验任务类型与节点一致；模型按路径会话缓存
     （ctx 键 ai_model:<path>）；类别名表写入 ctx.model_classes。
     """
 
@@ -76,7 +76,7 @@ class AiModelBase(VisionNode):
                Port("result", "result", label="结果"))
     PARAMS = {
         "model_path": ParamSpec("model_path", "模型文件", "path", "",
-                                tooltip=".pt 权重"),
+                                tooltip=".pt / .engine 权重"),
         "conf": ParamSpec("conf", "置信度", "float", 0.25, range=(0.0, 1.0)),
         "iou": ParamSpec("iou", "IOU", "float", 0.20, range=(0.0, 1.0)),
         "device": ParamSpec("device", "设备", "enum", "auto",
@@ -250,7 +250,7 @@ class DetectionToMeasure(VisionNode):
         if lo == 0.0 and hi == 0.0:
             passed = None
         elif not vals:
-            # 空检出不允许"全称量化恒真"判通过（P90：没检出 ≠ 合格）
+            # 空检出不允许"全称量化恒真"判通过（没检出 ≠ 合格）
             passed = False
             ctx.warn("检出转测量：未检出目标，测量无值，判定不通过")
         else:

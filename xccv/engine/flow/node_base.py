@@ -3,7 +3,7 @@
 节点实现约定：
 - run() 返回 {输出端口名: 数据}，禁止修改输入对象（零拷贝纪律，测试断言）；
 - run() 内禁止任何 UI 调用/弹窗（UI 反馈一律经 ctx.warn 与快照）；
-- PARAMS 是"参数键 → ParamSpec"表：属性面板据此自动渲染（批次十九），
+- PARAMS 是"参数键 → ParamSpec"表：属性面板据此自动渲染（），
   execute 前按 schema 校验。
 """
 
@@ -100,7 +100,7 @@ class RunContext:
         self._shared[key] = value
         self._revision += 1
         parent = getattr(self, "_parent", None)
-        while parent is not None:   # 子流程改共享键：主图缓存同样失效（T4-4）
+        while parent is not None:   # 子流程改共享键：主图缓存同样失效
             parent._revision += 1
             parent = getattr(parent, "_parent", None)
 
@@ -141,7 +141,7 @@ class RunContext:
 class VisionNode(ABC):
     """流程节点基类。NAME 全局唯一（registry 查重），CATEGORY 用于节点库分组。
 
-    HANDLES_LIST（修复循环 4，并行输入）：默认 False——任一输入收到多张
+    HANDLES_LIST：默认 False——任一输入收到多张
     集合（ImageList/ResultList）时执行器把节点**逐张自动映射**（节点实现
     只面向单张编程）；原生消费集合的节点（结果合并/逐图推理/逐图执行算子）
     置 True 关闭自动映射，自行展开集合。

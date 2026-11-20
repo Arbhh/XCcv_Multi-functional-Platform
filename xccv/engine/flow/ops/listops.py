@@ -1,12 +1,12 @@
-"""多图批处理算子族（V0.6 F2-2 建立；修复循环 3 统一端口；修复循环 4 取消
+"""多图批处理算子族（统一端口；取消
 image_list 端口类型）。
 
-修复循环 4（用户批注：图像/图像列表之分"极其不方便"，应统一为图像端口并按
+（图像/图像列表之分"极其不方便"，应统一为图像端口并按
 并行输入设计）：图像端口可承载单张或多张（多张=ImageList 集合，逐张带原图
 坐标）；除本模块三个原生集合节点（HANDLES_LIST=True）外，**任意节点**收到
 多张时由执行器逐张自动映射（executor._map_over）——「按检出全部裁图」的
 输出可直接接任意节点（预处理/定位/AI 检出…），无需再经「逐图推理/逐图执行
-算子」中转。原「取列表第k张」节点已按用户批注删除（并行输入下不再需要）。
+算子」中转。原「取列表第k张」节点已按删除（并行输入下不再需要）。
 
 本模块节点（端口约定；合并=成对（图像, 结果）输入，连上后自动出现下一对）：
 - crop_by_detection_all「按检出全部裁图」：image + result → image（多张）；
@@ -98,7 +98,7 @@ class CropByDetectionAll(VisionNode):
         det = inputs["result"]
         h, w = img.mat.shape[:2]
         boxes = [] if det is None else _seq(det.boxes)
-        labels = _seq(getattr(det, "labels", None))   # 判空不用真值（P150）
+        labels = _seq(getattr(det, "labels", None))   # 判空不用真值
         scores = _seq(getattr(det, "scores", None))
         keep = list(range(len(boxes)))   # 区域筛选已移交「保留/屏蔽区域」过滤节点
         limit = int(params["max_items"])
@@ -187,7 +187,7 @@ def _roi(item: ImageData):
 
 
 def _as_list(v):
-    """图像端口值 → ImageList（修复循环 4：端口类型统一后单张也允许接入）。"""
+    """图像端口值 → ImageList。"""
     if isinstance(v, ImageList):
         return v
     return ImageList(items=[v])
@@ -210,7 +210,7 @@ class ModelOnList(VisionNode):
     OUTPUTS = (Port("result", "result", label="结果"),)
     PARAMS = {
         "model_path": ParamSpec("model_path", "模型文件", "path", "",
-                                tooltip=".pt 权重（检测/分割/分类均可）"),
+                                tooltip=".pt / .engine 权重（检测/分割/分类均可）"),
         "conf": ParamSpec("conf", "置信度", "float", 0.25, range=(0.0, 1.0)),
         "iou": ParamSpec("iou", "IOU", "float", 0.20, range=(0.0, 1.0)),
         "device": ParamSpec("device", "设备", "enum", "auto",
@@ -218,7 +218,7 @@ class ModelOnList(VisionNode):
     }
 
     def run(self, inputs, params, ctx):
-        from ...models.base import Prediction   # 惰性：牵引 torch（P154）
+        from ...models.base import Prediction   # 惰性：牵引 torch
         from .ai_bridge import _load_model_session
 
         path = str(params.get("model_path") or "")
@@ -341,7 +341,7 @@ class MaskToBox(VisionNode):
     }
 
     def run(self, inputs, params, ctx):
-        from ...models.base import Prediction   # 惰性：牵引 torch（P154）
+        from ...models.base import Prediction   # 惰性：牵引 torch
         from .ai_bridge import DetectionPlus
 
         det = inputs["result"]
@@ -349,7 +349,7 @@ class MaskToBox(VisionNode):
         labels = _seq(getattr(det, "labels", None))
         scores = _seq(getattr(det, "scores", None))
         masks = getattr(det, "masks", None)
-        masks = [] if masks is None else list(masks)   # P150：不用真值判空
+        masks = [] if masks is None else list(masks)   # 不用真值判空
         min_area = int(params["min_area"])
         out_b, out_l, out_s, out_m = [], [], [], []
         dropped = 0
@@ -459,7 +459,7 @@ def geometry_box_mask(geo: Geometry, W: int, H: int, want_mask: bool):
 class MergeResults(VisionNode):
     """结果合并：多路（图像, 结果）对 → 原图坐标下的统一检出。
 
-    输入为成对端口（图像1, 结果1）（图像2, 结果2）…（用户批注/示意图）：
+    输入为成对端口（图像1, 结果1）（图像2, 结果2）…：
     在画布上连上一对后自动出现下一对空输入。每对中：
     - 图像：原图（结果已是原图坐标）或裁图列表（ImageList，逐张带 roi_rect
       ——结果按 roi_rect 换算回原图）；结果为逐图结果列表（ResultList）时与
@@ -490,7 +490,7 @@ class MergeResults(VisionNode):
     }
 
     def run(self, inputs, params, ctx):
-        from ...models.base import Prediction   # 惰性：牵引 torch（P154）
+        from ...models.base import Prediction   # 惰性：牵引 torch
         from ..ir import NumberVal
         from .ai_bridge import DetectionPlus
 
@@ -559,7 +559,7 @@ class MergeResults(VisionNode):
                 p_scores = _seq(getattr(v, "scores", None))
                 p_labels = _seq(getattr(v, "labels", None))
                 p_masks = getattr(v, "masks", None)
-                p_masks = [] if p_masks is None else list(p_masks)   # P150：不用真值判空
+                p_masks = [] if p_masks is None else list(p_masks)   # 不用真值判空
                 for j, b in enumerate(p_boxes):
                     x1, y1, x2, y2 = (float(t) for t in b)
                     boxes.append([x1 + ox, y1 + oy, x2 + ox, y2 + oy])

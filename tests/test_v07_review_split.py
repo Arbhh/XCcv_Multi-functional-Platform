@@ -1,4 +1,4 @@
-"""V0.7 勘误重构（2026-11-13）：测试平台 标准/项目复盘 拆分回归锁。
+"""V0.7 重构：测试平台 标准/项目复盘 拆分回归锁。
 
 - review_logic：三分组（过检>漏检>正确）、阈值复用现算、OK 图口径、未评估；
 - batch_match：per_image 增逐检出 dets 记录（列序与 review_logic 对齐）；
@@ -91,7 +91,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(len(g["unjudged_list"]), 1)
         self.assertEqual(g["unjudged"], 1)
         self.assertEqual(g["total"], 4)
-        # 再勘误④：未评估图必须带条目进组（生产图肉眼可确认）
+        # 再④：未评估图必须带条目进组（生产图肉眼可确认）
         self.assertEqual(g["unjudged_list"][0]["file"], "nogt.png")
         # conf=0.5：b 的低分 FP 被滤掉 → b 转正确；ok 仍过检（0.6≥0.5）
         g = classify_images(stats, {"score": 0.5})
@@ -102,7 +102,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual([e["file"] for e in g["missed"]], ["b.png"])
 
     def test_ok_dir_same_as_training_rule(self):
-        """再勘误③：OK 图判定与训练平台目录名规则（NEGATIVE_DIR_NAMES）同源——
+        """再③：OK 图判定与训练平台目录名规则（NEGATIVE_DIR_NAMES）同源——
         OK 目录内无 json 的图按 OK 评估；非 OK 目录无 json 图 = 未评估。"""
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
@@ -122,7 +122,7 @@ class ClassifyTest(unittest.TestCase):
             self.assertEqual(len(g["unjudged_list"]), 1)       # prod.png 可见
 
     def test_prod_only_folder_still_groups(self):
-        """再勘误④：纯生产图（无任何 GT json）也必须产出完整 per_image，
+        """再④：纯生产图（无任何 GT json）也必须产出完整 per_image，
         复盘「未评估」组要能展示每张图（修复 gt_available 短路）。"""
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
@@ -147,7 +147,7 @@ class ClassifyTest(unittest.TestCase):
         self.assertIn("未评估 3", line)
 
     def test_stats_line_unjudged_scope(self):
-        """未评估范围统计行给 OK/NG 口径（已评估/未评估解耦）。"""
+        """V0.7.2 任务③：未评估范围统计行给 OK/NG 口径。"""
         g = {"correct": [], "missed": [], "over": [],
              "unjudged_ok": 5, "unjudged_ng": 3, "unjudged": 8}
         line = stats_line(g, "unjudged")
@@ -279,7 +279,7 @@ class TestingWindowStructureTest(unittest.TestCase):
         w._switch_mode(1)
         self.assertIs(w._detail_stack.currentWidget(), w.review_page)
         self.assertTrue(w.btn_mode_review.isChecked())
-        # 标准页已剥离本轮新增控件
+        # 标准页已移除本轮新增控件
         self.assertFalse(hasattr(w, "btn_review"))
         self.assertFalse(hasattr(w, "btn_ab"))
         self.assertFalse(hasattr(w, "btn_dist"))
@@ -287,7 +287,7 @@ class TestingWindowStructureTest(unittest.TestCase):
         # 复盘页核心件
         self.assertTrue(hasattr(w.review_page, "threshold_panel"))
         self.assertTrue(hasattr(w.review_page, "cmb_run"))
-        # 再勘误①④ + V0.7.2③：数据集可浏览 + 五分组（已评估三组 + OK/NG 两组）
+        # 再①④ + V0.7.2③：数据集可浏览 + 五分组（已评估三组 + OK/NG 两组）
         self.assertTrue(hasattr(w.review_page, "btn_browse"))
         self.assertTrue(hasattr(w.review_page, "fld_dataset"))
         self.assertEqual(len(w.review_page.grids), 5)
@@ -303,10 +303,10 @@ class TestingWindowStructureTest(unittest.TestCase):
         self.assertTrue(w.review_page.threshold_panel._scope == "unjudged")
         w.review_page._set_scope("evaluated")
         self.assertFalse(w.review_page.grp_correct.isHidden())
-        # 再勘误②：面板为 compact 上下布局（直方图不被表单挤成窄条）
+        # 再②：面板为 compact 上下布局（直方图不被表单挤成窄条）
         from xccv.testing.threshold_panel import ThresholdPanel
         self.assertIsInstance(w.review_page.threshold_panel, ThresholdPanel)
-        # 勘误：关闭/启动兜底清缓存——close 后 review_cache 目录必须消失
+        # 关闭/启动兜底清缓存——close 后 review_cache 目录必须消失
         cache = Path("platform_data/review_cache")
         cache.mkdir(parents=True, exist_ok=True)
         (cache / "复盘缓存.json").write_text("{}", encoding="utf-8")

@@ -62,7 +62,7 @@ def img_data_to_png_data(img_data):
 def img_qt_to_arr(img_qt):
     """QImage → RGB uint8 ndarray（H, W, 3）。
 
-    2026-11-06 统一修复：非 RGB888 一律 convertToFormat(Format_RGB888)。
+    统一修复：非 RGB888 一律 convertToFormat(Format_RGB888)。
     原实现 bits() 直读——toImage() 常给 ARGB32_Premultiplied（预乘 alpha
     + BGRA 序），直读出现整体亮度偏移/通道错位（实测灰度图 qt=111 vs 源
     =124，SAM 编码受污染把小目标解成大背景块）；灰度图则 depth=8 按 1

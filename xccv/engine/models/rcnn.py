@@ -49,8 +49,8 @@ class RcnnDataset(Dataset):
         self.ops = dict(augment_ops) if (train and augment_ops) else None
         self.op_probs = dict(augment_probs or {})
         self.samples = list(samples)
-        self._grayscale = bool(grayscale)  # O5（V0.7）：灰度训练（读图转灰再复制 3 通道）
-        # T9-3 切图训练（opt-in）：预生成 (样本, x, y) 索引现场裁剪、不落盘；
+        self._grayscale = bool(grayscale)  # 灰度训练（读图转灰再复制 3 通道）
+        # 切图训练（opt-in）：预生成 (样本, x, y) 索引现场裁剪、不落盘；
         # 验证集不传 tiling（始终整图评估）
         tiling = dict(tiling) if (train and tiling) else None
         self._tile = int((tiling or {}).get("tile", 640))
@@ -71,7 +71,7 @@ class RcnnDataset(Dataset):
                 else len(self.samples))
 
     def _read(self, path):
-        """读图（O5：灰度模式转灰再复制 3 通道，下游增强/张量化零改动）。"""
+        """读图（灰度模式转灰再复制 3 通道，下游增强/张量化零改动）。"""
         return imread_unicode(path, color=not self._grayscale)
 
     def __getitem__(self, index: int):
@@ -120,7 +120,7 @@ class RcnnDataset(Dataset):
         return img, target
 
     def _getitem_tiled(self, index: int):
-        """切图条目（T9-3）：加载整图→在线增强（画布口径）→裁 tile→标签
+        """切图条目：加载整图→在线增强（画布口径）→裁 tile→标签
         按中心归属/可见面积过滤（重叠区去重已在 crop_target_boxes 执行——
         框只归中心所在的第一个窗口，跨 tile 不重复）。x/y 为 None=整图混入。"""
         e = self._entries[index]
@@ -413,12 +413,14 @@ def app_paths_fallback() -> str:
 
 
 def _load_slim_pretrained(net, num_classes: int) -> bool:
-    """maskrcnn18+slim 头的平台级预训练注入（weights/maskrcnn18_slim_*.pth）。
+    """maskrcnn18+slim 头的平台级预训练注入（weights/maskrcnn18_slim_*.pt）。
 
-    明文 .pth 预训练权重。骨干+FPN+RPN 严格加载；类别头按形状匹配
-    （COCO 类数与用户类别数不一致的头层跳过，不静默丢弃）。
-    缺文件/损坏只告警返回 False，不阻断训练。
+    权重不随仓库分发（自行构建或转换，见仓库文档）；支持自建 init 与
+    COCO 骨干迁移两种产物。骨干+FPN+RPN 严格加载；类别头按形状匹配
+    （COCO 类数与用户类别数不一致的头层跳过，不静默丢弃）。缺文件/损坏
+    只告警返回 False，不阻断训练。
     """
+    import io
     from pathlib import Path
 
     from ..offline import WEIGHTS_DIR   # 约定：算法引擎权重目录（开发态=
@@ -428,7 +430,10 @@ def _load_slim_pretrained(net, num_classes: int) -> bool:
     roots = [WEIGHTS_DIR, Path(app_paths_fallback())]
     cands = []
     for root in roots:
-        cands += [root / "maskrcnn18_slim_init.pth",
+        # 源权重=自建 init 优先；coco 转换产物仅最后兜底
+        cands += [root / "maskrcnn18_slim_init.pt",
+                  root / "maskrcnn18_slim_init.pth",
+                  root / "maskrcnn18_slim_coco.pt",
                   root / "maskrcnn18_slim_coco.pth"]
     for cand in cands:
         if not cand.is_file():
@@ -436,7 +441,8 @@ def _load_slim_pretrained(net, num_classes: int) -> bool:
         try:
             import torch
 
-            ckpt = torch.load(cand, map_location="cpu", weights_only=False)
+            ckpt = torch.load(cand, map_location="cpu",
+                              weights_only=False)
             sd = ckpt.get("state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
             model_sd = net.state_dict()
             strict, skipped = {}, []
@@ -469,7 +475,7 @@ def _load_slim_pretrained(net, num_classes: int) -> bool:
 
 def _apply_train_input(net, train_input: int, canvas_short: int,
                        arch: str) -> int:
-    """T9-2 两段式缩放（opt-in）：画布增强保持画布口径，入网前由
+    """两段式缩放（opt-in）：画布增强保持画布口径，入网前由
     GeneralizedRCNNTransform 按 keep_ratio 缩到显式 train_input（points/
     boxes/masks 由 transform 同步缩放）。
 
@@ -800,7 +806,7 @@ class RCNNModel(BaseModel):
         elif cfg.freeze_backbone:  # 剪枝预训练模型：冻结骨干 body，FPN/RPN/头保持训练
             for p in self.net.backbone.body.parameters():
                 p.requires_grad_(False)
-        # T9-2 两段式缩放（opt-in）：在网络建好/恢复后改写 transform 入网尺寸
+        # 两段式缩放（opt-in）：在网络建好/恢复后改写 transform 入网尺寸
         applied_input = _apply_train_input(self.net, cfg.train_input, size,
                                            self.arch)
 
@@ -822,7 +828,7 @@ class RCNNModel(BaseModel):
                                     grayscale=getattr(cfg, "color_mode", "color") == "gray")
             # 切图训练：tile 按原尺度入网（网络变换尺寸=tile），验证/保存仍按画布
             # 尺寸——原先 tile 被网络变换放大到画布短边（640 tile ×3 放大），训练与
-            # 整图评估尺度错位（E4 切图实验 0.156 的根因）
+            # 整图评估尺度错位（切图评估尺度错位的根因）
             self._tile_tsize = None
             if tiling_cfg and getattr(self.net, "transform", None) is not None:
                 _t = self.net.transform
@@ -834,11 +840,9 @@ class RCNNModel(BaseModel):
                          "请配合分块推理）", cfg.tile_size, cfg.tile_overlap,
                          cfg.bg_tile_keep, cfg.min_visibility,
                          cfg.mix_full_view, len(train_set))
-            val_set = RcnnDataset(data.val_samples, data.classes, self.task,
-                                  train=False,
-                                  grayscale=getattr(cfg, "color_mode", "color") == "gray")
+            val_set = RcnnDataset(data.val_samples, data.classes, self.task, train=False)
             val_set.coco = memory_coco(data.val_samples, data.classes, self.task.value)
-            self.color_mode = getattr(cfg, "color_mode", "color")  # O5：评估/混淆矩阵同口径
+            self.color_mode = getattr(cfg, "color_mode", "color")  # 评估/混淆矩阵同口径
             # 混合精度：GPU 上启用（缩短训练时间），CPU 自动关闭（界面可控）
             use_amp = cfg.use_amp and self.device == "cuda"
             # 显存预算：预估超出空闲显存时先启用梯度检查点（激活省约 60%），
@@ -869,7 +873,7 @@ class RCNNModel(BaseModel):
                      "开" if need_ckpt else "关")
             pin = self.device == "cuda"
             gen = (torch.Generator().manual_seed(cfg.seed)
-                   if getattr(cfg, "deterministic", False) else None)  # E3（V0.7）
+                   if getattr(cfg, "deterministic", False) else None)  # 
             loader = DataLoader(train_set, batch_size=bs, shuffle=True,
                                 num_workers=cfg.workers, collate_fn=_collate,
                                 pin_memory=pin,
@@ -884,7 +888,7 @@ class RCNNModel(BaseModel):
 
             params = [p for p in self.net.parameters() if p.requires_grad]
             # R-CNN 默认 AdamW lr=1e-4——旧默认 SGD lr=1e-3 在冻结 BN 的
-            # 小数据 R-CNN 上易平台期（用户实测第 2 轮后损失几乎不动）。
+            # 小数据 R-CNN 上易平台期（实测第 2 轮后损失几乎不动）。
             # 默认 AdamW(1e-4, wd 0.05)，rcnn_optimizer="sgd" 可回退旧行为
             if cfg.rcnn_optimizer == "adamw":
                 base_lr = cfg.rcnn_learning_rate or 1e-4   # 0=自动
@@ -1001,7 +1005,7 @@ class RCNNModel(BaseModel):
                 history.append({"epoch": epoch, **logs})
                 reporter.on_epoch(epoch, logs)
                 if getattr(self, "epoch_store", None) is not None:
-                    # 逐轮存档（内存序列化 → .pt）
+                    # 逐轮存档（序列化 → epoch_weights/ 明文 .pt）
                     self.epoch_store.save(epoch, {
                         "format": "xccv-rcnn", "arch": self.arch, "task": self.task.value,
                         "classes": data.classes, "min_size": size,
@@ -1018,7 +1022,7 @@ class RCNNModel(BaseModel):
 
             if best_state is not None:
                 self.net.load_state_dict(best_state)
-            # 保存最优权重 best.pt
+            # 训练产物明文落盘
             best_pt = cfg.output_dir / "best.pt"
             best_ckpt = {
                 "format": "xccv-rcnn", "arch": self.arch, "task": self.task.value,
@@ -1028,7 +1032,7 @@ class RCNNModel(BaseModel):
                 "anchor_base": anchor_used,
                 # T10-3 联动：部署侧读 meta 决定推理口径（0=跟随画布）
                 "train_input": applied_input,
-                # O5（V0.7）：灰度训练标记随权重走（load_weights/predict 同口径）
+                # 灰度训练标记随权重走（load_weights/predict 同口径）
                 "color_mode": getattr(cfg, "color_mode", "color"),
             }
             if cfg.resume_from_pruned:
@@ -1103,7 +1107,7 @@ class RCNNModel(BaseModel):
         if not dets:
             out = {"map50": 0.0, "map50_95": 0.0,
                    "map_loose": 0.0, "map10": 0.0, "map25": 0.0, "mar_loose": 0.0}
-            out["per_class_ap50"] = []  # O1：无检出无逐类 AP
+            out["per_class_ap50"] = []  # 无检出无逐类 AP
             if self.with_masks:
                 out.update(mask_map50=0.0, mask_map50_95=0.0)
             return out
@@ -1115,7 +1119,7 @@ class RCNNModel(BaseModel):
             return round(max(0.0, float(x)), 4)
 
         iou_types = ["bbox"] + (["segm"] if self.with_masks else [])
-        out: dict = {}
+        out = {}
         for iou_type in iou_types:
             ev = COCOeval(coco_gt, coco_dt, iouType=iou_type)
             ev.evaluate()
@@ -1152,7 +1156,7 @@ class RCNNModel(BaseModel):
         out["map25"] = _sane(aps[1])
         out["map_loose"] = _sane(sum(aps) / 3.0)
         out["mar_loose"] = _sane(sum(ars) / 3.0)
-        # O1（V0.7）：逐类 AP@50——取宽松评估数组 IoU 0.50 档（area=all、
+        # 逐类 AP@50——取宽松评估数组 IoU 0.50 档（area=all、
         # maxDets=末档，与标准 map50 同口径），仅 additive 不影响既有键
         out["per_class_ap50"] = coco_per_class_ap50(prec)
         return out
@@ -1204,8 +1208,8 @@ class RCNNModel(BaseModel):
     @torch.no_grad()
     def predict(self, image_bgr: np.ndarray, conf: float = 0.25, iou: float = 0.45) -> Prediction:
         self.net.eval()
-        # O5（V0.7）：灰度训练的模型推理前同样转灰（训练/推理同处理方式，
-        # VIMO"SDK 效果与平台不符"第 3 因的防御）
+        # 灰度训练的模型推理前同样转灰（训练/推理同处理方式，
+        # 外部 SDK 与平台结果不符场景的防御）
         if getattr(self, "color_mode", "color") == "gray":
             gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
             image_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -1229,7 +1233,7 @@ class RCNNModel(BaseModel):
 
     # ---- 权重 ----
     def load_weights(self, path) -> None:
-        # path 为权重文件路径或 ckpt 字典（训练回调直传）
+        # path 为权重文件路径，或已加载的 ckpt 字典（内存直传）
         if isinstance(path, dict):
             ckpt = path
         else:
@@ -1241,7 +1245,7 @@ class RCNNModel(BaseModel):
         self.classes = ckpt["classes"]
         self.industrial = ckpt.get("industrial_opt", False)
         self.mask_head_light = ckpt.get("mask_head_light", False)  # 供引擎导出透传
-        self.color_mode = ckpt.get("color_mode", "color")  # O5：推理侧同口径转灰
+        self.color_mode = ckpt.get("color_mode", "color")  # 推理侧同口径转灰
         self._min_size = ckpt.get("min_size", self.default_image_size)
         if "net_module" in ckpt:  # 模型工具剪枝后的整网结构：直接取用
             self.net = ckpt["net_module"]

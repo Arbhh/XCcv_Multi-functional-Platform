@@ -1,6 +1,6 @@
 """状态栏分层总线（v0.5.4 任务三）。
 
-分层规则（用户定案）：**大功能平台拥有专属底部状态栏**（训练平台、测试
+分层规则：**大功能平台拥有专属底部状态栏**（训练平台、测试
 平台、标注平台、模型工具、推理服务、模型加载、C# 测试）；其下的小项目、
 子功能窗口不再各自显示状态栏，消息统一路由到所属大平台的状态栏。
 
@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import QLabel
 TRAINING = "training"
 TESTING = "testing"
 ANNOTATION = "annotation"
+MODELTOOLS = "modeltools"
 DEPLOY = "deploy"          # 推理服务
 MODEL_LOAD = "model_load"
 CSHARP = "csharp"
@@ -27,6 +28,7 @@ _hosts = {}   # key -> weakref.ref(QMainWindow)
 
 
 def attach_platform_status(win, label: str, key: str) -> None:
+    """大平台主窗口：状态栏左侧加平台名徽章并注册为消息宿主。"""
     from .i18n import tr
 
     badge = QLabel(f"  {tr(label)}  ")

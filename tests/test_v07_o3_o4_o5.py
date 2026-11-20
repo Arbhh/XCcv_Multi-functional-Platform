@@ -143,7 +143,7 @@ class GrayModeTest(unittest.TestCase):
 
 
 class ManifestTest(unittest.TestCase):
-    """E2：run_manifest 序列化回归（f7e 实锤坑：asdict 含 Path → TypeError
+    """run_manifest 序列化回归（f7e 实锤坑：asdict 含 Path → TypeError
     静默写入失败）。"""
 
     def test_manifest_serializes_with_path_fields(self):
@@ -166,9 +166,9 @@ class ManifestTest(unittest.TestCase):
 
 
 class SplitDonutTest(unittest.TestCase):
-    """O12：环形图随统计刷新（offscreen 冒烟——构造已在 ProjectWindow 内）。
+    """环形图随统计刷新（offscreen 冒烟——构造已在 ProjectWindow 内）。
 
-    V0.7.1：签名改为 (已标数, OK 数, 训练比例, 验证比例)——随划分参数实时重绘。
+    签名改为 (已标数, OK 数, 训练比例, 验证比例)——随划分参数实时重绘。
     """
 
     def test_update_split_smoke(self):

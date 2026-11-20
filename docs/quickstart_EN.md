@@ -75,19 +75,59 @@ The review page decouples **Evaluated / Unevaluated** (toggle on top):
   Compare" compares two weights image by image (results for the same weights and parameters are
   cached — reopening the dialog does not re-run inference) and shows an overall verdict bar.
 
-## 4. Flowchart (AI + common operators)
+## 4. Flowchart (AI + classic operators)
 
 Click "Flowchart" in the workbench's left navigation (same level as the AI platform):
 1. "Select Folder" picks the image directory (the image tree supports preview);
 2. "Model Directory" chooses where flow JSONs live; "New" creates a blank flow, or pick an
-   existing flow / template;
+   existing flow / template (9 built-in templates: AI filter, cascade crop-merge,
+   template-match prefilter, circle locate, etc.);
 3. "Edit Flow" opens the canvas: drag **AI operators** (detection / instance segmentation /
-   classification / per-image inference) and **common operators** (crop, grid tiling, result
-   merge, detection filters, logic verdict, output) and connect them; model nodes need a `.pt`
-   weight picked in the property panel;
+   classification / per-image inference) and **classic operators** (crop, grid tiling, result
+   merge, detection filters, blob analysis / template matching / find line & circle /
+   measurement, logic verdict, external-operator plugin backend, output) and connect them;
+   model nodes need a `.pt` weight picked in the property panel;
 4. "Run Flow" executes a single image and shows the result on the right; "Batch Run" executes
    the whole directory and exports results;
 5. "Pack Flow" bundles the flow and its models into one `.xvap` file for reuse on other machines.
+
+## 5. Deployment platform and inference service
+
+Click "Deployment" in the workbench's left navigation — three cards:
+
+1. **Inference service**: "Start Service" launches the HTTP inference service
+   (default `127.0.0.1:8600`; an API key is generated on first start and can be copied /
+   reset in the panel). Endpoints:
+   - `POST /v1/models/load`: load a `.pt` / `.engine` model as a resident API;
+   - `POST /v1/infer/image`, `POST /v1/infer/batch`, `POST /v1/render/overlay`:
+     single-frame / batch inference and overlay rendering;
+   - `POST /v1/flows/load` + `POST /v1/flows/run`: resident flow packages;
+   - `WS /v1/ws/infer`: WebSocket binary-frame streaming inference;
+   - `GET /docs`: self-hosted offline Swagger documentation;
+2. **Model Loading**: load models / flow packages as resident APIs from a window — no code
+   needed (status table refreshes every 2 s);
+3. **C# Test**: one-click build & run of the WinForms demo (same as
+   `xccv\service\csharp\build_demo.bat`) — load a model → infer → inspect the unified JSON
+   and overlay image. The deployment platform also offers a "Consistency Check"
+   (the same image through local inference and the HTTP service, compared box by box).
+
+For headless deployment use `run_service.bat` (or `python -m xccv.service.main --port 8600`).
+
+## 6. Model tools
+
+The workbench "Model Tools" card (or `run_modeltools.bat`):
+
+1. **Model pruning**:
+   - Pre-training pruning: builds a pruned model from the project dataset (saved under the
+     project's model folder `pruned/`; it appears in the training platform's model dropdown —
+     pick it to start transfer learning);
+   - Post-training pruning: processes a training run's `best.pt` and writes `best_pruned.pt`
+     next to it, ready to compare head-to-head in the testing platform;
+2. **Model acceleration (TensorRT)**: export `best.pt` to a TensorRT engine (`.engine`,
+   FP16/FP32; needs GPU + TensorRT; YOLO via the native ultralytics path, classification via
+   in-memory ONNX→TRT, Mask R-CNN feature-segment acceleration). The testing platform loads
+   `.engine` directly; engines are bound to the building GPU model — cross-GPU loading gives
+   a clear message.
 
 ## FAQ
 
@@ -108,7 +148,24 @@ Click "Flowchart" in the workbench's left navigation (same level as the AI platf
   "Lightweight mask head" and other acceleration options;
 - **Switching the UI language**: workbench "Settings" → "Language" → English; all windows
   switch automatically after saving (no restart needed). The preference is stored in
-  `platform_data/ui_lang.json`; a few uncovered texts fall back to Chinese.
+  `platform_data/ui_lang.json`; a few uncovered texts fall back to Chinese;
+- **Are model weights plaintext?** Yes. Since 0.8.0 all training / pruning / acceleration
+  artifacts are plaintext (`best.pt`, `best_pruned.pt`, `.engine`); the legacy encrypted
+  containers (`.xva` / `.xcs`) are no longer supported — retrain or re-export with the
+  current version;
+- **Which TensorRT to install**: `pip install tensorrt` matching your CUDA major version,
+  or set `TENSORRT_DIR` to a folder containing `nvinfer_10.dll`. Engines are bound to the
+  building GPU's compute capability (an engine built on an RTX 30 card will not load on a
+  20-series card);
+- **Where is the inference service API key**: `platform_data/service/config.json`
+  (generated on first start; the deployment panel can reset it in one click);
+- **Why are there no weights or sample images in the repo**: this project ships no model
+  weights and no sample data. Weights follow their publishers' licenses and are obtained by
+  the user (placement table in the README "Optional: weights and sample data"); defect-synthesis
+  sample images live in the separate `XCcv-Platform-testdata-0.8.0.zip` package;
+- **Where do the sample images go**: extract `XCcv-Platform-testdata-0.8.0.zip` under
+  `xccv/defectgen/` (yielding `xccv/defectgen/testdata/`). Without it the synthesis UI still
+  runs — just point it at your own background/patch folders.
 
 ## License Note
 

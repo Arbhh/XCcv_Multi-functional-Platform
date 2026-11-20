@@ -1,13 +1,12 @@
-# Adapted from CIF (https://github.com/Sunny5250/CIF)
-# Copyright (c) 2025 Sunny5250
-# Licensed under the MIT License. See licenses/CIF-LICENSE-MIT.txt.
-# Modifications Copyright (c) 2026 XCcv Community contributors.
 """CIF 无监督异常检测后端（RGB-only，论文口径 L=1/α=0.9/K=4）。
 
-来源：CIF（AAAI 2026，arXiv 2511.05966）少样本多模态异常检测；本实现为
-平台 2D 图像链的 RGB 分支移植。特征/聚类/降维主路径分别使用 timm、
-scikit-learn、anomalib；任一缺失时回退到纯 torch ViT、cv2.kmeans 与原始
-特征直算，保留零依赖运行能力。指标使用平台自有 image_auroc/image_ap。
+来源：CIF（AAAI 2026，arXiv 2511.05966）少样本多模态异常检测；本地复现
+`E:\Zcode\Study\CIF`（B+）。平台集成口径按集成设计落地。
+依赖对齐：主路径与复现工程同款——timm ViT 特征
+（dino_vit.py）、sklearn.KMeans(random_state=0)、anomalib SRP(eps=0.9)
+（三包均已随复现装在平台 venv，不新增安装）；anomalib/timm/sklearn 缺失
+时各自回退（cv2.kmeans / 纯 torch ViT / 原始特征直算），零依赖能力保留。
+torchmetrics 仍不需要（平台自有 image_auroc/image_ap）。
 
 管线（RGB 分支）：
 1. 特征：DINO ViT-B/8（224 输入 → 28×28=784 patch token，768 维，全 12 层）；
@@ -23,17 +22,18 @@ scikit-learn、anomalib；任一缺失时回退到纯 torch ViT、cv2.kmeans 与
 
 ------------------------------------------------------------------------
 ANOMALY 后端契约（后续 SubspaceAD/RAD 等接入模板；本类即参照实现）：
-- 注册：engine/models/registry.py MODEL_SPECS + load_model 容器分支（vendored 区
+- 注册：engine/models/registry.py MODEL_SPECS + load_model 容器分支（模型层
   唯一触碰点）；supported_tasks=(TaskType.ANOMALY,)，family="folder"；
 - fit(data, cfg, reporter) -> metrics：metrics.json 键与 patchcore 同构
   （final.auroc/ap/ok_fp_rate、classes、history 单条；additive 允许）；
 - predict(image_bgr, conf, iou) -> Prediction：labels 全 0、boxes/scores
   （框内最大 z）、masks（与框一一对应）、probs=[图像级 z]——测试平台/
   复盘/回流零改动即可消费；
-- save_weights/load_weights："xccv-<backend>" 容器（平台明文 .pt 权重）；
-  冻结骨干
+- save_weights/load_weights："xccv-<backend>" 明文容器（fit 收尾写
+  best.pt）；冻结骨干
   （DINO 等）不进容器，只记指纹，加载时按 weights/ 落点重建；
-- TRT 导出：不支持（记忆库/超图非标准算子图；.pt 交付，文档注明）。
+- TensorRT .engine：记忆库/检索类后端一律不支持（与 patchcore 同口径，
+  文档注明）。
 ------------------------------------------------------------------------
 """
 
@@ -93,7 +93,7 @@ def _kmeans(feats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """K-Means（返回 (labels(M,), centers(k,D))）。
 
     主路径 = sklearn.KMeans(n_clusters=k, random_state=0, n_init='auto')，
-    与复现工程逐参同款（2026-11-17 依赖对齐；sklearn 已在平台 venv）。
+    与复现工程逐参同款。
     回退 = cv2.kmeans（kmeans++ 同语义；内部 RNG 随进程推进，先
     setRNGSeed(0) 复位保持同输入 ⇒ 同输出）。
     """
@@ -532,12 +532,12 @@ class CifModel(BaseModel):
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
         self.task = TaskType.ANOMALY
-        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        # §三（V0.7.3）：图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
         self.score_semantics = {
             "key": "z", "name": "图像分数", "range": [0.0, None],
             "higher": "分数越高越异常（OK 分布 z 标定）",
         }
-        # 免训练范式声明（UI 隐藏轮次类参数、阶段化进度）
+        # §四（V0.7.3）：免训练范式声明（UI 隐藏轮次类参数、阶段化进度）
         self.train_mode = "free"
         self.image_size = self.default_image_size
         # DINO 权重缺失在此即抛（创建模型时用户即见提示，训练前不空转）
@@ -720,7 +720,7 @@ class CifModel(BaseModel):
         n_fp = sum(1 for s, l in zip(scores, labels)
                    if l == 0 and (s - self.score_mu) / self.score_sigma >= z25)
         n_ok_v = sum(1 for l in labels if l == 0)
-        # 权重落盘：平台明文 best.pt 容器
+        # 权重落盘：明文 best.pt
         best_pt = Path(cfg.output_dir) / "best.pt"
         self.save_weights(best_pt)
         metrics = {
@@ -779,7 +779,7 @@ class CifModel(BaseModel):
 
     # ---- 权重 ----
     def save_weights(self, path: Path) -> None:
-        """xccv-cif 容器（平台明文 .pt 权重）。
+        """xccv-cif 容器（明文 torch.save）。
 
         冻结骨干不进容器（330MB×每模型不可接受）：只记指纹，加载时按
         weights/dino 落点重建（设计文档 §四）。
@@ -797,7 +797,7 @@ class CifModel(BaseModel):
         torch.save(ckpt, path)
 
     def load_weights(self, source) -> None:
-        """source：明文路径 / ckpt dict（registry 统一入口语义）。"""
+        """source：权重路径 / ckpt dict（registry 统一入口语义）。"""
         if isinstance(source, dict):
             ckpt = source
         else:

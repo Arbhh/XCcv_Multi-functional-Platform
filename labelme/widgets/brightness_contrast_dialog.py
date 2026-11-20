@@ -46,7 +46,7 @@ class BrightnessContrastDialog(QtWidgets.QDialog):
             #
             # lambda 必须接收 *args：Cython 编译态下编译函数无 code object，
             # PyQt 无法按签名裁剪 valueChanged(int) 的实参，无参 lambda 会
-            # 被多传参 TypeError → 进程 abort（坑清单 5.1.1 同族）
+            # 被多传参 TypeError → 进程 abort
             slider.valueChanged.connect(
                 lambda *_, s=slider, lb=value_label:
                     lb.setText(f"{s.value() / self._base_value:.2f}"))

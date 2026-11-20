@@ -110,9 +110,9 @@ class DistributionCanvas(_WheelThroughCanvas):
 
 
 class SplitDonutCanvas(_WheelThroughCanvas):
-    """O12（V0.7）：训练/验证划分环形图。
+    """训练/验证划分环形图。
 
-    V0.7.1 勘误：划分由训练参数区的训练集比例 / 验证集比例决定，
+    划分由训练参数区的训练集比例 / 验证集比例决定，
     改参数即重绘（数量按 split_samples 同口径推算），不再只随统计刷新。
     """
 
@@ -149,7 +149,7 @@ class SplitDonutCanvas(_WheelThroughCanvas):
             segs.append((f"{tr(f'{name}训练')} {tr_r}", tr_r))
             segs.append((f"{tr(f'{name}验证')} {va}", va))
         if not segs or sum(v for _, v in segs) <= 0:
-            self.ax.text(0.5, 0.5, "暂无数据", ha="center", va="center",
+            self.ax.text(0.5, 0.5, tr("暂无数据"), ha="center", va="center",
                          color=MUTED, fontsize=11)
             self.ax.set_axis_off()
             self.draw()

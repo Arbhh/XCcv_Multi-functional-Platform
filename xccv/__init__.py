@@ -1,3 +1,3 @@
-"""XCcv Community —— 零基础深度学习视觉模型训练平台（社区版）。"""
+"""XCcv Multi-functional Platform —— 多功能深度学习视觉平台（全量开源）。"""
 
-__version__ = "0.7.3-community"
+__version__ = "0.8.0"

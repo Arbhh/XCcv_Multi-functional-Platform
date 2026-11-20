@@ -162,7 +162,7 @@ def _ports(items, kind: str, errs: list) -> list:
         name = str((p or {}).get("name") or "")
         typ = str((p or {}).get("type") or "")
         if typ == "image_list":
-            typ = "image"   # 修复循环 4：image_list 端口类型取消，旧定义平移
+            typ = "image"   # image_list 端口类型取消，旧定义平移
         if not _NAME_RE.match(name):
             errs.append(f"{kind}第 {i + 1} 个端口名「{name}」非法（字母/数字/下划线）")
             continue

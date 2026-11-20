@@ -1,7 +1,14 @@
-"""XCcv Community 主界面：统一入口（平台卡片墙 + 最近项目 + 全局搜索）。
+"""XCcv 主界面：统一入口（左侧图标导航 + 顶栏服务状态 + 四个同级平台页）。
 
-主界面本身保持轻量（不含 torch 等重型依赖）。点击平台卡片时以独立子进程
-拉起标注 / 训练 / 测试 / 缺陷样本合成四个平台，平台崩溃互不影响。
+主界面本身保持轻量（不含 torch 等重型依赖）。左侧导航切换四个同等级页面：
+AI 平台（卡片墙，点击平台卡片时以独立子进程拉起标注 / 训练 / 测试 / 模型
+工具，平台崩溃互不影响）、传统平台（首次进入加载算子工作台）、流程图平台
+页（画布编辑由 HTML 画布窗口承担）、部署平台（推理服务控制，v0.5）。
+
+v0.5 UI 升级（期1）：图标化导航 + 底部系统区；顶栏页面标题 + 全局搜索
+（实时过滤 AI 平台卡片/最近项目）+ 服务状态胶囊（共享 ServiceHealthPoller
+轮询，点击跳部署平台）；平台卡渐变图标底 + 悬停阴影抬升；最近项目横排
+小卡直达训练平台。
 
 运行：python -m xccv.app
 """
@@ -11,17 +18,19 @@ if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再�
 
     early_splash("main", "主界面")
 
-# QtWebEngine 早期初始化：主界面进程内要创建流程画布（FlowGraphWebWindow），
-# 必须在 QApplication 建立前导入并开启共享 OpenGL 上下文（否则画布崩溃/白屏）。
-from PyQt5.QtCore import Qt as _Qt  # noqa: E402
-from PyQt5.QtWidgets import QApplication as _QApp  # noqa: E402
+# QtWebEngine 早期初始化（与 platform_entry 同理，主界面也可能派生工具流程）
+import logging
+log = logging.getLogger(__name__)
+from PyQt5.QtCore import Qt as _Qt
+from PyQt5.QtWidgets import QApplication as _QApp
 
 if _QApp.instance() is None:
     _QApp.setAttribute(_Qt.AA_ShareOpenGLContexts, True)
 try:
     import PyQt5.QtWebEngineWidgets  # noqa: F401,E402
-except Exception:  # noqa: BLE001  环境缺件时流程图编辑会给出中文指引
-    pass
+except Exception:
+    log.debug("QtWebEngine 不可用（Web 功能降级）")
+
 
 import json
 import os
@@ -54,19 +63,24 @@ _ASSETS = Path(__file__).resolve().parent / "assets"
 
 # 平台卡片：key / 标题 / 描述 / 图标 / 渐变底（起, 止）
 _PLATFORMS = [
-    ("annotation", "标注平台", "绘制矩形 / 多边形，自动保存 labelme json；AI 智能标注",
+    ("annotation", "标注平台", "绘制矩形 / 多边形，自动保存 labelme json；分类模式一键归档",
      "annotation.png", ("#5b9df5", "#3a7ce0")),
     ("training", "训练平台", "项目管理、数据集可视化、增强策略、参数配置与实时训练曲线",
      "training.png", ("#f6a13c", "#ef7f1a")),
     ("testing", "测试平台", "加载模型推理，置信度 / IOU 实时调节，bbox 与掩码可视化",
      "testing.png", ("#57c793", "#2fae66")),
-    ("defectgen", "缺陷样本合成", "缺陷样本合成工具：把缺陷贴图自然融合到良品图，扩充训练样本",
-     "defectgen.png", ("#9d6bf0", "#7c4fe0")),
+    ("tools", "模型工具", "剪枝、TensorRT 加速等模型后处理工具",
+     "tools.png", ("#9d6bf0", "#7c4fe0")),
 ]
 
 # 左侧导航：图标 + 文字；底部系统区（设置/文档/关于）
-_NAV_ITEMS = [("ai", "AI平台", "ai"), ("flow", "流程图", "flow")]
-_PAGE_TITLES = {"ai": "AI 平台", "flow": "流程图"}
+_NAV_ITEMS = [("ai", "AI平台", "ai"), ("trad", "传统平台", "trad"),
+              ("flow", "流程图", "flow"), ("deploy", "部署平台", "deploy")]
+_PAGE_TITLES = {"ai": "AI 平台", "trad": "传统平台", "flow": "流程图",
+                "deploy": "部署平台"}
+
+_SERVICE_DOT_COLOR = {"running": C.success, "starting": C.warn,
+                      "stopped": C.text_3}
 
 
 def icon_path(name: str) -> Path:
@@ -91,6 +105,50 @@ def recent_projects(limit: int = 4, root: Path | None = None) -> list[dict]:
                          "mtime": mtime})
     rows.sort(key=lambda r: -r["mtime"])
     return rows[:limit]
+
+
+class _ServiceChip(QFrame):
+    """顶栏服务状态胶囊：状态点 + 文字，点击跳部署平台页。"""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("statusChip")
+        self.setCursor(Qt.PointingHandCursor)
+        from .i18n import tr as _tr
+
+        self.setToolTip(_tr("点击进入部署平台"))
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 6, 16, 6)
+        lay.setSpacing(8)
+        self.dot = StatusDot(10, _SERVICE_DOT_COLOR["stopped"], self)
+        from .i18n import tr as _tr
+
+        self.text = QLabel(_tr("推理服务未运行"))
+        lay.addWidget(self.dot)
+        lay.addWidget(self.text)
+
+    def set_state(self, state: str, models: int = 0) -> None:
+        from .i18n import tr as _tr
+
+        self.dot.set_color(_SERVICE_DOT_COLOR.get(state, C.text_3))
+        if state == "running":
+            self.text.setText(_tr("推理服务运行中") if models <= 0
+                              else f"{_tr('推理服务')} · {models} "
+                                   f"{_tr('个模型')}")
+            self.dot.stop_breath()
+        elif state == "starting":
+            self.text.setText(_tr("推理服务启动中…"))
+            self.dot.start_breath()
+        else:
+            self.text.setText(_tr("推理服务未运行"))
+            self.dot.stop_breath()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 class _RecentChip(QFrame):
@@ -129,17 +187,25 @@ class HomeWindow(ChromeMainWindow):
     def __init__(self):
         # 品牌由侧栏上移至顶栏（去除顶栏重复字样，见 v0.5.5 批注）
         super().__init__(show_title=False)
-        self.setWindowTitle("XCcv 视觉模型训练平台（社区版）")
+        self.setWindowTitle("XCcv 视觉模型训练平台")
         self.setWindowIcon(QIcon(str(icon_path("app.png"))))
         self.resize(1280, 780)
+        # 共享健康轮询先建（顶栏胶囊 + 部署平台页单一请求源），UI 建好即启
+        from .service_health import ServiceHealthPoller
+
+        self._poller = ServiceHealthPoller(self)
+        self._poller.state_changed.connect(self._on_service_state)
         self._platform_cards = []
         self._recent_chips = []
         self._build_ui()
+        self._poller.start()
+        self._on_service_state(self._poller.state(),
+                               {"url": "", "models": 0, "device": ""})
 
     # ---- UI ----
     def _build_ui(self):
         central = QWidget()
-        apply_app_theme(central)  # 仅作用于主界面子树；主题切换实时重设（F2-5）
+        apply_app_theme(central)  # 仅作用于主界面子树；主题切换实时重设
         central.setObjectName("homeCentral")
         central.setStyleSheet(
             central.styleSheet()
@@ -161,9 +227,12 @@ class HomeWindow(ChromeMainWindow):
 
         self.nav_list = QListWidget()
         self.nav_list.setObjectName("navList")
+        from .i18n import tr as _tr
+
         for _key, text, icon_kind in _NAV_ITEMS:
             self.nav_list.addItem(QListWidgetItem(
-                nav_icon(icon_kind, token("text_2", "#5f7086"), 45), text))
+                nav_icon(icon_kind, token("text_2", "#5f7086"), 45),
+                _tr(text)))
         self.nav_list.setIconSize(QSize(45, 45))
         self.nav_list.setCurrentRow(0)
         self.nav_list.currentRowChanged.connect(self._on_nav_changed)
@@ -196,20 +265,26 @@ class HomeWindow(ChromeMainWindow):
         right_lay.setSpacing(0)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._build_ai_page())    # 平台页
-        from .flow_platform import FlowPage  # 流程图页（图片树 / 运行 / 画布入口）
+        self.stack.addWidget(self._build_ai_page())    # 0 AI平台
+        self.stack.addWidget(self._build_trad_page())  # 1 传统平台（首次进入替换）
+        from .flow_platform import FlowPage  # 流程图独立平台页（画布窗口惰性）
 
-        self.stack.addWidget(FlowPage())               # 流程图
+        self._flow_page = FlowPage()                   # 跳转落点引用
+        self.stack.addWidget(self._flow_page)          # 2 流程图
+        from .deploy_platform import DeployPage  # 部署平台卡片页（v0.5.4 撤回独立引导页）
+
+        self.stack.addWidget(DeployPage())             # 3 部署平台（三卡片 → 独立进程）
         right_lay.addWidget(self.stack, stretch=1)
         outer.addWidget(right, stretch=1)
         # 无边框基座：内容追加到标题栏之下（setCentralWidget 会覆盖标题栏）
         self.set_chrome_central(central)
+        self._trad_workbench = None  # 算子工作台（Q6：首次导航才导入，冷启动零开销）
 
     # ---- 窗口顶栏（品牌角块 + 原页面顶栏内容合并）----
     def _build_header_content(self):
         """品牌区做成固定尺寸的左上角块，不再随窗口边框（标题栏）伸缩。
 
-        蓝框规格（用户批注）：宽 = 侧栏宽（200），底边与页标题行分割线
+        蓝框规格：宽 = 侧栏宽（200），底边与页标题行分割线
         齐平（顶栏总高 120 = 原标题栏 58 + 原页面顶栏 62）；logo 48px。
         原页面顶栏的标题/搜索/服务胶囊移入顶栏弹簧两侧，搜索框与胶囊
         标记 _chrome_drag_exempt（可点击，不被当作标题栏拖拽区）。
@@ -271,6 +346,17 @@ class HomeWindow(ChromeMainWindow):
             f" color:{token('text_1')}; font-size:15px; }}"
             f"QLineEdit:focus {{ border:1px solid {token('primary')};"
             f" background:{token('focus_bg', '#ffffff')}; }}"))
+        self.service_chip = _ServiceChip()
+        self.service_chip.clicked.connect(self._goto_deploy)
+        self.service_chip._chrome_drag_exempt = True  # 胶囊可点击，不当标题栏
+        bind_style(self.service_chip, lambda: (
+            f"QFrame#statusChip {{ background:{token('panel')};"
+            f" border:1px solid {token('border')}; border-radius:12px; }}"
+            f"QFrame#statusChip:hover {{ border:1px solid {token('primary')};"
+            f" background:{token('card_hover')}; }}"
+            f"QFrame#statusChip QLabel {{ background:transparent; border:none;"
+            f" color:{token('text_2')}; font-size:15px; }}"))
+
         # 右侧容器：上行 = 窗口键（上移贴顶），下行 = 搜索框 + 胶囊（红框位）
         right_side = QWidget()
         right_side.setStyleSheet("background: transparent; border: none;")
@@ -288,6 +374,7 @@ class HomeWindow(ChromeMainWindow):
         ctrl_row.setSpacing(12)
         ctrl_row.addStretch(1)
         ctrl_row.addWidget(self.search_edit)
+        ctrl_row.addWidget(self.service_chip)
         rs_lay.addLayout(ctrl_row)
         right_side._chrome_drag_exempt = True   # 容器内全是可点控件，不当标题栏
         self.add_header_widget(right_side, 3)
@@ -303,7 +390,7 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 最近项目实时刷新 ----
     def _refresh_recent_projects(self):
-        """重建最近项目小卡（用户需求 v0.5.5追加-①：不再只在启动时读一次）。
+        """重建最近项目小卡（需求 v0.5.5追加-①：不再只在启动时读一次）。
 
         触发时机：主界面显示（showEvent）、切回 AI 平台页（导航）、
         窗口重新激活（从训练平台开/关项目后回到主界面）。训练平台是
@@ -319,7 +406,7 @@ class HomeWindow(ChromeMainWindow):
             w = item.widget()
             if w is not None:
                 # setParent(None) 立即脱离视图：仅 deleteLater 会残留旧卡
-                # 几帧（布局已让位、旧卡仍画在原位），与新卡叠字（P134）
+                # 几帧（布局已让位、旧卡仍画在原位），与新卡叠字
                 w.setParent(None)
                 w.deleteLater()
         for rec in recent_projects():
@@ -364,7 +451,7 @@ class HomeWindow(ChromeMainWindow):
         hero_text.setSpacing(4)
         big_title = QLabel("欢迎使用 XCcv 视觉模型训练平台")
         big_title.setObjectName("pageTitle")
-        subtitle = QLabel("标注 → 训练 → 测试，三步完成模型落地（另附缺陷样本合成工具）")
+        subtitle = QLabel("标注 → 训练 → 测试 → 部署，四步完成模型落地")
         subtitle.setObjectName("pageSub")
         hero_text.addWidget(big_title)
         hero_text.addWidget(subtitle)
@@ -404,9 +491,26 @@ class HomeWindow(ChromeMainWindow):
         page_lay.addWidget(version)
         return page
 
+    def _build_trad_page(self) -> QWidget:
+        """传统平台页初始壳（首次导航即被 OperatorWorkbench 替换，
+        见 _on_nav_changed；真正内容=传统图像算法算子工作台）。"""
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setAlignment(Qt.AlignCenter)
+        lay.setSpacing(10)
+        title = QLabel("传统视觉算法平台")
+        title.setObjectName("pageTitle")
+        title.setAlignment(Qt.AlignCenter)
+        hint = QLabel("规划中：传统图像算子")
+        hint.setObjectName("pageSub")
+        hint.setAlignment(Qt.AlignCenter)
+        lay.addWidget(title)
+        lay.addWidget(hint)
+        return page
+
     # ---- 顶栏交互 ----
     def _on_search_typed(self, _text: str) -> None:
-        """键盘输入路径：300ms 防抖（T2-7），落定后才执行一次全量过滤。"""
+        """键盘输入路径：300ms 防抖，落定后才执行一次全量过滤。"""
         self._search_debounce.start()
 
     def _on_search_debounced(self) -> None:
@@ -423,7 +527,7 @@ class HomeWindow(ChromeMainWindow):
         for card in self._platform_cards:
             card.setVisible(not query or query in card.card_title.lower()
                             or query in card.card_desc.lower())
-        # 最近项目保留搜索（用户更正：上轮只该修残影 bug，不该砍功能）——
+        # 最近项目保留搜索（更正：上轮只该修残影 bug，不该砍功能）——
         # 命中的项目卡作为结果显示；"最近项目"提示语仅在有内容时出现
         hit = 0
         for chip in self._recent_chips:
@@ -438,7 +542,14 @@ class HomeWindow(ChromeMainWindow):
             self.recent_hint.setVisible(self.recent_row.isVisible())
         page = self.stack.currentWidget() if hasattr(self, "stack") else None
         if page is not None and hasattr(page, "set_search_query"):
-            page.set_search_query(text)   # 流程图页过滤图片树
+            page.set_search_query(text)   # 部署页/流程页/传统页（算子工作台）
+
+    def _goto_deploy(self) -> None:
+        """顶栏服务胶囊点击 → 切到部署平台页（卡片拉起各独立模块）。"""
+        self.nav_list.setCurrentRow(3)
+
+    def _on_service_state(self, state: str, info: dict) -> None:
+        self.service_chip.set_state(state, int(info.get("models", 0) or 0))
 
     # ---- 导航切换 ----
     def _on_nav_changed(self, row: int):
@@ -446,6 +557,19 @@ class HomeWindow(ChromeMainWindow):
 
         key = _NAV_ITEMS[row][0] if 0 <= row < len(_NAV_ITEMS) else ""
         self.page_title.setText(_tr(_PAGE_TITLES.get(key, "")))
+        if key == "trad" and self._trad_workbench is None:
+            # 首次进入传统平台才加载算子工作台（Q6：主界面冷启动零开销）
+            from .workbench import OperatorWorkbench
+
+            self._trad_workbench = OperatorWorkbench()
+            old = self.stack.widget(1)
+            self.stack.removeWidget(old)
+            # 注意：栈替换的 Qt6 专属 API 在 Qt 5.15 没有（实测首点
+            # 「传统平台」即 AttributeError 崩溃），必须 remove+insert；
+            # setParent(None) 断开层级后再延迟删除，避免进程尾部原生崩溃
+            old.setParent(None)
+            old.deleteLater()
+            self.stack.insertWidget(1, self._trad_workbench)
         self.stack.setCurrentIndex(max(0, row))
         if key == "ai":
             self._refresh_recent_projects()   # 回到 AI 平台页即刷新最近项目
@@ -456,7 +580,7 @@ class HomeWindow(ChromeMainWindow):
     # ---- 页面切换淡入（150ms；WebEngine 页不参与透明度动效）----
     def _animate_page_in(self):
         page = self.stack.currentWidget()
-        if page is None:
+        if page is None or self.stack.currentIndex() == 2:
             return
         effect = page.graphicsEffect()
         if not isinstance(effect, QGraphicsOpacityEffect):
@@ -489,14 +613,13 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 平台启动（独立子进程，单实例由平台侧守卫） ----
     def _open_platform(self, key: str):
-        from .i18n import tr
-
         try:
             launcher.launch_platform(key)
         except Exception as e:
+            log.warning("平台启动失败（已弹窗提示）: %s", e, exc_info=True)
             QMessageBox.critical(
-                self, tr("无法启动平台"),
-                f"「{dict((p[0], p[1]) for p in _PLATFORMS).get(key, key)}」{tr('启动失败：')}\n"
+                self, "无法启动平台",
+                f"「{dict((p[0], p[1]) for p in _PLATFORMS).get(key, key)}」启动失败：\n"
                 f"{type(e).__name__}: {e}")
 
     def _open_recent_project(self, name: str):
@@ -506,6 +629,7 @@ class HomeWindow(ChromeMainWindow):
         try:
             launcher.launch_platform("training", name)
         except Exception as e:
+            log.warning("项目打开失败（已弹窗提示）: %s", e, exc_info=True)
             QMessageBox.critical(self, tr("无法打开项目"),
                                  f"{tr('项目')}「{name}」{tr('打开失败')}：\n"
                                  f"{type(e).__name__}: {e}")
@@ -524,12 +648,12 @@ class HomeWindow(ChromeMainWindow):
 
     def _show_settings_placeholder(self):
         """设置对话框：界面主题切换**即时生效**（V0.6 F2-5；此前需重启）
-        + 界面语言切换（保存后各窗口自动重建生效）+ 版本信息。
+        + 界面语言切换（V0.7.2，保存后重启主界面生效）+ 版本信息。
 
         主题：本进程 set_theme 立即重绘；写入 ui_prefs.json 后，已打开的各
         平台进程经文件监听（install_theme_watcher）同步切换。
-        语言：偏好 platform_data/ui_lang.json 全平台共享——主界面经语言
-        监听即时重建，各平台窗口自动重建生效。
+        语言：偏好 platform_data/ui_lang.json 全平台共享——主界面重启生效，
+        各平台窗口在下次打开时生效。
         """
         from .i18n import lang, set_lang, tr
         from .ui_style import ACTIVE_THEME
@@ -581,10 +705,11 @@ class HomeWindow(ChromeMainWindow):
             return
         self.apply_theme_choice(combo.currentData())
         # 语言：保存偏好即可——各进程的语言文件监听会自动重建窗口
+        # （主界面即时重建；部署三窗重开生效），无需重启进程
         self.apply_language_choice(self.cmb_lang.currentData())
 
     def apply_language_choice(self, lang_code: str) -> bool:
-        """保存语言偏好；返回是否发生变化（变化时由语言监听重建生效）。"""
+        """保存语言偏好；返回是否发生变化（变化时调用方负责重启生效）。"""
         from .i18n import lang, set_lang
 
         lang_code = "en" if lang_code == "en" else "zh"
@@ -608,25 +733,26 @@ class HomeWindow(ChromeMainWindow):
     def _open_docs(self):
         from .i18n import tr
 
-        doc = app_root() / "docs" / "quickstart.md"
-        if doc.is_file():
-            try:
-                os.startfile(str(doc))  # noqa: S606  Windows 关联程序打开
-                return
-            except OSError:
-                pass
+        docs_dir = app_root() / "docs"
+        for name in ("使用文档.md", "result_schema.md"):
+            doc = docs_dir / name
+            if doc.is_file():
+                try:
+                    os.startfile(str(doc))  # noqa: S606  Windows 关联程序打开
+                    return
+                except OSError:
+                    pass
         QMessageBox.information(self, tr("使用文档"),
-                                tr("未找到本地文档（docs/quickstart.md）。")
-                                + "\n" + tr("请查阅仓库 README 与 docs 目录。"))
+                                tr("未找到本地文档（docs/使用文档.md）。")
+                                + "\n" + tr("接口契约见部署平台页提示。"))
 
     def _show_about(self):
         from .i18n import tr
 
-        QMessageBox.about(self, tr("关于 XCcv Community"),
-                          f"{tr('XCcv 视觉模型训练平台（社区版）')} v{__version__}\n\n"
+        QMessageBox.about(self, tr("关于 XCcv"),
+                          f"{tr('XCcv 视觉模型训练平台')} v{__version__}\n\n"
                           + tr("零基础工业视觉模型训练平台：")
-                          + "\n" + tr("标注 → 训练 → 测试（另附缺陷样本合成工具）")
-                          + "\n\n" + tr("本版本为社区版，基于 AGPL-3.0 开源。"))
+                          + "\n" + tr("标注 → 训练 → 测试 → 部署（C# 上位机 HTTP API）"))
 
 
 def main():
@@ -637,13 +763,19 @@ def main():
     set_process_app_user_model_id("XCcv.Main")   # 任务栏独立条目（v0.5.5）
     from .win_qos import opt_out_power_throttling
 
-    opt_out_power_throttling()  # 退出 EcoQoS 节流（V0.6 用户回传：后台推理被降频）
+    opt_out_power_throttling()  # 退出 EcoQoS 节流（V0.6 实测反馈：后台推理被降频）
     setup_logging("main")
     install_excepthook("XCcv 主界面")
     if "--selftest" in sys.argv:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     app = QApplication.instance() or QApplication(sys.argv)
+    # 主界面单实例（跳转落点）——已在运行则转发参数（流程文件）并退出
+    from .home_jump import forward_args
+    from .single_instance import already_running
+
+    if "--selftest" not in sys.argv and already_running("main", forward_args()):
+        sys.exit(0)
     apply_app_font(app)  # 全局字体放大
     install_freeze_watchdog()  # T2-1：主线程卡顿留痕
     from .ui_style import install_theme_watcher
@@ -658,6 +790,7 @@ def main():
     try:
         window = HomeWindow()
     except Exception:
+        log.warning("主界面构建失败（闪屏已收尾，原样上抛）", exc_info=True)
         splash.finish()
         raise
     from .i18n import localize_widget_tree
@@ -665,11 +798,15 @@ def main():
     localize_widget_tree(window)   # 英文模式替换层（首次构建也要跑）
     window.show()
     splash.finish(window)
-    # 语言切换免重启：偏好文件变化即同进程重建主界面（先建新窗再关旧窗）
-    if "--selftest" not in sys.argv:
-        from .i18n import install_language_watcher
+    from .home_jump import wire
 
-        # watcher 必须跨重建转移到新窗持有（提前析构会撞监视线程销毁竞态）
+    wire(window)   # V0.7.5 跳转接收：on_platform_message 钩子 + argv 流程文件
+    # V0.7.2 实测修复：语言切换免重启——偏好文件变化即同进程重建主界面
+    if "--selftest" not in sys.argv:
+        from .i18n import install_language_watcher, localize_widget_tree
+
+        # watcher 必须跨重建转移到新窗（处理完文件变化即析构
+        # 会撞 Win32 监视线程销毁竞态）
         _lang_watcher = install_language_watcher(lambda: None)
 
         def _rebuild_home():

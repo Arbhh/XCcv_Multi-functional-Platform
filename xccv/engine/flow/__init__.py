@@ -1,4 +1,4 @@
-"""通用视觉流程子系统（V0.4 批次十四起）：类型化端口的节点图引擎。
+"""通用视觉流程子系统（V0.4 起）：类型化端口的节点图引擎。
 
 - ir.py        数据中间表示（ImageData/Geometry/MeasureResult/NumberVal）+ 端口类型表
 - node_base.py VisionNode 基类 / Port / ParamSpec / RunContext

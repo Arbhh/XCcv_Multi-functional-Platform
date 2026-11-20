@@ -1,12 +1,12 @@
 """拓扑执行引擎：Kahn 排序 + 环检测（报环路径）+ 端口类型检查 + 会话缓存。
 
 - 输入图 JSON 与画布 serialize 同源（LiteGraph 兼容 nodes/links；
-  链接兼容 5 元与 6 元格式，见坑 17/第五批）；
+  链接兼容 5 元与 6 元格式，见坑 17/）；
 - 端口按槽序对齐注册类的 INPUTS/OUTPUTS；一个输入端口只允许一条入线；
 - 缓存 = 会话内记忆化：键 (node_id, params_hash, 各输入对象 id)，
   生命周期与 RunContext 相同——"单节点重跑"是调试语义，不做跨运行缓存；
 - 错误隔离：单节点异常记入 NodeResult，其下游标记 skipped，独立分支继续；
-- **并行输入**（修复循环 4，用户批注：统一图像端口、按并行输入设计）：
+- **并行输入**：
   任一输入收到多张集合（ImageList/ResultList）且节点非 HANDLES_LIST 时，
   节点按集合逐张自动映射（_map_over）——标量输入广播，输出按端口类型
   重新集合成 ImageList / ResultList；节点实现只面向单张编程。
@@ -14,6 +14,7 @@
 
 import hashlib
 import logging
+log = logging.getLogger(__name__)
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -220,7 +221,7 @@ class Executor:
         merged.update(_node_params(self._specs[node_id]))
         return merged
 
-    # ---------- 并行输入：多张集合的逐张自动映射（修复循环 4） ----------
+    # ---------- 并行输入：多张集合的逐张自动映射 ----------
     @staticmethod
     def _bundles(inputs: dict) -> dict:
         """输入中的多张集合（长度 ≠1 的 ImageList/ResultList；0 张也算集合）。"""
@@ -282,6 +283,7 @@ class Executor:
             try:
                 out = cls().run(sub, params, self.ctx)
             except Exception as e:
+                # 再抛（上下文并入消息，由上层统一转译）——P-2 登记
                 raise ValueError(f"第 {k} 张执行失败：{e}") from None
             for name, v in out.items():
                 is_image = any(p.name == name and p.type == "image"
@@ -379,7 +381,7 @@ class Executor:
         for name, v in out.items():
             if isinstance(v, ImageData):
                 images[str(name)] = v.mat
-            elif isinstance(v, ImageList):   # 列表端口：拼图快照（F2-2）
+            elif isinstance(v, ImageList):   # 列表端口：拼图快照
                 images[f"{name}（{len(v)} 张拼图）"] = mosaic([it.mat for it in v.items])
             elif isinstance(v, ResultList):   # 逐图结果：叠加到对应输入图后拼图
                 src = next((iv for iv in inputs.values() if isinstance(iv, ImageList)), None)
@@ -391,7 +393,7 @@ class Executor:
                              if k in by_index else img.mat
                              for k, img in enumerate(src.items)])
                     except Exception:
-                        pass
+                        log.debug("快照叠加构建失败（本轮省略叠加）")
             elif isinstance(v, Geometry):
                 overlays[str(name)] = v.to_json()
         if not images:
@@ -400,7 +402,7 @@ class Executor:
                     try:
                         images["输入+结果叠加"] = overlay_result(v.mat, out)
                     except Exception:
-                        pass  # 叠加绘制失败不影响运行
+                        log.debug("结果叠加渲染失败（快照省略叠加）")
                     break
         if images or overlays:
             self.ctx.snapshot_store.save(node_id, images, overlays)

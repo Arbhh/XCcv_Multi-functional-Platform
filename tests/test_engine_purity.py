@@ -1,4 +1,4 @@
-"""E5（V0.7）：engine 包纯净性门禁。
+"""engine 包纯净性门禁。
 
 `xccv/engine` 是流程引擎/模型训练推理的纯逻辑层——部署服务、无头场景
 （fastapi 服务、剪枝子进程、批处理探针）都依赖它可在无 Qt 环境导入。
@@ -52,7 +52,7 @@ class EnginePurityTest(unittest.TestCase):
             if rel in _PURITY_WHITELIST:
                 continue
             # utf-8-sig：容忍 BOM（Windows 工具写 UTF8 带 BOM 会 defeating
-            # 行首锚定的正则——本测试自身就中招过，坑 P220）
+            # 行首锚定的正则——本测试自身就中招过，）
             text = path.read_text(encoding="utf-8-sig")
             for i, line in enumerate(text.splitlines(), start=1):
                 if _BAD_IMPORT.match(line):

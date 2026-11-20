@@ -11,12 +11,17 @@ python_path.txt
 # 运行期用户数据
 platform_data/
 
-# 权重与数据（体积大且许可各异，不随仓库分发）
+# 权重与数据（体积大且许可各异，不随仓库分发；见 xccv/engine/weights/download_weights.py）
 weights/
 xccv/engine/weights/
 *.pt
 *.pth
 *.onnx
+*.engine
+*.xva
+*.xcs
+# 缺陷样本合成示例数据（独立数据包分发）
+xccv/defectgen/testdata/
 
 # 训练数据与产物
 traintest/
@@ -31,15 +36,14 @@ runs/
 Thumbs.db
 .DS_Store
 
-# 内部开发文档（更新说明 / 约定 / 交接 / 验收，面向开发者本机留存）
-docs/验收/
-docs/社区版更新说明_*.md
-docs/社区版约定.md
+# 内部开发文档（约定 / 交接 / 合规参考，面向开发者本机留存）
+docs/平台约定.md
 docs/交接_*.md
-docs/社区版开源合规参考_*.md
+docs/开源合规参考_*.md
 
-# 按版本文档目录（本地留存；远端 docs/ 仅保留 quickstart、images 与最新版简介 docx）
+# 按版本文档目录（本地留存；远端 docs/ 仅保留 quickstart、images 与简介 docx）
 docs/0.7.*/
+docs/0.8.0/
 
 # Office 锁文件
 ~$*.docx
@@ -47,6 +51,11 @@ docs/0.7.*/
 # AI 协作记忆（本机留存，不入仓库）
 AGENTS.md
 
-# 内部文档分版本目录（更新说明/验收/交接的按版本归档，仅本地留存）
+# 内部开发文档（更新说明 / 旧约定 / 验收 / 旧版本目录，面向开发者本机留存）
+docs/验收/
+docs/社区版更新说明_*.md
+docs/社区版约定.md
 docs/V0.7.*/
-docs/0.7.*/
+
+# 旧品牌 docx（0.8.0 起由 docs/XCcv多功能视觉平台_项目简介*.docx 取代，本地留存）
+docs/XCcv社区版_项目简介.docx

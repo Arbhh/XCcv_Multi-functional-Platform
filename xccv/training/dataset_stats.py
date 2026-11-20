@@ -18,8 +18,8 @@ class DatasetStats:
     class_counts: dict[str, int] = field(default_factory=dict)
     n_images: int = 0
     n_labeled: int = 0          # 分类任务等于 n_images
-    n_ok: int = 0               # O6（V0.7）：OK 负样本图数（检测/分割）
-    n_ignore: int = 0           # O8（V0.7）：`__ignore__` 忽略区域数
+    n_ok: int = 0               # OK 负样本图数（检测/分割）
+    n_ignore: int = 0           # `__ignore__` 忽略区域数
     widths: list[int] = field(default_factory=list)
     heights: list[int] = field(default_factory=list)
 
@@ -43,7 +43,7 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
         return stats
 
     if task is TaskType.ANOMALY:
-        # A1/V0.7.3（P252）：异常检测数据集 = OK/NG 子目录纯图（无标注），
+        # A1/异常检测数据集 = OK/NG 子目录纯图（无标注），
         # 与 run_health_check 的 is_anomaly 分支同口径走分类式扫描；
         # trainer_thread 依赖 n_images/classes 判空，缺此分支 UI 训练链
         # 会对合法数据报"数据集中没有图片"。
@@ -66,7 +66,7 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
         stats.widths.append(s.width)
         stats.heights.append(s.height)
         for shape in s.shapes:
-            if shape.label == IGNORE_LABEL:   # O8（V0.7）：忽略区域单独计数
+            if shape.label == IGNORE_LABEL:   # 忽略区域单独计数
                 stats.n_ignore += 1
                 continue
             if shape.label in stats.class_counts:
@@ -75,6 +75,6 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
                 stats.class_counts[shape.label] = 1
     stats.n_images = len(samples)
     stats.n_labeled = len(samples)
-    # O6（V0.7）：OK 负样本数量与训练侧同源口径（NEGATIVE_DIR_NAMES）
+    # OK 负样本数量与训练侧同源口径（NEGATIVE_DIR_NAMES）
     stats.n_ok = len(scan_negative_images(dataset_dir))
     return stats

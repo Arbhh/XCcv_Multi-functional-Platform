@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""4K 大图分块推理（P8/T8-3）。
+"""4K 大图分块推理。
 
 问题：检测模型把整张 4K 图缩到 640 输入时，小目标（电表读数、焊点、
 细小异物）尺寸低于可检下限而漏检。分块推理让每块保持模型原生输入口径，
-小目标不再被整图缩水吞掉（与 P9/T9-3「切图训练」配对使用效果最佳）。
+小目标不再被整图缩水吞掉（与「切图训练」配对使用效果最佳）。
 
 - 切片：tile×tile（默认 640）滑窗，重叠 overlap（默认 15%）防边缘截断；
 - 逐块 model.predict（与整图同 conf/iou 参数）；
@@ -80,7 +80,7 @@ def tiled_predict(model, image: np.ndarray, tile: int = 640,
             y1i = min(y0 + tile, h)
             x1i = min(x0 + tile, w)
             pred = model.predict(image[y0:y1i, x0:x1i], conf=conf, iou=iou)
-            pboxes = getattr(pred, "boxes", None) or []  # 判空不用真值（P150）
+            pboxes = getattr(pred, "boxes", None) or []  # 判空不用真值
             for i, b in enumerate(pboxes):
                 bx1, by1, bx2, by2 = (float(v) for v in b)
                 boxes.append([bx1 + x0, by1 + y0, bx2 + x0, by2 + y0])

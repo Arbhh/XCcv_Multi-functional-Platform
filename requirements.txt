@@ -28,6 +28,14 @@ scikit-learn==1.9.1
 anomalib==2.7.0
 transformers==5.23.0
 
+# 模型工具（结构化剪枝 / TensorRT 导出的 ONNX 中间产物）
+torch-pruning==1.6.1
+onnx==1.22.0
+
+# 部署平台（推理服务进程看门狗 / 剪枝子进程水位监视）
+psutil==7.2.2
+python-multipart==0.0.34
+
 # 缺陷样本合成（本地 Web 服务）
 fastapi==0.141.1
 uvicorn==0.53.0

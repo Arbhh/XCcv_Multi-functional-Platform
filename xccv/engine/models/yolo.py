@@ -41,14 +41,14 @@ def _masks_to_original(res, orig_hw) -> list:
     """把 ultralytics 输出的实例掩码还原到原图尺寸（bool, (H, W)）。
 
     res.masks.data 停在网络输入分辨率（letterbox 后的 imgsz，例如 1216），
-    直接交给可视化层会与原图 (H, W) 形状不符——IndexError（2026-10-26 测试
-    平台 YOLO-seg 崩溃根因，T1-1）。这里按 LetterBox 逆变换先去 padding 再
+    直接交给可视化层会与原图 (H, W) 形状不符——IndexError（测试
+    平台 YOLO-seg 崩溃根因）。这里按 LetterBox 逆变换先去 padding 再
     缩放回原图，与 boxes 坐标系同源（ultralytics 对 boxes 做了同规则的
     scale_boxes，框无需再变换）。
 
     返回值遵守 Prediction.masks 契约：**list[np.ndarray(H, W) bool]**（不是
     3 维数组——消费方普遍以 `if pred.masks:` 判空，ndarray 真值歧义会抛
-    ValueError，用户回传"YOLO 无法正常推理"即此因，坑 P150）。
+    ValueError，实测反馈"YOLO 无法正常推理"即此因）。
     """
     mdata = res.masks.data
     mh, mw = int(mdata.shape[-2]), int(mdata.shape[-1])
@@ -76,7 +76,7 @@ def _lean_yolo_ckpt(ckpt: dict, color_mode: str = "") -> dict:
       load_checkpoint 才能取到；
     - 白名单保留加载必需键（epoch/best_fitness/train_args/date/version），
       其余一律不落盘。
-    color_mode（O5，V0.7）：灰度训练标记随权重走（ultralytics 读取时忽略
+    color_mode：灰度训练标记随权重走（ultralytics 读取时忽略
     未知键；平台 load_weights 读回决定推理侧是否同口径转灰）。
     """
     lean = {}
@@ -182,7 +182,7 @@ class YoloModel(BaseModel):
         self._history: list[dict] = []
         self._loss_patch = "off"
         if cfg.industrial_opt:
-            # 工业优化：Focaler-WIoU v3 边界框损失 + Varifocal 分类损失
+            # 工业优化（YOLO 专用）：NWD-CIoU 混合框损失
             model.add_callback("on_train_start", self._apply_industrial_loss)
         model.add_callback("on_fit_epoch_end", self._on_epoch_end)
         # validator 有独立 callbacks（on_val_start 不经 trainer）——
@@ -202,7 +202,7 @@ class YoloModel(BaseModel):
                  "剪枝模型" if resume else self.init_weight, self.task.value,
                  imgsz, cfg.epochs, self.device, resume)
 
-        # 逐轮宽松口径评估的数据源（用户反馈：YOLO 该列恒 0 不正常）
+        # 逐轮宽松口径评估的数据源（修复：YOLO 该列此前恒 0）
         from types import SimpleNamespace as _NS
 
         self._val_data = _NS(val_samples=list(data.val_samples),
@@ -223,7 +223,7 @@ class YoloModel(BaseModel):
         trainer_cls._xccv_classes = data.classes
         trainer_cls._xccv_ops = data.augment_ops
         trainer_cls._xccv_probs = data.augment_probs
-        self.color_mode = getattr(cfg, "color_mode", "color")  # O5：评估/推理同口径
+        self.color_mode = getattr(cfg, "color_mode", "color")  # 评估/推理同口径
         trainer_cls._xccv_gray = self.color_mode == "gray"
         if resume:
             trainer_cls.resume_module = model.model  # 剪后网络直接参与训练
@@ -256,14 +256,14 @@ class YoloModel(BaseModel):
         except Exception:
             self._trainable = 0
         best = Path(model.trainer.best)
-        # 保存最优权重 best.pt。瘦身：ultralytics 原生 ckpt 携带 optimizer 状态
-        # 等训练期数据（体积接近网络本身），对推理无影响——
-        # 只保留 model/train_args 等加载必需键
+        # 瘦身落盘：ultralytics 原生 ckpt 携带 optimizer 状态等训练期数据
+        # （体积接近网络本身），对推理无影响——只保留 model/train_args 等
+        # 加载必需键，写明文 best.pt
         ckpt = torch.load(best, map_location="cpu", weights_only=False)
-        plaintext = cfg.output_dir / "best.pt"
+        best_pt = cfg.output_dir / "best.pt"
         torch.save(_lean_yolo_ckpt(ckpt, color_mode=getattr(cfg, "color_mode", "color")),
-                   plaintext)
-        # 加载最优权重进内存，再清理 ultralytics 训练目录里的中间权重
+                   best_pt)
+        # 先把最优权重加载进内存，再清理 ultralytics 训练目录里的明文权重
         self.model = YOLO(str(best))
         self.model.model.to(self.device)
         for w in (Path(model.trainer.save_dir) / "weights").glob("*.pt"):
@@ -289,6 +289,25 @@ class YoloModel(BaseModel):
             "confusion_matrix": self._confusion_matrix(data),
             "classes": data.classes,
         }
+
+    def _p2_transfer(self, model) -> None:
+        """P2 头无官方预训练：同尺寸官方权重同名迁移（骨干 + 颈部）+ 检测头
+        按步长对齐迁移（_shift_head_levels），仅新增的 stride 4 分支从头学。
+
+        必须经 model.load()：它同时置 ckpt，ultralytics Model.train 只在 ckpt
+        非空时把内存权重交给训练器，否则按 yaml 重建随机网络。
+        """
+        bundled = WEIGHTS_DIR / "ultralytics" / f"{self.p2_source}.pt"
+        src_path = str(bundled) if bundled.is_file() else f"{self.p2_source}.pt"
+        try:
+            model.load(src_path)
+            ck = model.ckpt or {}
+            src = ck.get("ema") if ck.get("ema") is not None else ck.get("model")
+            moved = _shift_head_levels(model.model, src) if src is not None else 0
+            log.info("P2 预训练迁移: %s → %s-p2（骨干/颈部同名迁移 + 检测头按步长对齐 %d 张量）",
+                     self.p2_source, self.p2_source, moved)
+        except Exception as e:  # noqa: BLE001  迁移失败不阻塞：随机初始化继续训练
+            log.warning("P2 预训练迁移失败（按随机初始化继续训练）: %s", e)
 
     def _final_metrics(self, trainer) -> dict:
         """用最优权重在内存验证集上评估（复用训练期 validator，不产生任何文件）。"""
@@ -317,34 +336,15 @@ class YoloModel(BaseModel):
             # mask 口径仅作内部参数记录，不进曲线/摘要展示
             out.update(mask_map50=round(float(m.seg.map50), 4),
                        mask_map50_95=round(float(m.seg.map), 4))
-        # O1（V0.7）：逐类 AP@50（仅验证集中出现过的类有值，缺类记 0.0）
+        # 逐类 AP@50（仅验证集中出现过的类有值，缺类记 0.0）
         per_ap = ultralytics_per_class_ap50(ns)
         if per_ap:
             out["per_class_ap50"] = per_ap
         return out
 
-    def _p2_transfer(self, model) -> None:
-        """P2 头无官方预训练：同尺寸官方权重同名迁移（骨干 + 颈部）+ 检测头
-        按步长对齐迁移（_shift_head_levels），仅新增的 stride 4 分支从头学。
-
-        必须经 model.load()：它同时置 ckpt，ultralytics Model.train 只在 ckpt
-        非空时把内存权重交给训练器，否则按 yaml 重建随机网络。
-        """
-        bundled = WEIGHTS_DIR / "ultralytics" / f"{self.p2_source}.pt"
-        src_path = str(bundled) if bundled.is_file() else f"{self.p2_source}.pt"
-        try:
-            model.load(src_path)
-            ck = model.ckpt or {}
-            src = ck.get("ema") if ck.get("ema") is not None else ck.get("model")
-            moved = _shift_head_levels(model.model, src) if src is not None else 0
-            log.info("P2 预训练迁移: %s → %s-p2（骨干/颈部同名迁移 + 检测头按步长对齐 %d 张量）",
-                     self.p2_source, self.p2_source, moved)
-        except Exception as e:  # noqa: BLE001  迁移失败不阻塞：随机初始化继续训练
-            log.warning("P2 预训练迁移失败（按随机初始化继续训练）: %s", e)
-
     def _loose_metrics(self, data, predict_fn=None) -> dict:
         """宽松口径（IoU {0.10,0.25,0.50} 三档平均）bbox mAP/mAR——与
-        R-CNN 家族同一口径（第三批：YOLO 路径此前不产出 map_loose，
+        R-CNN 家族同一口径（YOLO 路径此前不产出 map_loose，
         训练表该列恒 0 误导）。predict_fn(path)->Prediction 可注入
         （逐轮评估用 EMA 权重）；缺省用最优权重 self.model。失败不阻塞。"""
         if predict_fn is None:
@@ -556,7 +556,7 @@ class YoloModel(BaseModel):
     def _apply_industrial_loss(self, trainer):
         """on_train_start：包装 init_criterion（惰性创建点），创建瞬间替换损失组件。
 
-        YOLO（anchor-free）专用工业方案（第三批，用户指令）：仅替换
+        YOLO（anchor-free）专用工业方案（定稿）：仅替换
         bbox_loss 为 NWD-CIoU 混合（微小缺陷友好，见
         modules.NWDCIoUBboxLoss）；cls/DFL 保持 ultralytics 原生——
         与 R-CNN 家族的 DCN+CBAM+Dice 方案完全独立。
@@ -604,7 +604,7 @@ class YoloModel(BaseModel):
         训练损失：trainer.metrics 只含验证指标——训练损失在 tloss，需经
         label_loss_items 打标（此前直接读 metrics 导致 loss 曲线恒 0）；
         tloss 分量含 box/cls/dfl 增益，小目标数据集 box_loss 会破百
-        （用户实测 160+），按增益归一化回原始损失均值口径（可解释量级）。
+        （实测 160+），按增益归一化回原始损失均值口径（可解释量级）。
         """
         logs, train_loss = {}, 0.0
         seg = self.task is TaskType.SEGMENTATION
@@ -625,7 +625,7 @@ class YoloModel(BaseModel):
                     labeled = get_label(tloss)
                     # 增益归一化：ultralytics 的 tloss 分量已乘 box/cls/dfl 增益
                     # （小目标数据集 box_loss 会因类别得分分母极小而高达百余，
-                    # 用户实测曲线破百）。除回各自增益得到原始损失均值口径。
+                    # 实测曲线破百）。除回各自增益得到原始损失均值口径。
                     args = getattr(trainer, "args", None)
                     gain_by_name = {
                         "box_loss": getattr(args, "box", 7.5),
@@ -688,12 +688,17 @@ class YoloModel(BaseModel):
     def predict(self, image_bgr: np.ndarray, conf: float = 0.25, iou: float = 0.45) -> Prediction:
         if self.model is None:
             raise RuntimeError("模型尚未训练或加载权重")
-        # O5（V0.7）：灰度训练的模型推理前同样转灰（训练/推理同处理方式）
+        # 灰度训练的模型推理前同样转灰（训练/推理同处理方式）
         if getattr(self, "color_mode", "color") == "gray":
+            import cv2
+
             gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
             image_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        res = self.model.predict(image_bgr, conf=conf, iou=iou,
-                                 device=self.device, verbose=False)[0]
+        kw = {"conf": conf, "iou": iou, "device": self.device, "verbose": False}
+        engine_sz = getattr(self, "_engine_imgsz", None)
+        if engine_sz:  # 引擎按导出形状推理（矩形引擎必须精确匹配，P-07）
+            kw["imgsz"] = engine_sz
+        res = self.model.predict(image_bgr, **kw)[0]
         boxes = res.boxes.xyxy.cpu().numpy().tolist() if res.boxes is not None else []
         scores = res.boxes.conf.cpu().numpy().tolist() if res.boxes is not None else []
         labels = res.boxes.cls.cpu().numpy().astype(int).tolist() if res.boxes is not None else []
@@ -704,12 +709,36 @@ class YoloModel(BaseModel):
 
     # ---- 权重 ----
     def load_weights(self, path: Path) -> None:
-        """加载 ultralytics 训练产出的 .pt。"""
-        self.model = YOLO(str(path))
-        self.model.model.to(self.device)
-        # O5（V0.7）：读回灰度训练标记（lean ckpt 顶层键，ultralytics 忽略）
+        """加载 ultralytics 训练产出的 .pt（.engine 的容器头回填见 apply_engine_meta）。"""
+        self._engine_imgsz = None  # .pt 直载无引擎几何约束
+        if str(path).lower().endswith(".engine"):
+            import torch
+
+            if not torch.cuda.is_available():  # TensorRT 引擎需 CUDA 设备
+                from ..trt_runtime import _TRT_UNAVAILABLE_MSG, TrtUnavailableError
+
+                raise TrtUnavailableError(_TRT_UNAVAILABLE_MSG)
         try:
-            ck = torch.load(path, map_location="cpu", weights_only=False)
+            self.model = YOLO(str(path))
+        except ModuleNotFoundError as e:
+            if "tensorrt" in str(e).lower():  # .engine 在无 TensorRT 环境
+                from ..trt_runtime import TrtUnavailableError
+
+                raise TrtUnavailableError(
+                    "该模型为 TensorRT 加速模型（.engine）：加载需要 GPU 环境和 "
+                    "TensorRT 运行时，当前环境不可用。请在配备 NVIDIA 显卡且安装 "
+                    "TensorRT 的机器上使用，或改用未加速的模型文件（.pt）。") from e
+            raise
+        # .engine 加载后 model.model 是引擎元数据（str）而非网络，
+        # 仅对真正的 nn.Module 做 device 迁移（P-06：str 无 .to 崩溃）
+        import torch as _torch
+
+        if isinstance(self.model.model, _torch.nn.Module):
+            self.model.model.to(self.device)
+        # 读回灰度训练标记（lean ckpt 顶层键，ultralytics 忽略）
+        try:
+            ck = _torch.load(path, map_location="cpu", weights_only=False) \
+                if not str(path).lower().endswith(".engine") else None
             self.color_mode = str((ck or {}).get("color_mode") or "color")
         except Exception:
             self.color_mode = "color"
@@ -717,3 +746,50 @@ class YoloModel(BaseModel):
         self.num_classes = len(names)
         self.classes = list(names.values())
         self.task = TaskType.DETECTION if self.model.task == "detect" else TaskType.SEGMENTATION
+
+    def apply_engine_meta(self, meta: dict | None) -> None:
+        """把引擎容器头元数据回填到引擎加载结果。
+
+        ultralytics 直接加载 .engine 会丢 task/类别名（默认按检测解析），分割
+        引擎被检测头解析即产出大量异常框；容器头里的 task/classes/imgsz 是
+        导出时记录的权威值，这里统一回填（overrides 在 predict 建预测器时生效）。
+        """
+        if not meta:
+            return
+        task = meta.get("task")
+        if task:
+            t = TaskType(task)
+            self.task = t
+            utask = "segment" if t is TaskType.SEGMENTATION else "detect"
+            try:
+                self.model.task = utask
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                self.model.overrides["task"] = utask
+            except Exception:  # noqa: BLE001
+                pass
+        classes = meta.get("classes")
+        if classes:
+            self.num_classes = len(classes)
+            self.classes = list(classes)
+            try:
+                self.model.names = {i: n for i, n in enumerate(classes)}
+            except Exception:  # noqa: BLE001
+                pass
+        imgsz = meta.get("imgsz")
+        if imgsz:
+            pair = ([int(imgsz), int(imgsz)] if isinstance(imgsz, int)
+                    else [int(imgsz[0]), int(imgsz[1])])
+            self._engine_imgsz = pair  # predict 按导出形状 letterbox
+            try:
+                self.model.overrides["imgsz"] = list(pair)
+            except Exception:  # noqa: BLE001
+                pass
+        # 构建算力随 meta 留存（测试平台"推理形态"行显示）
+        cc = meta.get("cc_build")
+        if cc:
+            self._meta_cc_build = list(cc)
+        trt = meta.get("trt_build")
+        if trt:
+            self._meta_trt_build = str(trt)

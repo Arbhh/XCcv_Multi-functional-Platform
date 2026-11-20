@@ -1,4 +1,4 @@
-"""O2 扩展（V0.7 用户追加）：阈值调优 → 流程图模板一键生成（纯逻辑）。
+"""阈值调优 → 流程图模板一键生成（纯逻辑）。
 
 用户在阈值拖线面板各维度拖定阈值后，本模块把所选维度编排成新 IR 流程图
 （schema:3，与模板库同款格式）：
@@ -9,7 +9,7 @@
 - conf 维度写进 model_detection 的 conf 参数（不单独建节点）；
 - 短边/长边同时启用时合并为一个 filter_bbox_side 节点；
 - model_path 写入当前权重绝对路径——生成即可直接运行；
-- 落盘位置：`<模型存放文件夹>/flow/<时间戳>_<模型名>.json`（用户约定），
+- 落盘位置：`<模型存放文件夹>/flow/<时间戳>_<模型名>.json`（既定约定），
   流程图平台「打开流程」选取即可使用。
 """
 
@@ -126,7 +126,7 @@ def build_threshold_graph(model_path: str, model_name: str, dims: dict,
 
 
 def flow_filename(model_name: str) -> str:
-    """流程文件名：`<时间戳>_<模型名>.json`（用户约定；模型名做文件名净化）。"""
+    """流程文件名：`<时间戳>_<模型名>.json`（既定约定；模型名做文件名净化）。"""
     stem = re.sub(r'[\\/:*?"<>|]+', "_", str(model_name or "model")).strip() \
         or "model"
     return f"{time.strftime('%Y%m%d_%H%M%S')}_{stem}.json"

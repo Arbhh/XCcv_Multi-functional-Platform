@@ -2,7 +2,7 @@
 
 合成数据：PIL 默认字体在固定位置画文本 + 同位置 rectangle 标注
 （label=字符串内容）。小字符集 + 固定渲染，短训练可记忆——
-断言 loss 收敛 + 精确匹配率阈值 + 加密权重回环 + JSON text 键。
+断言 loss 收敛 + 精确匹配率阈值 + best.pt 权重回环 + JSON text 键。
 """
 
 import json

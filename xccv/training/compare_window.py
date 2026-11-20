@@ -1,10 +1,13 @@
 """实验对比视图（新窗口）：2~3 条训练记录的参数 / 指标 / 曲线 / 混淆矩阵对比。
 
-用户批注：对比视图必须新拉一个独立窗口（To2.5）、限 2~3 条（D6）、
-数据集指纹不一致的提示必须明确出现在对比视图中（To2.6）。
+对比视图必须新拉一个独立窗口、限 2~3 条、
+数据集指纹不一致的提示必须明确出现在对比视图中。
 曲线用 matplotlib 多线叠加（项目既有依赖，不引入 pyqtgraph）；
 指标口径与训练平台可视化页一致（mAP/mAR 固定两条、分类 Top-1）。
 """
+
+import logging
+log = logging.getLogger(__name__)
 
 from pathlib import Path
 
@@ -22,7 +25,6 @@ from matplotlib.figure import Figure
 from ..engine.dataset.prepare import dataset_fingerprint
 from ..i18n import tr  # 模块级：动态文案站点直接用
 from ..ui_style import ACCENT
-from .project import migrate_history
 from .runs import RunRecord, format_duration
 
 # 每条记录一种颜色（曲线与混淆矩阵标题共用）
@@ -40,7 +42,7 @@ _PARAM_LABELS = [
     ("use_amp", "AMP 混合精度"), ("tf32", "TF32 提速"),
     ("save_epoch_weights", "轮次权重"),
     # 注意：增强算子与增强概率不再单列两行，合并为「增强算子（概率）」
-    # （用户回执 E2），见 param_rows 内的 _fmt_augment
+    # （一行合并展示），见 param_rows 内的 _fmt_augment
 ]
 
 _AUGMENT_ROW_LABEL = "增强算子（概率）"
@@ -116,10 +118,10 @@ def metric_rows(records: list) -> list:
 
 def history_series(history: list) -> tuple:
     """历史 → (损失曲线对, 指标曲线对)；口径与训练可视化页一致。"""
-    history = migrate_history(history)
+    history = list(history or [])
     xs = [h["epoch"] for h in history]
     loss = []
-    for key, label in (("train_loss", tr("训练损失")), ("val_loss", tr("验证损失"))):
+    for key, label in (("train_loss", "训练损失"), ("val_loss", "验证损失")):
         if any(key in h for h in history):
             loss.append((label, xs, [h.get(key) for h in history]))
     if any("val_top1" in h for h in history):
@@ -136,7 +138,7 @@ def history_series(history: list) -> tuple:
 
 
 def fingerprint_warnings(records: list, current_fp: str | None) -> list:
-    """数据集指纹提示（用户要求：明确出现在对比视图中）。"""
+    """数据集指纹提示（明确展示在对比视图中）。"""
     warnings = []
     fps = {}
     for r in records:
@@ -162,7 +164,7 @@ class _AdaptiveFigure(FigureCanvasQTAgg):
     """随窗口宽度 1:1 重设 matplotlib 画布尺寸。
 
     固定 figsize 的画布放进滚动区会被 Qt 拉伸（字号/线宽比例失真，全屏时
-    严重变形、非全屏时被裁剪不可见——用户回执 E2/ToE4）。此处监听
+    严重变形、非全屏时被裁剪不可见）。此处监听
     resizeEvent，把 figure 的英寸尺寸同步为控件实际像素，渲染与显示一致。
     """
 
@@ -191,6 +193,8 @@ class CompareWindow(QMainWindow):
 
     def __init__(self, project, records: list):
         super().__init__()
+        from ..i18n import tr
+
         self.records = list(records)
         self.setWindowTitle(
             f"{tr('实验对比')}（{len(self.records)} {tr('条记录')}）"
@@ -217,6 +221,7 @@ class CompareWindow(QMainWindow):
             QApplication.setOverrideCursor(Qt.WaitCursor)
             current_fp = dataset_fingerprint(Path(project.dataset_dir))
         except Exception:
+            log.debug("数据集指纹读取失败（按无指纹提示）")
             current_fp = None
         finally:
             QApplication.restoreOverrideCursor()
@@ -270,7 +275,7 @@ class CompareWindow(QMainWindow):
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         # 列宽策略统一：标签列固定宽，记录列均分剩余宽度——两张表左右
-        # 对称且互相同步（用户回执 ToE2"最终指标表左右不对称"）
+        # 对称且互相同步（修复"最终指标表左右不对称"）
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setSectionResizeMode(0, QHeaderView.Fixed)

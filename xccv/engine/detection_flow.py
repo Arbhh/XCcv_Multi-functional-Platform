@@ -15,6 +15,7 @@
 
 import json
 import logging
+log = logging.getLogger(__name__)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -316,7 +317,7 @@ def load_flow(path) -> dict | None:
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
-        return None
+        log.debug("检出流程 JSON 解析失败（按未配置处理）")
     fmt = sniff_format(data)
     if fmt == "xcv_graph":
         _LOG.warning("流程文件为新 IR 图格式（%s），不走过滤链引擎", p.name)
@@ -351,7 +352,7 @@ def graph_to_chain(flow_graph: dict) -> dict:
         src, dst = lk[1], lk[3]
         outgoing.setdefault(src, []).append(dst)
     # 模型起点：旧画布模型节点（v0.4.2 起新流程用 xccv2/ 模型节点走新引擎，
-    # 旧链仅服务旧流程文件，不再为新节点做旧链兼容——用户批注 Q5）
+    # 旧链仅服务旧流程文件，不再为新节点做旧链兼容——）
     start = next((nid for nid, n in nodes.items()
                   if str(n["type"]).startswith(("model/", "xccv/model"))), None)
     chain: list[dict] = []

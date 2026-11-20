@@ -1,11 +1,14 @@
-"""UI 升级公共组件（v0.5 UI 批次）：徽章 / 状态点 / Toast / 空状态 / 图标绘制。
+"""UI 升级公共组件（v0.5）：徽章 / 状态点 / Toast / 空状态 / 图标绘制。
 
 设计 Token 见 ui_style.C/R/SP；本模块只依赖 ui_style 与轻量路径工具，
-禁 torch / QtWebEngine 依赖（P66：可复用逻辑不进重模块）。
+禁 torch / QtWebEngine 依赖（可复用逻辑不进重模块）。
 
 Cython 约束：信号一律连 self 具名方法（禁无参 lambda——P06/P48）；
 本模块末尾 apply_auto_slot_module(globals())。
 """
+
+import logging
+log = logging.getLogger(__name__)
 
 from datetime import datetime
 import math
@@ -188,7 +191,7 @@ class _ToastFrame(QLabel):
 
     def _release_from_window(self):
         # 淡出销毁后窗口仍持有死引用会导致下一条 toast 触发
-        # RuntimeError（P129：训练平台按钮失效根因），销毁路径必须先摘除
+        # RuntimeError（训练平台按钮失效根因），销毁路径必须先摘除
         try:
             win = self.parentWidget()
         except RuntimeError:
@@ -267,9 +270,9 @@ class EmptyState(QWidget):
 class HoverCard(QFrame):
     """平台卡片基件：objectName=card（QSS 圆角/hover），静态阴影 + 点击信号。
 
-    Q1 教训（2026-09-21）：**不要在运行中修改 QGraphicsDropShadowEffect 属性**
+    Q1 教训：**不要在运行中修改 QGraphicsDropShadowEffect 属性**
     （逐帧动画 blur/offset）——QSS 样式化的卡片会被渲染成空白（widget 消失
-    但仍可点击，用户实测）。阴影只在构造时静态设置一次，悬停反馈交给
+    但仍可点击，实测）。阴影只在构造时静态设置一次，悬停反馈交给
     QSS `#card:hover`（边框主色 + 底色变化）。
 
     Q2 教训：子类可能重定义 clicked 为带参信号（如 clicked[str]）——
@@ -497,6 +500,7 @@ def load_prefs() -> dict:
     try:
         return json.loads(_prefs_path().read_text(encoding="utf-8"))
     except Exception:
+        log.debug("界面偏好读取失败（按默认处理）")
         return {}
 
 

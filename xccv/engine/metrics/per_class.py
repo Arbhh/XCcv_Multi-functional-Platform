@@ -1,6 +1,6 @@
-"""O1（V0.7）：逐类精确率/召回率表的数据聚合（纯逻辑，UI 与测试共用）。
+"""逐类精确率/召回率表的数据聚合（纯逻辑，UI 与测试共用）。
 
-对照 VIMO"类型详情表"：每类 GT 实例数/检出数/TP/FP/FN/精确率/召回率/AP@50。
+对照商用视觉软件的类型详情表：每类 GT 实例数/检出数/TP/FP/FN/精确率/召回率/AP@50。
 数据源全部现成——IoU 匹配混淆矩阵（metrics.detection.detection_confusion_matrix，
 训练收尾随 metrics.json 落盘）+ 各家族评估器的逐类 AP@50（additive 键
 per_class_ap50：R-CNN 从 COCOeval precision 数组取，YOLO 从 ultralytics
@@ -8,6 +8,8 @@ Metric.ap50 取）。本模块不做任何推理，只做聚合。
 """
 
 from __future__ import annotations
+import logging
+log = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -84,4 +86,4 @@ def ultralytics_per_class_ap50(metric) -> list[float] | None:
         size = max(by_idx) + 1
         return [round(by_idx.get(i, 0.0), 4) for i in range(size)]
     except Exception:
-        return None
+        log.debug("分类 AP 解析失败（按未知处理）")

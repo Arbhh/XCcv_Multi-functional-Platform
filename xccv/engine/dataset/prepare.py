@@ -67,8 +67,8 @@ class PreparedData:
     augment_probs: dict = field(default_factory=dict)  # 每算子启用概率，缺失按 0.5
     neg_train_count: int = 0   # 负样本（OK 图）进入训练/验证的图数（倍增前）
     neg_val_count: int = 0
-    ignore_regions: int = 0    # O8（V0.7）：`__ignore__` 忽略区域数
-    ignore_dropped: int = 0    # O8：因与 ignore 区域重叠>50% 被剔除的 GT 实例数
+    ignore_regions: int = 0    # `__ignore__` 忽略区域数
+    ignore_dropped: int = 0    # 因与 ignore 区域重叠>50% 被剔除的 GT 实例数
 
     @property
     def data_yaml(self) -> Path:
@@ -121,7 +121,7 @@ def prepare(
     dataset_dir = Path(dataset_dir)
     neg_train: list[Sample] = []
     neg_val: list[Sample] = []
-    n_regions = n_dropped = 0   # O8：folder 族无实例标注，恒为 0
+    n_regions = n_dropped = 0   # folder 族无实例标注，恒为 0
 
     if family == "folder":  # 分类与无监督异常检测同族：按目录名扫描
         samples, classes = scan_classification_dataset(dataset_dir)
@@ -129,7 +129,7 @@ def prepare(
                                    train_ratio=train_ratio)
     else:
         samples, classes, _ = scan_labelme_dataset(dataset_dir)
-        # O8（V0.7）：`__ignore__` 忽略区域近似语义——单点过滤（YOLO/R-CNN/
+        # `__ignore__` 忽略区域近似语义——单点过滤（YOLO/R-CNN/
         # OCR 三族共同的样本咽喉；忽略区域与重叠>50% 的 GT 在进训练前剔除）
         for s in samples:
             kept, nr, nd = filter_ignore_shapes(s.shapes)

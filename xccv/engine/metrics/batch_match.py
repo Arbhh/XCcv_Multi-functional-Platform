@@ -1,4 +1,4 @@
-"""O2/O19/O20（V0.7）：批量推理的 GT 匹配统计（纯逻辑，不依赖 Qt）。
+"""批量推理的 GT 匹配统计（纯逻辑，不依赖 Qt）。
 
 批量目录里与图片同名的 labelme .json 视为真值标注：
 - 有 GT 的图：检出按"同类 + IoU≥阈值"贪心匹配——命中=绿（TP）、未命中=红（FP）；
@@ -18,15 +18,17 @@
 阈值 t 下的指标（threshold_metrics）：precision=TP/(TP+FP)、
 recall=TP/gt_total、ok_fp_per_img=OK 误检框/OK 图数。
 
-V0.7.1：另收集 dims（O2 扩展多维分布）与 dims_missed（漏检 GT 框的
+另收集 dims与 dims_missed（漏检 GT 框的
 面积/短边/长边）——阈值面板"漏检"曲线的数据源。
 
-task="anomaly"/"classification" 走图像级口径
+V0.7.3 §二：task="anomaly"/"classification" 走图像级口径
 （来源目录=弱 GT；与训练平台统一）——见 collect_match_stats 与两个
 _collect_* 分支；per_image/dims 结构三口径同构（只增不改）。
 """
 
 from __future__ import annotations
+import logging
+log = logging.getLogger(__name__)
 
 import json
 from pathlib import Path
@@ -37,7 +39,7 @@ from ..dataset.ignore import OVERLAP_DROP_RATIO, _inter_ratio
 from ..dataset.reader import is_negative_dir_name
 from .detection import iou_matrix
 
-# O2 扩展（V0.7 用户追加）：阈值面板多维度（score=conf 单独走既有通道）
+# 阈值面板多维度（score=conf 单独走既有通道）
 _DIM_KEYS = ("area", "short", "long", "fg_ratio", "gray_diff")
 
 
@@ -68,6 +70,7 @@ def read_gt_full(json_path: Path) -> tuple[list, list, list]:
     try:
         data = json.loads(Path(json_path).read_text(encoding="utf-8"))
     except Exception:
+        log.warning("GT 标注 JSON 读取失败（按空统计）", exc_info=True)
         return [], [], []
     raw = data.get("shapes") or []
     regions = _json_regions(raw)
@@ -143,7 +146,7 @@ def match_detections(det_boxes, det_labels, det_scores,
 
 
 def _det_dim_values(det: dict) -> dict:
-    """单检出的多维度值（O2 扩展）：面积/短长边由 bbox 现算，
+    """单检出的多维度值：面积/短长边由 bbox 现算，
     fg_ratio/gray_diff 取批量线程预计算的 det["_dims"]（缺则 None）。"""
     box = det.get("bbox")
     if not box:
@@ -173,7 +176,7 @@ def _new_match_stats(score_semantics: dict | None = None, task: str = "detection
             "per_image": [],
             "dims": {k: {"green": [], "red_defect": [], "red_ok": []}
                      for k in _DIM_KEYS},
-            # V0.7.1：漏检 GT 框自身的几何维度（面积/短边/长边）——
+            # 漏检 GT 框自身的几何维度（面积/短边/长边）——
             # 阈值面板"漏检"曲线的数据源；分数/灰度类维度 GT 侧无值不收集
             "dims_missed": {k: [] for k in ("area", "short", "long")},
             "task": task,
@@ -215,7 +218,7 @@ def _collect_anomaly_stats(results: list, score_semantics, weak_classes) -> dict
         ok_dir, ng_dir = _weak_dir_names(path, weak_classes)
         # 检出记录 matched 语义：NG 图的图像级检出=命中(True)；OK 图/来源
         # 不明图的检出=误报(False)——否则精确率/召回率把 OK 误报计成 TP
-        # （第十六轮实机复盘抓到：precision 1.0 / recall 1.5 假象）
+        # （实测复盘抓到：precision 1.0 / recall 1.5 假象）
         rec = ([float(score), bool(ng_dir), None, None, None, None, None]
                if score is not None else [])
         if ok_dir:
@@ -314,12 +317,12 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
     results 每项需含 "path" 与 "detections"（label/score/bbox，批量线程
     既有产出）。无任何同名 GT json 时返回 {"gt_available": False}。
 
-    §二（用户指令：复盘与训练平台统一口径）：
+    V0.7.3 §二（复盘与训练平台统一口径）：
     - task="anomaly"：图像级判定（来源目录=弱 GT）→ _collect_anomaly_stats；
     - task="classification"：预测类别 vs 目录真值 → _collect_classification_stats；
     - 其余（检测/分割）：labelme json GT 框匹配（既有口径）。
 
-    O2 扩展（V0.7 用户追加）：同时收集多维度值表 stats["dims"]
+    O2 扩展（V0.7 追加）：同时收集多维度值表 stats["dims"]
     （{dim: {green, red_defect, red_ok}}）——阈值面板各维度直方图数据源；
     fg_ratio/gray_diff 取批量线程预计算的 det["_dims"]（无图维度为空表）。
     """
@@ -346,7 +349,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
         det_boxes = [d.get("bbox") for d in dets]
         det_labels = [str(d.get("label", "")) for d in dets]
         det_scores = [float(d.get("score", 0.0)) for d in dets]
-        # O8（V0.7）：落在 ignore 区域内的检出不计 FP（模糊区不算误检，
+        # 落在 ignore 区域内的检出不计 FP（模糊区不算误检，
         # 与训练侧同口径）；GT 侧的过滤已在 read_gt_full 内完成
         kept_dets = list(dets)
         if regions and det_boxes:
@@ -358,7 +361,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
             det_scores = [det_scores[i] for i in keep]
             kept_dets = [dets[i] for i in keep]
         if not gt_boxes and not gt_labels:
-            # 再勘误③（2026-11-13）：OK 图判定与训练平台同源——
+            # OK 图判定与训练平台同源——
             # NEGATIVE_DIR_NAMES 目录（OK/良品/正常/负样本/背景…）内**无同名
             # json** 的图 = OK 负样本，全部检出记 OK 误检；其余无 json 图 =
             # 未评估（生产图），空 json 图 = 已审无缺陷样本（按 GT 空评估）
@@ -392,7 +395,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
                     "path": str(path), "gt": None, "gt_available": False,
                     "ok_dir": False, "missed": None, "fp": None,
                     "fp_ok": None, "matched_all": None,
-                    # V0.7.2：未评估图的检出照记——OK/NG 扫描曲线与分组需要
+                    # 未评估图的检出照记——OK/NG 扫描曲线与分组需要
                     "dets": [_det_record(d, False) for d in kept_dets]})
             continue
         seen_gt = True
@@ -407,7 +410,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
         stats["red_defect"].extend(s for s, m in zip(det_scores, matched) if not m)
         for d, m in zip(kept_dets, matched):
             _push(_det_dim_values(d), "green" if m else "red_defect")
-        # V0.7.1：漏检 GT 框自身的几何维度（bbox 现算，与检出同口径）
+        # 漏检 GT 框自身的几何维度（bbox 现算，与检出同口径）
         for gb, hit in zip(gt_boxes, gt_hit):
             if hit:
                 continue
@@ -422,7 +425,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
             "missed": n_missed,
             "fp": n_fp, "fp_ok": 0, "matched_all": n_fp == 0 and n_missed == 0,
             "dets": [_det_record(d, m) for d, m in zip(kept_dets, matched)]})
-    # 再勘误④（2026-11-13）：即使批量目录完全没有 GT/OK json（纯生产图），
+    # 即使批量目录完全没有 GT/OK json（纯生产图），
     # 也返回完整 per_image/dims——复盘页的「未评估」组要展示每张生产图的
     # 检出供肉眼确认；gt_available 仅表示"是否出现过可评估的 GT"
     stats["gt_available"] = seen_gt
@@ -430,7 +433,7 @@ def collect_match_stats(results: list, iou_thr: float = 0.5, task=None,
 
 
 def threshold_metrics_for(stats: dict, dim: str, thr: float) -> dict:
-    """多维度指标现算（O2 扩展）：与 threshold_metrics 同口径，但取
+    """多维度指标现算：与 threshold_metrics 同口径，但取
     stats["dims"][dim] 的红绿表按维度阈值过滤（score 维走 threshold_metrics）。"""
     if dim == "score":
         return threshold_metrics(stats, thr)
@@ -471,7 +474,7 @@ def threshold_metrics(stats: dict, conf: float) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# V0.7.2（用户重设计）：阈值扫描曲线数据层。
+# V0.7.2（重设计）：阈值扫描曲线数据层。
 # 曲线含义改为"阈值=x 处 正常/过检/漏检 的总数"（联合过滤口径，与复盘
 # 分组同源）：正常=阈值下命中 GT 的检出数；过检=未命中检出数（含 OK 图
 # 误检）；漏检=gt_total−正常（贪心一对一匹配下被阈值筛掉的命中 + 未命中

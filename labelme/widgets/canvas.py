@@ -11,7 +11,7 @@ from PyQt5 import QtWidgets
 
 # XCcv V0.6 T5-2：AI 标注经 xccv.annotation.ai_assist（ultralytics SAM 预测器，
 # 编码按图缓存）。保持 osam 形状契约——历史 AI 分支（finalise 精化等）继续可用；
-# 权重缺失时 initializeAiModel 调用点给中文提示（T5-3）。
+# 权重缺失时 initializeAiModel 调用点给中文提示。
 import types as _types
 
 try:
@@ -19,7 +19,7 @@ try:
 except Exception:  # noqa: BLE001  独立测试环境无 xccv 包时保持可导入
     _ai_assist = None
 
-# V0.6 修复循环 4：types 必须接 ai_assist 的真实 dataclass——占位 object()
+# V0.6 types 必须接 ai_assist 的真实 dataclass——占位 object()
 # 会让 `osam.types.Prompt(...)` 构造即 TypeError（S 智能多边形确认路径必崩）
 if _ai_assist is not None:
     _osam_types = _types.SimpleNamespace(
@@ -108,7 +108,7 @@ class Canvas(QtWidgets.QWidget):
             "linestrip": False,
             "ai_polygon": True,    # 批注修复：AI/画笔瞄准必需十字准星
             "ai_mask": True,
-            "brush": True,   # V0.6 修复循环 4：画笔模式（缺键 paintEvent KeyError）
+            "brush": True,   # V0.6 画笔模式（缺键 paintEvent KeyError）
         }
         _crosshair_cfg = kwargs.pop("crosshair", None)
         if isinstance(_crosshair_cfg, dict):
@@ -184,7 +184,7 @@ class Canvas(QtWidgets.QWidget):
         self._sam_lock = threading.Lock()
         self.aiHoverReady.connect(self._ai_hover_apply)
         self._px_img = None            # QImage 缓存（准星取背景色）
-        # 智能多边形交互（第二批：先判双击再建锚点 + 单线程解码 + 结果缓存）
+        # 智能多边形交互（先判双击再建锚点 + 单线程解码 + 结果缓存）
         self._ai_pending = None        # 双击判定窗口内的待定点击
         self._ai_click_timer = QtCore.QTimer(self)
         self._ai_click_timer.setSingleShot(True)
@@ -465,8 +465,8 @@ class Canvas(QtWidgets.QWidget):
 
         # Polygon drawing.
         if self.drawing():
-            # V0.6 修复循环 4：brush 同 ai 族以 "points" 落地（白名单无 "brush"，
-            # 原样赋 createMode 会在移动预览时抛 ValueError——按现场堆栈定位）
+            # V0.6 brush 同 ai 族以 "points" 落地（白名单无 "brush"，
+            # 原样赋 createMode 会在移动预览时抛 ValueError——实测堆栈定位）
             if self.createMode in ["ai_polygon", "ai_mask", "brush"]:
                 self.line.shape_type = "points"
             else:
@@ -477,7 +477,7 @@ class Canvas(QtWidgets.QWidget):
                     self.createMode == "brush"
                     and (self._brush_erasing or self._brush_pts)):
                 if self.createMode == "brush":
-                    # 第三批：笔刷框局部重绘（repaint() 同步整幅重绘是
+                    # 笔刷框局部重绘（repaint() 同步整幅重绘是
                     # 延迟根因——大图+多形状时圈远落后于系统十字光标）
                     self._brush_region_update(pos)
                 else:
@@ -514,10 +514,10 @@ class Canvas(QtWidgets.QWidget):
                 if self.current is not None and self.current.points:
                     self.line.points = [self.current.points[-1], pos]
                     self.line.point_labels = [1, 1]
-                # 批注修复：拖动必须持续追加轨迹点（原实现只记起点——
+                # 拖动必须持续追加轨迹点（原实现只记起点——
                 # 松手仅一个点，"无法拖动/作用点位与准星相差甚远"根因；
-                # 2026-11-05 测试批：0 顶点 current 为假值导致每次 move
-                # 都在上面的守卫早退——拖动/纯擦除仍只有单点圆，
+                # 0 顶点 current 为假值导致每次 move
+                # 都在上面的守卫早退——实测拖动/纯擦除仍只有单点圆，
                 # 故落笔点入形状 + 守卫放行画笔手势）
                 if self._brush_erasing:
                     if not self._brush_erase_pts or (
@@ -684,7 +684,7 @@ class Canvas(QtWidgets.QWidget):
                         if int(ev.modifiers()) == QtCore.Qt.ControlModifier:
                             self.finalise()
                     elif self.createMode in ["ai_polygon", "ai_mask"]:
-                        # 先判双击再建锚点（第二批用户要求）：按下处即锚点
+                        # 先判双击再建锚点：按下处即锚点
                         # 位置（line 端点可能是未移动鼠标时的陈旧值）
                         self._ai_click(self._ai_clamp(pos),
                                        0 if is_shift_pressed else 1,
@@ -694,8 +694,8 @@ class Canvas(QtWidgets.QWidget):
                         self.current.addPoint(self.line.points[1])
                 elif not self.outOfPixmap(pos):
                     # Create new shape.
-                    # V0.6 修复循环 4：brush 也以 "points" 落地——Shape 白名单
-                    # 不含 "brush"，构造即抛 ValueError（画笔模式必现）
+                    # V0.6 brush 也以 "points" 落地——Shape 白名单
+                    # 不含 "brush"，构造即抛 ValueError
                     self.current = Shape(
                         shape_type="points"
                         if self.createMode in ["ai_polygon", "ai_mask", "brush"]
@@ -985,7 +985,7 @@ class Canvas(QtWidgets.QWidget):
 
         p.scale(1 / self.scale, 1 / self.scale)
 
-        # 准星绘制已移除（用户反馈 2026-11-06）：矩形/智能多边形/画笔
+        # 准星绘制已移除：矩形/智能多边形/画笔
         # 统一用 labelme 原生鼠标光标样式（CURSOR_DRAW 十字光标），
         # 不再自绘任何跟随鼠标的锚框
 
@@ -1038,9 +1038,9 @@ class Canvas(QtWidgets.QWidget):
             p.restore()
         if self._ai_prompts and self.drawing() \
                 and self.createMode in ["ai_polygon", "ai_mask"]:
-            # 批注修复：已点击锚点必须可见（原实现不渲染提示点）
+            # 已点击锚点必须可见（原实现不渲染提示点）
             for q, lab in self._ai_prompts:
-                r = 4.0   # 固定设备像素（用户反馈：锚点不应随缩小视图巨大化）
+                r = 4.0   # 固定设备像素（锚点不应随缩小视图巨大化）
                 p.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 1))
                 p.setBrush(QtGui.QColor(0, 230, 0) if lab
                            else QtGui.QColor(255, 60, 60))
@@ -1068,7 +1068,7 @@ class Canvas(QtWidgets.QWidget):
             p.save()
             if self._brush_pts:
                 # 宽度必须等比：w×scale（+2 补偿轮廓线）；注意 setPen 后
-                # 再 setWidthF 只改局部对象无效（"预览不跟随缩放"问题的根因）
+                # 再 setWidthF 只改局部对象无效
                 pen = QtGui.QPen(QtGui.QColor(0, 200, 255, 110),
                                  max(2.0, float(self._brush_width)
                                      * self.scale + 2.0))
@@ -1142,7 +1142,7 @@ class Canvas(QtWidgets.QWidget):
         self.update()
 
     def _brush_region_update(self, new_pos):
-        """画笔圈/轨迹局部重绘（第三批 2026-11-07）。
+        """画笔圈/轨迹局部重绘。
 
         原实现每次移动走 repaint() 同步重绘整幅场景（大图+多形状时
         笔刷框明显滞后于原生十字光标）；改为只刷新新旧圆心与移动段
@@ -1364,7 +1364,7 @@ class Canvas(QtWidgets.QWidget):
                                 else t_click, len(self._ai_prompts))
         self._ai_refined_n = -1
         if self._ai_embedding() is None and self._sam is not None:
-            # 首次点击嵌入未就绪：明确告知（第四批，防用户无反馈重复点击）
+            # 首次点击嵌入未就绪：明确告知（防用户无反馈重复点击）
             self.aiStatus.emit("正在计算图像嵌入（首次约数秒），请稍候…")
         self._ai_request(self._ai_prompts, "refine")
         self.update()
@@ -1388,7 +1388,7 @@ class Canvas(QtWidgets.QWidget):
             self._ai_commit_pending()   # 远处第二击：前一击按单击生效
         self._ai_pending = (QtCore.QPointF(pt), int(lab),
                             QtCore.QPointF(local_pos), time.monotonic())
-        # 第三批：双击判定统一 250ms（系统默认 400ms 偏慢，闭合更跟手）
+        # 双击判定统一 250ms（系统默认 400ms 偏慢，闭合更跟手）
         self._ai_click_timer.start(250)
         self._ai_request(self._ai_prompts + [(pt, lab)], "spec")
         self.update()
@@ -1558,8 +1558,8 @@ class Canvas(QtWidgets.QWidget):
 
     def _ai_hover_apply(self, shape):
         self._ai_hover_busy = False
-        self._ai_preview_shape = None   # 淡色副本已移除（用户反馈：
-        # 悬停/点击预测直接刷新现有多边形，只显示一个多边形）
+        self._ai_preview_shape = None   # 淡色副本已移除：
+        # 悬停/点击预测直接刷新现有多边形，只显示一个多边形
         if shape is not None and self.current is not None \
                 and self.drawing() \
                 and self.createMode in ("ai_polygon", "ai_mask"):
@@ -1711,7 +1711,7 @@ class Canvas(QtWidgets.QWidget):
 
     def finalise(self):
         if self.current is None:
-            # V0.6 修复循环 4：双重 release/模态嵌套下 current 已被上一次
+            # V0.6 双重 release/模态嵌套下 current 已被上一次
             # finalise 消费——静默返回（原 assert 会弹错误框中断用户操作）
             return
         if self.createMode == "brush":
@@ -1885,7 +1885,7 @@ class Canvas(QtWidgets.QWidget):
         self.update()
 
     def wheelEvent(self, ev):
-        # 画笔粗细改由 [ ]（用户反馈 2026-11-06）；滚轮恒为图像缩放
+        # 画笔粗细改由 [ ]；滚轮恒为图像缩放
         # XCcv：滚轮直接以鼠标为中心缩放；Shift+滚轮横向滚动
         delta = ev.angleDelta()
         if ev.modifiers() & QtCore.Qt.ShiftModifier:
@@ -2013,7 +2013,7 @@ class Canvas(QtWidgets.QWidget):
     def loadPixmap(self, pixmap, clear_shapes=True):
         self.pixmap = pixmap
         self._px_img = pixmap.toImage()
-        # 切换图片清 AI 交互残留（用户反馈 2026-11-06：锚点跨图留存）
+        # 切换图片清 AI 交互残留（锚点跨图留存）
         self._ai_prompts = []
         self._ai_last_mask = None
         self._ai_refined_n = -1
@@ -2112,7 +2112,7 @@ def _update_shape_with_sam(
         )
         if len(points) < 2:
             return
-        # 精化守卫（2026-11-05 测试批）：重解结果须与当前形状显著重叠，
+        # 精化守卫：重解结果须与当前形状显著重叠，
         # 否则视为 SAM 误判、保留点击时已实时精化的多边形——以多顶点
         # 作提示点重解时，邻近大结构会吞掉结果（实测拱形缺陷处
         # 1.7k px² 小目标被换成 142k px² 拱形区域）

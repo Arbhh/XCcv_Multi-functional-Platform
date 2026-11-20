@@ -18,23 +18,21 @@ PLATFORMS = {
     "annotation": ("XCcv标注平台.exe", "xccv.annotation.annotator_window"),
     "training": ("XCcv训练平台.exe", "xccv.training.training_window"),
     "testing": ("XCcv测试平台.exe", "xccv.testing.testing_window"),
-    # 缺陷样本合成（DefectAugmentStudio，独立进程）
+    "tools": ("XCcv模型工具.exe", "xccv.modeltools.modeltools_window"),
+    # 部署族（v0.5.4：同一模块按 argv 分发三种独立进程窗口）
+    "deploy": ("XCcv推理服务.exe", "xccv.deploy_platform"),
+    "model_load": ("XCcv模型加载.exe", "xccv.deploy_platform"),
+    "csharp_test": ("XCcvCSharp测试.exe", "xccv.deploy_platform"),
+    # V0.6 P6：缺陷生成（DefectAugmentStudio，独立进程）
     "defectgen": ("XCcv缺陷生成.exe", "xccv.defectgen.defectgen_window"),
+    # 流程图（新版=主界面流程图页；独立窗口同 FlowPage+HTML 画布）
+    # 与主界面（复盘页「前往流程图界面」跳转目标）——修复缺键 KeyError
+    "flowmain": ("XCcv流程图.exe", "xccv.flow_platform"),
+    "main": ("XCcv.exe", "xccv.app"),
 }
 
 
 def _pythonw() -> str:
-    """子进程解释器：优先 venv 自身的 pythonw。
-
-    venv 里的 python.exe 可能是基础解释器的符号链接/副本，sys.executable 会
-    解析到基环境（丢失 venv 的 site-packages，QtWebEngine 等组件随之缺失）。
-    sys.prefix 才是当前 venv 根——只要它的 Scripts 下有解释器就用它。
-    """
-    scripts = Path(sys.prefix) / "Scripts"
-    for name in ("pythonw.exe", "python.exe"):
-        cand = scripts / name
-        if cand.is_file():
-            return str(cand)
     python = Path(sys.executable)
     w = python.with_name("pythonw.exe")
     return str(w if w.is_file() else python)
@@ -48,8 +46,11 @@ def launch_platform(key: str, arg: str | None = None) -> subprocess.Popen:
     """
     exe_name, module = PLATFORMS[key]
     if getattr(sys, "frozen", False) or is_installed():
-        # 冻结/安装态：优先同目录独立 exe，缺失回退 importlib 调 main()
-        exe = Path(sys.executable).resolve().parent / exe_name
+        # 冻结/安装态：独立 exe 在安装根（python 环境 = <根>\app，见
+        # app_paths 安装态布局），缺失回退 importlib 调 main()
+        exe = Path(sys.prefix).resolve().parent / exe_name
+        if not exe.is_file():  # 旧布局兜底：exe 与解释器同目录
+            exe = Path(sys.executable).resolve().parent / exe_name
         if exe.is_file():
             cmd = [str(exe)]
             if arg:

@@ -55,7 +55,7 @@ class TrainThread(QThread):
     def _resume_model_path(self):
         """解析迁移学习起始权重，返回其路径（无迁移时返回 None）。
 
-        优先级：项目 transfer_file（界面"迁移学习"文件选择，支持 .pt）>
+        优先级：项目 transfer_file（界面"迁移学习"文件选择，支持 .pt/.engine）>
         旧版模型名前缀引用（"pruned:<文件名>" / "run:<记录目录>/<权重文件>"）。
         路径越界（../ 等）一律拒绝。
         """
@@ -94,7 +94,7 @@ class TrainThread(QThread):
             task = project.task_type
             log.info("训练开始: 项目=%s 模型=%s 输出=%s", project.name,
                      project.model_name, self.run_dir)
-            from ..engine.models import TrainConfig, create_model  # torch 延迟导入（T1-4）
+            from ..engine.models import TrainConfig, create_model  # torch 延迟导入
 
             stats = collect_stats(task, project.dataset_dir)
             if stats.n_images == 0:
@@ -103,12 +103,12 @@ class TrainThread(QThread):
                 raise ValueError("数据集中未发现类别，请先完成标注或检查数据集路径")
             resume_path = self._resume_model_path()
             if resume_path is not None:
-                # 项目自有的已有权重（剪枝模型或训练记录产物）：直接作为起始模型
+                # 项目自有权重（剪枝模型或训练记录产物）：直接作为起始模型
                 from ..engine.models import load_model
 
                 model = load_model(resume_path, device=project.device)
                 model.resume_weights = True
-                # A1/A2（V0.7）：异常检测/OCR 模型的 classes 恒为内置占位，
+                # A1/异常检测/OCR 模型的 classes 恒为内置占位，
                 # 不做数据集类别一致性校验（记忆库/字符集与类别无关）
                 if task not in (TaskType.ANOMALY, TaskType.OCR) and \
                         list(model.classes or []) != list(stats.classes):
@@ -176,7 +176,8 @@ class TrainThread(QThread):
                              and getattr(model, "p2", False)),
                 save_epoch_weights=getattr(project, "save_epoch_weights", True),
                 resume_from_pruned=resume_path is not None,
-                # 免训练范式自有参数（k-shot/增强样本数；轮次式范式忽略）
+                # §四（V0.7.3）：免训练范式自有参数（k-shot/增强样本数；
+                # 轮次式范式忽略）
                 model_params={
                     "k_shot": int(getattr(project, "k_shot", 4) or 4),
                     "aug_count": int(getattr(project, "aug_count", 30) or 30),

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""标注平台数量统计面板（批注第二批 F8）。
+"""标注平台数量统计面板（批注F8）。
 
 当前图每类计数（实时） + 数据集目录每类计数（后台线程扫描 labelme json）。
 """
 
+import logging
+log = logging.getLogger(__name__)
 import json
 import os
 import threading
@@ -93,7 +95,7 @@ class StatsDialog(QDialog):
                     if prog.wasCanceled():
                         break
             except Exception:
-                pass
+                log.warning("统计扫描中断（进度对话框异常）", exc_info=True)
             prog.close()
             self._folder_done.emit(counts)
 

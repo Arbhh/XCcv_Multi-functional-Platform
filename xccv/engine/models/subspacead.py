@@ -1,15 +1,15 @@
-# Portions adapted from SubspaceAD (https://github.com/CLendering/SubspaceAD),
-# Copyright (c) 2026 Camile Lendering, Erkut Akdag, Egor Bondarev.
-# Licensed under the Apache License, Version 2.0. See licenses/SubspaceAD-LICENSE-Apache-2.0.txt.
-# This file has been modified by XCcv Community contributors.
 """SubspaceAD 无监督少样本异常检测后端（训练免梯度，PCA 子空间）。
 
 来源：SubspaceAD（CVPR 2026，arXiv 2602.23013）Training-Free Few-Shot
-Anomaly Detection via Subspace Modeling；本实现为平台 2D 图像链适配。
-k-shot 支持集张数可调，上限 12；支持集张数/增强样本数替代轮次类参数。
+Anomaly Detection via Subspace Modeling；本地复现参考
+`E:\Zcode\Study\SubspaceAD`（官方 repo 全量 + 评估报告）。
+接入要求（遗留待办 §六）：SubspaceAD 先行接入；k-shot 可调但设上限 12
+（避免脱离免训练范畴），与 UI 适配同步（支持集张数/增强样本数替代
+轮次类参数，见 training_window §四适配）。
 
-依赖：transformers（DINOv2-with-registers 特征）；PCA 为纯 torch 两遍
-流式 fp64 实现（不依赖 sklearn）；增强走 torchvision T（缺失回退 cv2 旋转）。
+依赖：transformers（DINOv2-with-registers 特征，已随复现工作装在平台
+venv，不新增安装）；PCA 为纯 torch 两遍流式 fp64 实现（repo PCAModel
+同式，不依赖 sklearn）；增强走 torchvision T（缺失回退 cv2 旋转）。
 
 管线（论文主表口径：无显著性掩码/docrop/CLAHE）：
 1. k-shot 采样：OK 池按种子随机取 k 张（k∈[1,12]，不足取全部）；
@@ -23,14 +23,13 @@ k-shot 支持集张数可调，上限 12；支持集张数/增强样本数替代
 6. z 标定（与 patchcore/CIF 同链）：OK 图像分 mu/sigma + 像素图
    mu/sigma；conf→z=1/conf−1；连通域出框/掩码 + 图像级 z 分数。
 
-权重边界：DINOv2 骨干不随包分发、不进模型文件（只记指纹）；优先使用
-本地权重，缺失时可经 transformers 下载标准 DINOv2 权重（需网络或镜像）。
-发现顺序：
+权重红线（"用户自备"，与 dino_vit.py 同惯例）：DINOv2 骨干不自动下载
+大权重、不随包分发（只记指纹）。发现顺序：
 ①环境变量 XCCV_DINOV2_CKPT（本地 HF 模型目录，含 config.json）；
 ②<app_root>/weights/dinov2/ 同结构目录；③HF 本地缓存（优先大模型）；
 ④默认 hub id facebook/dinov2-with-registers-small（需要网络或
 HF_ENDPOINT=https://hf-mirror.com 镜像）。
-TRT 导出：不支持（PCA 子空间后端；.pt 交付，文档注明）。
+TensorRT .engine：PCA 子空间后端不支持（与 patchcore/CIF 同口径）。
 """
 
 from __future__ import annotations
@@ -183,7 +182,7 @@ class SubspaceAdModel(BaseModel):
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
         self.task = TaskType.ANOMALY
-        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        # §三（V0.7.3）：图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
         self.score_semantics = {
             "key": "z", "name": "图像分数", "range": [0.0, None],
             "higher": "分数越高越异常（OK 分布 z 标定）",
@@ -447,7 +446,7 @@ class SubspaceAdModel(BaseModel):
         n_fp = sum(1 for s, l in zip(scores, labels)
                    if l == 0 and (s - self.score_mu) / self.score_sigma >= z25)
         n_ok_v = sum(1 for l in labels if l == 0)
-        # 权重落盘：平台明文 best.pt 容器
+        # 权重落盘：明文 best.pt
         best_pt = Path(cfg.output_dir) / "best.pt"
         self.save_weights(best_pt)
         metrics = {
@@ -521,7 +520,7 @@ class SubspaceAdModel(BaseModel):
 
     # ---- 权重 ----
     def save_weights(self, path: Path) -> None:
-        """xccv-subspacead 容器（平台明文 .pt 权重）。
+        """xccv-subspacead 容器（明文 torch.save）。
 
         DINOv2 骨干不进容器：只记来源 id + 指纹，加载时按发现链重建。"""
         ckpt = {
@@ -541,7 +540,7 @@ class SubspaceAdModel(BaseModel):
         torch.save(ckpt, path)
 
     def load_weights(self, source) -> None:
-        """source：明文路径 / ckpt dict（registry 统一入口语义）。"""
+        """source：权重路径 / ckpt dict（registry 统一入口语义）。"""
         if isinstance(source, dict):
             ckpt = source
         else:

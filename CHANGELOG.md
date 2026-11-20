@@ -1,9 +1,80 @@
 # Changelog
 
-本文件记录 XCcv Community 的显著变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+本文件记录 XCcv 多功能视觉平台的显著变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
+
+## [0.8.0] - 2026-11-20
+
+> **重大更新**：项目正式更名为 **XCcv 多功能视觉平台（XCcv Multi-functional Platform）**，
+> 并自本版本起转为**全量开源**——原未开放的四块能力（部署推理服务、模型工具、
+> TensorRT/ONNX 导出、传统视觉算子）全部随源码发布；同时**移除权重加解密体系**，
+> 训练产物改为明文 `.pt` / `.engine`，并重新设计外部算子为可插拔后端架构。
+
+### 新增（全量开源）
+
+- **部署平台与 HTTP 推理服务**（`xccv/deploy_platform.py` + `xccv/service/`）：
+  FastAPI 服务把模型/流程加载为常驻 API（LRU 池 + 逐模型锁），单帧 / 批量 /
+  叠加图 / WebSocket 二进制流推理，`X-XCcv-Timing` 分段耗时；API Key 常量时间
+  比对、并发准入闸、模型路径白名单、自托管离线 Swagger 文档；部署平台提供
+  服务控制台（监听地址/端口/API Key 重置/灵动岛/GPU 洞察）、模型加载窗口、
+  C# 测试卡片与一键「本地 vs 服务」一致性自检。
+- **C# SDK 与 Demo**（`xccv/service/csharp/`）：单文件 `XCcv.Vision.Sdk.cs`
+  薄客户端（.NET Framework 4.5+，系统 csc 直接编译，无第三方依赖）+
+  WinForms 测试程序（双语，支持拖图推理与叠加图预览）。
+- **模型工具平台**（`xccv/modeltools/modeltools_window.py`）：
+  结构化通道**剪枝**（Torch-Pruning DepGraph，训练前预剪枝 / 训练后剪枝，
+  独立子进程 + 内存水位看门狗 + 紧急终止）；**TensorRT 引擎导出**
+  （YOLO 走 ultralytics 原生路径；分类走内存 ONNX→TRT；Mask R-CNN
+  特征段加速，元数据头记录类别/输入尺寸/生成算力，加载侧跨显卡预检）；
+  配套 `.engine` 产线推理运行时（`xccv/engine/trt_runtime.py`）。
+- **传统视觉算子**（`xccv/engine/flow/ops/`）：预处理 17 个（滤波/阈值/形态学/
+  频域/平场校正等）、定位 7 个（斑点分析、模板匹配、找线/找圆/角点、
+  线对、矩形拟合）、测量 2 个、逻辑判定 5 个、传统检出过滤 3 个、输出 4 个、
+  裁图族 6 个——内置算子由 39 增至 **57**（66 个节点），并附 5 个
+  传统视觉模板（模板匹配预筛、圆形定位、线对水平、斑点预筛、裁图导出）。
+- **外部算子插件后端**：`external_op` 节点重构为可插拔后端架构
+  （`ExternalEngine` 协议 + 注册表），内置 OpenCV 展示后端（mock）让节点
+  开箱可跑通全链路；真实厂商 SDK 后端按同一接口注册即可接入，节点零改动。
+- **平台体验**：主界面工作台卡片墙与页栈、部署平台/模型工具导航、
+  服务健康胶囊与桌面灵动岛、GPU 监控、传统算子工作台（workbench）、
+  算子编辑器、训练页级拆分（`training/panels/`）、双击渲染检测结果窗、
+  复盘页「前往流程图界面」跳转。
+- **测试矩阵**：新增 `tests/modules/` 五大模块行为锁与训练页快照锁；
+  新增 `tools/run_tests.py` 逐模块子进程测试运行器（Windows 大套件稳定跑法）。
+
+### 变更
+
+- **项目更名**：仓库/文档更名为 XCcv Multi-functional Platform，版本号去掉
+  `-community` 后缀，首个全量开源版本为 0.8.0。
+- **移除权重加解密体系**：训练 / 剪枝 / 轮次权重 / 流程包 / TensorRT 导出产物
+  全部改为明文（`best.pt`、`best_pruned.pt`、`epoch_NNN.pt`、`.xvap` 明文容器、
+  `.engine` 明文引擎）；加载旧版 `.xva/.xcs` 容器时给出明确迁移提示。
+- 模型加载入口（registry）重构：按 ckpt format / `.engine` 元数据路由；
+  TensorRT 引擎改用 `.engine` 后缀。
+- `requirements.txt` 新增 `torch-pruning`、`onnx`、`psutil`、`python-multipart`；`onnxruntime`
+  保留用于 EfficientSAM 辅助标注。
+- 测试平台 `.xva` 相关文案/过滤器全部改为明文 `.pt` / `.engine` 口径。
+
+### 移除
+
+- 权重加密/解密工具窗（模型工具「权重加密 / 解密」卡片）与
+  `engine/model_crypto.py` 加密容器实现。
+- HALCON / VisionMaster 厂商桥接适配器（进程内调用实现与 HALCON 算子迁移
+  映射器）；对应能力由「外部算子插件后端」接口承载，厂商适配器不再随仓库分发。
+
+### 测试
+
+- 全量回归：单测（历史锁 + 模块行为锁 + 页快照锁）与四平台离屏自检，
+  全部通过；推荐使用 `python tools/run_tests.py` 逐模块运行。
+
+### 第三方许可变更
+
+- 新增依赖：Torch-Pruning（MIT）、onnx（MIT）、psutil（BSD-3-Clause）、
+  swagger-ui 静态资源（Apache-2.0，自托管于推理服务 /docs）。
+- TensorRT 为可选外部运行库（Apache-2.0），不随仓库分发。
+- 归属与全文见 `THIRD_PARTY_NOTICES.md` / `licenses/`。
 
 ## [0.7.3-community] - 2026-11-18
 

@@ -1,12 +1,12 @@
-"""裁图算子族（V0.6 T3-3 建立；修复循环 3 统一端口；修复循环 4 取消 image_list）。
+"""裁图算子族（统一端口；取消 image_list）。
 
-端口约定（用户批注：裁图节点归通用算子；输入 image+result，输出图像；
+端口约定（裁图节点归通用算子；输入 image+result，输出图像；
 算子内部不再带区域屏蔽/保留——筛选请先接「保留区域/屏蔽区域」过滤节点）：
 - crop_by_detection「按检出裁图」：image + result → image（单张）；
 - crop_by_detection_all「按检出全部裁图」：image + result → image（多张集合）；
 - grid_tile「网格分块」：image（结果可选）→ image；
 - grid_tile_all「网格全部分块」：image（结果可选）→ image（多张集合）。
-多张集合与单张同用 image 端口（修复循环 4），下游任意节点逐张自动映射。
+多张集合与单张同用 image 端口，下游任意节点逐张自动映射。
 
 - 按检出裁图：选一个检出框（首个/最大/指定序号）裁出子图，可外扩边距、
   补成正方形、保证最小边长；可选把**全部**检出的裁图落盘（中文路径安全）。
@@ -60,7 +60,7 @@ def _write(path: Path, mat) -> bool:
     return imwrite_unicode(path, mat)
 
 
-# 外扩像素参数（F2-2 用户建议：外扩可按百分比或像素，两种叠加）
+# 外扩像素参数（F2-2 设计建议：外扩可按百分比或像素，两种叠加）
 _MARGIN_PX = ParamSpec("margin_px", "外扩像素", "int", 0, range=(0, 4096),
                        tooltip="每侧额外外扩的像素（与外扩百分比叠加）")
 
@@ -137,7 +137,7 @@ class CropByDetection(VisionNode):
         det = inputs["result"]
         h, w = img.mat.shape[:2]
         boxes = [] if det is None else _seq(det.boxes)
-        all_labels = _seq(getattr(det, "labels", None))  # 判空不用真值（P150）
+        all_labels = _seq(getattr(det, "labels", None))  # 判空不用真值
         all_scores = _seq(getattr(det, "scores", None))
         keep = list(range(len(boxes)))   # 区域筛选已移交「保留/屏蔽区域」过滤节点
         if not boxes:

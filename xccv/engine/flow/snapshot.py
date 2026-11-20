@@ -1,4 +1,4 @@
-"""节点调试快照：会话内存 + 降采样存储（用户决策 D6）。
+"""节点调试快照：会话内存 + 降采样存储（决策 D6）。
 
 - 快照只存副本：降采样（长边 ≤ max_side）后的 ndarray，原图引用零改动；
 - 落盘不属于本类——磁盘导出仅限冒烟脚本（runs/_dbg_flow_smoke.py），
@@ -34,8 +34,7 @@ def to_png_base64(img: np.ndarray) -> str:
 
 
 def overlay_result(mat: np.ndarray, outputs: dict) -> np.ndarray:
-    """把节点输出以"蒙版 + 描边"叠加到输入图副本（用户批注 ToC4/ToE2：
-    细描边几乎不可见，改为半透明填充蒙版，类似分割掩码的绘制方式）。
+    """把节点输出以"蒙版 + 描边"叠加到输入图副本（细描边几乎不可见，改为半透明填充蒙版，类似分割掩码的绘制方式）。
 
     - Geometry：point 画大圆点、line 画粗线 + 端点、circle/rotated_rect
       画半透明填充蒙版 + 2px 描边；
@@ -50,7 +49,7 @@ def overlay_result(mat: np.ndarray, outputs: dict) -> np.ndarray:
     disp = mat if mat.ndim == 3 else _cv.cvtColor(mat, _cv.COLOR_GRAY2BGR)
     vis = disp.copy()
     green, orange = (0, 220, 60), (0, 140, 255)
-    alpha = 0.38          # 蒙版不透明度（用户要求透明度较高的蒙版）
+    alpha = 0.38          # 蒙版不透明度（渲染约定：偏透明）
 
     def _blend(mask: np.ndarray, color) -> None:
         nonlocal vis
@@ -160,13 +159,13 @@ class SnapshotStore:
         self._items: dict = {}
         self._max_side = int(max_side)
 
-    def save(self, node_id: int, images: dict, overlays: dict | None = None) -> None:
+    def save(self, node_id: int, images, overlays: dict | None = None) -> None:
         """images: {名称: ndarray}；overlays: {名称: [叠加元素 dict]}（可选）。
 
         快照必须存副本：未触发降采样时 downscale 返回原引用，这里补拷贝，
         保证快照与运行数据隔离（D6 契约）。
         """
-        item: dict = {"images": {}, "overlays": dict(overlays or {})}
+        item = {"images": {}, "overlays": dict(overlays or {})}
         for k, v in (images or {}).items():
             if v is None:
                 continue

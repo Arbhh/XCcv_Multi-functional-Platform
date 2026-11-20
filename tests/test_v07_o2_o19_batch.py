@@ -1,7 +1,7 @@
 """V0.7 O2/O19/O20：批量 GT 匹配统计、阈值面板、复判回流回归锁。
 
 纯逻辑全覆盖（batch_match / batch_review），UI 接线用源码锁；
-对话框模态交互（回流确认/目录选择）属 UI 验收项。
+对话框模态交互（回流确认/目录选择）属实测验证项（P196 纪律）。
 """
 
 import json
@@ -215,7 +215,7 @@ class ReviewLogicTest(unittest.TestCase):
 
 
 class WindowWiringTest(unittest.TestCase):
-    """testing_window / review_page 接线源码锁（勘误：面板与复判入口移入复盘页）。"""
+    """testing_window / review_page 接线源码锁（面板与复判入口移入复盘页）。"""
 
     def test_wiring_present(self):
         src = Path("xccv/testing/testing_window.py").read_text(encoding="utf-8")
@@ -225,7 +225,7 @@ class WindowWiringTest(unittest.TestCase):
         self.assertIn("self.btn_review.setEnabled(True)", review)
         self.assertIn("collect_match_stats(", src)     # 标准批量线程仍出统计
         self.assertIn("collect_match_stats(", review)  # 复盘线程也出统计
-        self.assertIn('node["params"]["note"] = (', src)      # O18 留痕
+        self.assertIn('node["params"]["note"] = (', src)      # 留痕
         self.assertIn("def _open_batch_review", src)
         self.assertIn("BatchReviewDialog(", src)
         self.assertIn('_detail_stack.addWidget(self.review_page)', src)

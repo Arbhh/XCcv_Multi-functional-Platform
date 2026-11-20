@@ -7,7 +7,7 @@
   缓冲，通道握手（js_ready）后统一下发。旧 console.log("XCCV:") 入口保留
   兜底（通道未就绪时 JS 自动降级）；
 - 新建流程：用户选择文件夹并命名，保存为 .json；不绑定训练平台项目；
-- 打包 .xvap：按当前流程图 JSON 把所选模型文件一并封入（单文件）；
+- 打包 .xvap：按当前流程图 JSON 把所选模型文件一并封入（明文容器，单文件）；
 - 运行预览：按连线拓扑执行到所选节点，检出结果画在样图上回显。
 """
 
@@ -37,10 +37,9 @@ from ..engine.detection_flow import graph_to_chain  # noqa: F401
 from ..engine import detection_flow as df
 from ..engine import flow_package as fp
 from ..i18n import tr
-from ..ui_style import icon_path
+from .modeltools_window import icon_path
 
 log = logging.getLogger(__name__)
-_WEB_DIR = Path(__file__).resolve().parent / "web"
 
 
 def _inject_web_i18n(page):
@@ -57,6 +56,7 @@ def _inject_web_i18n(page):
         "window.__I18N_EN="
         + _json.dumps(TABLE, ensure_ascii=False)
         + ";if(window.__applyI18N)window.__applyI18N();")
+_WEB_DIR = Path(__file__).resolve().parent / "web"
 
 
 class _Bridge(QObject):
@@ -75,7 +75,7 @@ class _Bridge(QObject):
 
     def send(self, payload: dict):
         if payload.get("event") == "loaded" and isinstance(payload.get("flow"), dict):
-            # 画布载入统一入口：旧端口布局连线先迁移到当前布局（修复循环 3），
+            # 画布载入统一入口：旧端口布局连线先迁移到当前布局，
             # 否则画布按槽位画线会接错端口（port_migrate 幂等，schema:2 跳过）
             from ..engine.flow.port_migrate import migrate_ports
 
@@ -96,6 +96,7 @@ class _Bridge(QObject):
         try:
             msg = json.loads(raw)
         except Exception:
+            log.debug("流程图 Web 消息解析失败（忽略该条消息）")
             return
         action = msg.get("action")
         try:
@@ -110,7 +111,7 @@ class _Bridge(QObject):
     def do_js_ready(self, msg):
         """JS 侧 QWebChannel 就绪握手。
 
-        顺序关键（用户实测红色 undefined 节点的根因）：必须**先下发节点库
+        顺序关键（实测红色 undefined 节点的根因）：必须**先下发节点库
         （注册 xccv2/ 类型）再冲刷缓冲事件**——外部在通道就绪前推入的
         loaded 事件（主界面编辑流程图/流程图页同步画布）若先于节点库执行，
         graph.configure 会遇到未注册类型，渲染成红色 undefined 占位节点。
@@ -135,8 +136,7 @@ class _Bridge(QObject):
 
     def do_new(self, msg):
         path, _ = QFileDialog.getSaveFileName(
-            self.win, tr("新建流程图（选择保存位置并命名）"), "flow.json",
-            tr("流程图 (*.json)"))
+            self.win, tr("新建流程图（选择保存位置并命名）"), "flow.json", tr("流程图 (*.json)"))
         if not path:
             return
         empty = {"last_node_id": 0, "last_link_id": 0, "nodes": [], "links": []}
@@ -200,10 +200,10 @@ class _Bridge(QObject):
 
     def do_save_xvap(self, msg):
         flow = msg.get("flow") or {}
-        from .flow_pack import _show_pack_problems, validate_flow_for_pack
+        from .flow_shared import _show_pack_problems, validate_flow_for_pack
 
         # 画布打包与 Qt 侧打包走同一套打包前校验（此前画布通道绕过校验，
-        # 用户实测假权重/非法区域/未连通节点/数量判定均未被拦截）
+        # 实测假权重/非法区域/未连通节点/数量判定均未被拦截）
         problems = validate_flow_for_pack(flow)
         if problems:
             _show_pack_problems(self.win, problems)
@@ -224,7 +224,7 @@ class _Bridge(QObject):
                     self.win, tr("打包 .xvap"),
                     tr("流程中没有已选择模型文件的模型节点（在节点属性面板中浏览选择）"))
                 return
-            # 纯传统算子流程（用户批注 F2）：允许打包为不含模型的 .xvap
+            # 纯传统算子流程：允许打包为不含模型的 .xvap
         path, _ = QFileDialog.getSaveFileName(
             self.win, tr("打包流程"), "flow.xvap", tr("流程包 (*.xvap)"))
         if not path:
@@ -238,7 +238,7 @@ class _Bridge(QObject):
     def do_pick_model(self, msg):
         path, _ = QFileDialog.getOpenFileName(
             self.win, tr("选择模型文件"), "",
-            tr("模型权重 (*.pt);;所有文件 (*)"))
+            tr("模型权重 (*.pt *.engine);;所有文件 (*)"))
         if path:
             self.send({"event": "model_file", "node_id": msg.get("node_id"), "path": path})
 
@@ -246,20 +246,20 @@ class _Bridge(QObject):
         """schema 面板 path 型参数的文件浏览（path 参数复用同一桥接链路）。"""
         path, _ = QFileDialog.getOpenFileName(
             self.win, tr("选择文件"), "",
-            tr("图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.json *.xvap);;所有文件 (*)"))
+            tr("图片/模型/流程 (*.jpg *.jpeg *.png *.bmp *.pt *.engine *.json *.xvap);;所有文件 (*)"))
         if path:
             self.send({"event": "param_file", "node_id": msg.get("node_id"),
                        "key": msg.get("key"), "path": path})
 
     def do_pick_param_folder(self, msg):
-        """schema 面板 folder 型参数的目录浏览（用户批注 ToC1：输出目录
+        """schema 面板 folder 型参数的目录浏览（输出目录
         应选文件夹而非文件）。"""
         path = QFileDialog.getExistingDirectory(self.win, tr("选择文件夹"))
         if path:
             self.send({"event": "param_file", "node_id": msg.get("node_id"),
                        "key": msg.get("key"), "path": path})
 
-    # ---- 新引擎运行会话（批次十九：运行到此 / 单节点重跑 / 快照 / 日志） ----
+    # ---- 新引擎运行会话（运行到此 / 单节点重跑 / 快照 / 日志） ----
     def _session(self):
         if getattr(self.win, "_flow_session", None) is None:
             from .flow_session import FlowSession
@@ -445,7 +445,7 @@ class FlowGraphWebWindow(QMainWindow):
         if query:  # 调试开关：nort=禁用连续渲染循环；nolg=不加载 litegraph.js
             url.setQuery("&".join(query))
         self.page.setUrl(url)
-        # 英文模式：页面加载完成即注入翻译表（与握手注入双保险）
+        # 英文模式：页面加载完成即注入翻译表（与握手注入双保险，P243 时序）
         self.page.loadFinished.connect(
             lambda _ok: _inject_web_i18n(self.page))
         self.setCentralWidget(view)

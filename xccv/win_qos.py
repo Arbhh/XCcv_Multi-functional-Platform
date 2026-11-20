@@ -1,16 +1,19 @@
 """进程 QoS：显式退出 Windows EcoQoS（电源节流），保证推理/训练速度稳定。
 
-背景（V0.6 用户回传，2026-11-02 实测于 Intel Core 7 250H 混合架构笔记本）：
+背景（实测反馈：Intel Core 7 250H 混合架构笔记本）：
 Windows 11 会对"后台"进程自动施加 EcoQoS——降频并优先调度到能效核（E 核）。
 测试平台单图推理在主线程执行（maskrcnn 2821×2144 约 3.4s），窗口一旦失去
 前台（用户切走窗口，或主线程阻塞超过约 5s 被 DWM 判"未响应"、换成幽灵
 窗口），进程即被节流：同一推理 3.4s → 8.8s（SetProcessInformation 强制
-EcoQoS 复现，与用户"3s 飙到 8s 以上"吻合）。
+EcoQoS 复现，与实测"3s 飙到 8s 以上"吻合）。
 
 XCcv 是计算密集型桌面工具：各进程入口显式声明 HighQoS（ControlMask=
 EXECUTION_SPEED、StateMask=0 → 系统不再自动节流）。仅 Windows 生效；
 任何失败静默返回 False（不影响功能，只是速度可能受系统节流）。
 """
+
+import logging
+log = logging.getLogger(__name__)
 
 import sys
 
@@ -59,6 +62,7 @@ def opt_out_power_throttling() -> bool:
             k32.GetCurrentProcess(), _PROCESS_POWER_THROTTLING,
             ctypes.byref(state), ctypes.sizeof(state)))
     except Exception:
+        log.debug("QoS 节流关闭失败（按未生效处理）")
         return False
 
 
@@ -77,4 +81,5 @@ def power_throttling_state() -> tuple | None:
             return None
         return int(state.ControlMask), int(state.StateMask)
     except Exception:
+        log.debug("QoS 状态查询失败（返回 None）")
         return None

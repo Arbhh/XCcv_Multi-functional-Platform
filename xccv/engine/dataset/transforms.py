@@ -253,6 +253,7 @@ def maybe_apply_ops(image: np.ndarray, shapes: list[Shape], ops: dict, rng=None,
         return image, shapes
     return apply_ops(image, shapes, chosen, rng=rng)
 
+
 def preview_apply_ops(image: np.ndarray, ops: dict, probs: dict | None = None,
                       rng=None, always: tuple = ("resize",)) -> tuple:
     """增强效果预览：与 maybe_apply_ops 同口径（每算子独立掷硬币），

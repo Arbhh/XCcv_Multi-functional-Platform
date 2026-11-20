@@ -10,6 +10,8 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+import logging
+log = logging.getLogger(__name__)
 
 
 def ensure_console_streams() -> None:
@@ -25,6 +27,7 @@ def ensure_console_streams() -> None:
         try:
             stream.flush()
         except Exception:
+            log.debug("控制台流兜底失败（pythonw 环境差异，不影响运行）")
             try:
                 setattr(sys, name,
                         open(os.devnull, "w", encoding="utf-8",
@@ -48,6 +51,7 @@ def crash_log_path() -> Path:
             probe.unlink()
             return d / "crash.log"
         except Exception:
+            log.debug("崩溃日志候选目录探测失败（跳过该候选）")
             continue
     return candidates[-1] / "crash.log"
 
@@ -77,13 +81,13 @@ def install_excepthook(context: str) -> None:
             logging.getLogger("xccv.crash").critical(
                 f"未捕获异常（{context}）\n{text}")
         except Exception:
-            pass
+            pass  # 三有豁免：崩溃上报自身失败不得再抛（防递归）
         path = crash_log_path()
         try:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(f"\n[{datetime.now():%Y-%m-%d %H:%M:%S}] {context}\n{text}")
         except Exception:
-            pass
+            pass  # 三有豁免：崩溃日志写失败已由后续路径兜底
         try:
             from PyQt5.QtWidgets import QApplication, QMessageBox
 
@@ -92,7 +96,7 @@ def install_excepthook(context: str) -> None:
                     None, "XCcv 发生错误",
                     f"{context}\n\n{tp.__name__}: {val}\n\n详细堆栈已保存到：\n{path}")
         except Exception:
-            pass
+            pass  # 三有豁免：崩溃弹窗失败无更高层兜底（防递归）
 
     sys.excepthook = _hook
 
@@ -105,13 +109,13 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
     "卡顿开始"+主线程栈顶三帧，心跳恢复时补记"卡顿结束+时长"
     （写入 logs/freeze_watchdog.log，异常必须留痕，P75 纪律）。
 
-    负载纪律（用户 R3）：一个 50ms 级 daemon 线程 + 主线程低频 QTimer，
+    负载纪律（R3 约定）：一个 50ms 级 daemon 线程 + 主线程低频 QTimer，
     无轮询数据库/文件，不构成常驻性能负载；主要入口统一装配。
     返回 stop() 卸载函数（测试用）。
 
-    生命周期（坑 P153）：产品入口丢弃返回值——心跳 QTimer 若只被 stop 闭包
+    生命周期：产品入口丢弃返回值——心跳 QTimer 若只被 stop 闭包
     引用会随之被 GC，心跳永停：每次启动只记一条"卡顿开始"、此后永久失明
-    （V0.6 首版：日志 48 条开始 / 0 条结束）。故 QTimer 挂 QApplication 为父
+    （V0.6 首版运行日志 48 条开始/0 条结束）。故 QTimer 挂 QApplication 为父
     并登记模块级保活表。布防：连续 3 次准时心跳（事件循环已稳定运转）后才
     开始判定——启动期窗口构建本就无事件循环（有加载中界面兜底），不计卡顿。
     """
@@ -124,7 +128,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
     state = {"frozen": False, "start": 0.0, "stop": False, "armed": False}
     main_tid = threading.get_ident()
 
-    timer = QTimer(QCoreApplication.instance())  # 挂 app 为父：随进程存活（P153）
+    timer = QTimer(QCoreApplication.instance())  # 挂 app 为父：随进程存活
     timer.setInterval(heartbeat_ms)
 
     def _beat():
@@ -146,7 +150,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
         while not state["stop"]:
             ok = beat.wait(threshold_ms / 1000.0)
             if ok:
-                beat.clear()  # Event.wait 不清标志（坑 P141），必须显式清
+                beat.clear()  # Event.wait 不清标志，必须显式清
             now = _time.perf_counter()
             if ok:
                 if state["frozen"]:
@@ -180,7 +184,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
                 stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{stamp}] {text}\n")
         except Exception:
-            pass
+            log.debug("心跳落盘失败（watchdog 文件未更新）")
 
     timer.start()
     thread = threading.Thread(target=_watch, daemon=True,
@@ -194,7 +198,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
             timer.stop()
             timer.deleteLater()
         except Exception:
-            pass
+            log.warning("watchdog 定时器清理失败", exc_info=True)
         try:
             _WATCHDOG_KEEPALIVE.remove(entry)
         except ValueError:
@@ -214,7 +218,7 @@ def auto_cleanup_thread(owner, attr: str, thread):
     finished→安全置 None（owner 线程队列投递；owner 先亡自动断开）+
     finished→deleteLater 释放 Qt 底层对象。thread 参数须显式传入
     （连接建立于 start 之前；普通函数槽会直连在工作线程执行，
-    跨线程碰已亡 C++ 对象即段错误——坑 P146）。
+    跨线程碰已亡 C++ 对象即段错误）。
     """
     from PyQt5.QtCore import QObject
 

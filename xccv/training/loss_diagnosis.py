@@ -1,7 +1,7 @@
-"""O3（V0.7）：Loss 曲线自动判读（VIMO"指标差如何调优"第 5 步对照）。
+"""Loss 曲线自动判读（通用调优指引第 5 步对照）。
 
 训练结束/历史详情自动生成一句话判读，纯规则实现、零训练改动：
-- NaN/Inf → 直接给 FAQ 文案（VIMO"Loss became infinite"处置口径）；
+- NaN/Inf → 直接给 FAQ 文案（"Loss became infinite"处置口径）；
 - 末段训练损失仍在明显下降 → 疑似欠拟合，建议增加轮次；
 - 验证指标较最佳回落明显（且训练损失继续降）→ 疑似过拟合，
   建议采用 best 轮次权重或减少轮次；
@@ -13,6 +13,8 @@ history 条目与各家族落盘一致（epoch/train_loss + 验证指标键之�
 from __future__ import annotations
 
 import math
+
+from ..i18n import tr
 
 _METRIC_KEYS = ("map_loose", "map50", "val_top1", "auroc", "exact_match")
 _MIN_EPOCHS = 6          # 少于该轮数不下结论
@@ -52,12 +54,13 @@ def diagnose(history: list) -> dict:
     if any(isinstance(v, (int, float)) and not math.isfinite(v)
            for v in losses):
         return {"kind": "nan",
-                "text": "训练损失出现 NaN/Inf——数值不稳定：建议降低学习率、"
-                        "检查标注数据（空/损坏样本），或在开发者选项开启"
-                        "「确定性训练」复现问题"}
+                "text": tr("训练损失出现 NaN/Inf——数值不稳定：建议降低学习率、"
+                           "检查标注数据（空/损坏样本），或在开发者选项开启"
+                           "「确定性训练」复现问题")}
     if len(history) < _MIN_EPOCHS:
         return {"kind": "insufficient",
-                "text": f"轮次不足 {_MIN_EPOCHS} 轮，损失形态判读意义有限"}
+                "text": tr("轮次不足 {n} 轮，损失形态判读意义有限").format(
+                    n=_MIN_EPOCHS)}
     fin_losses = _finite(losses)
     metric = _metric_series(history)
     metric_vals = [v for _, v in metric if math.isfinite(v)] if metric else []
@@ -69,19 +72,21 @@ def diagnose(history: list) -> dict:
         best_epoch = next(e for e, v in metric if math.isfinite(v) and v == best)
         if best > 0 and last < best * (1 - _OVERFIT_DROP):
             return {"kind": "overfit",
-                    "text": f"疑似过拟合：验证指标较最佳回落 "
-                            f"{(best - last) / best:.0%}（最佳在第 "
-                            f"{best_epoch} 轮，当前第 {metric[-1][0]} 轮），"
-                            "建议采用 best 轮次权重（默认已选）或减少轮次"}
+                    "text": tr("疑似过拟合：验证指标较最佳回落 {pct:.0%}"
+                               "（最佳在第 {best} 轮，当前第 {cur} 轮），"
+                               "建议采用 best 轮次权重（默认已选）或减少轮次").format(
+                        pct=(best - last) / best, best=best_epoch,
+                        cur=metric[-1][0])}
     if len(fin_losses) >= _MIN_EPOCHS:
         tail_n = max(3, int(len(fin_losses) * _TAIL_RATIO))
         tail = fin_losses[-tail_n:]
         mean = sum(tail) / len(tail)
         if mean > 0 and _slope(tail) / mean < _TAIL_SLOPE:
             return {"kind": "underfit",
-                    "text": f"疑似欠拟合：训练损失末段仍在明显下降"
-                            f"（近 {tail_n} 轮斜率为负），建议增加训练轮次"}
-    return {"kind": "ok", "text": "训练收敛正常（损失与验证指标形态无异常）"}
+                    "text": tr("疑似欠拟合：训练损失末段仍在明显下降"
+                               "（近 {n} 轮斜率为负），建议增加训练轮次").format(
+                        n=tail_n)}
+    return {"kind": "ok", "text": tr("训练收敛正常（损失与验证指标形态无异常）")}
 
 
 def _metric_series(history: list) -> list:

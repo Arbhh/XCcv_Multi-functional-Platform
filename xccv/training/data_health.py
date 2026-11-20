@@ -1,7 +1,7 @@
-"""数据集体检（用户规则：仅「提示 / 警告」两档，不阻止训练）。
+"""数据集体检（设计规则：仅「提示 / 警告」两档，不阻止训练）。
 
 检查项与引擎既有逻辑对齐（体检说"会启用工业损失"就真的会触发）：
-- 类别不均衡：最小类实例占整体比例 < imbalance_share（默认 5%，用户 Q3 回执口径）→ 警告；
+- 类别不均衡：最小类实例占整体比例 < imbalance_share（默认 5%，占比口径）→ 警告；
 - 单类样本过少：分类 <20/类、检测/分割 <50 实例/类 → 警告；
 - 验证集类别缺失：按当前划分参数模拟抽查 → 提示；
 - 未标注图片（labelme 结构缺同名 json）→ 提示；
@@ -9,7 +9,7 @@
 - 尺寸离群：面积偏离中位数 ±N×MAD → 提示。
 
 阈值在训练平台「开发者选项」（齿轮）中可调（dev_options.DevOptions）。
-"疑似错标"暂不实现（用户决策 D3）。本模块为纯逻辑，不依赖 Qt。
+"疑似错标"暂不实现（决策 D3）。本模块为纯逻辑，不依赖 Qt。
 """
 
 from dataclasses import dataclass, field
@@ -24,6 +24,7 @@ from ..engine.dataset.converters import split_samples
 from ..engine.dataset.ignore import IGNORE_LABEL
 from ..engine.dataset.reader import scan_classification_dataset, scan_labelme_dataset
 from ..engine.io_utils import imread_unicode
+from ..i18n import tr
 from .dev_options import DevOptions
 
 LEVEL_INFO = "提示"
@@ -122,7 +123,7 @@ def _duplicate_groups(hashes: dict, threshold: int) -> list[list]:
 
 
 def _check_imbalance(counts: dict, opt: DevOptions) -> list:
-    """类别不均衡（用户 Q3 回执改占比口径）：最小类实例占整体比例 < 阈值 → 警告。"""
+    """类别不均衡（占比口径）：最小类实例占整体比例 < 阈值 → 警告。"""
     issues = []
     positive = {c: n for c, n in counts.items() if n > 0}
     total = sum(positive.values())
@@ -132,11 +133,13 @@ def _check_imbalance(counts: dict, opt: DevOptions) -> list:
         if share < opt.imbalance_share:
             hi = max(positive, key=positive.get)
             issues.append(HealthIssue(
-                LEVEL_WARN, "imbalance", "类别数量不均衡",
-                f"最少类「{lo}」{positive[lo]} 个，仅占整体 {share:.1%}"
-                f"（阈值 {opt.imbalance_share:.0%}）；最多类「{hi}」{positive[hi]} 个。",
-                "工业场景建议开启「工业场景优化」（会自动启用 Focal 类改进损失）；"
-                "可能时补充稀少类别样本。"))
+                LEVEL_WARN, "imbalance", tr("类别数量不均衡"),
+                tr("最少类「{lo}」{n} 个，仅占整体 {share:.1%}（阈值 {thr:.0%}）；"
+                   "最多类「{hi}」{m} 个。").format(
+                    lo=lo, n=positive[lo], share=share,
+                    thr=opt.imbalance_share, hi=hi, m=positive[hi]),
+                tr("工业场景建议开启「工业场景优化」（会自动启用 Focal 类改进损失）；"
+                   "可能时补充稀少类别样本。")))
     return issues
 
 
@@ -146,13 +149,14 @@ def _check_few_samples(counts: dict, task: TaskType, opt: DevOptions) -> list:
     unit = "张样本" if task is TaskType.CLASSIFICATION else "个实例"
     few = {c: n for c, n in counts.items() if 0 < n < floor}
     if few:
-        shown = "、".join(f"{c}={n}" for c, n in sorted(few.items())[:6])
-        more = f" 等 {len(few)} 类" if len(few) > 6 else ""
+        shown = ", ".join(f"{c}={n}" for c, n in sorted(few.items())[:6])
+        more = tr(" 等 {n} 类").format(n=len(few)) if len(few) > 6 else ""
         return [HealthIssue(
-            LEVEL_WARN, "few_samples", "部分类别样本过少",
-            f"建议每类至少 {floor} {unit}，当前偏少：{shown}{more}。",
-            "样本过少的类别不易学好；可补充采集，或在训练设置中增大"
-            "「数据倍增倍数」并配合数据增强。")]
+            LEVEL_WARN, "few_samples", tr("部分类别样本过少"),
+            tr("建议每类至少 {n} {unit}，当前偏少：{few}。").format(
+                n=floor, unit=tr(unit), few=shown + more),
+            tr("样本过少的类别不易学好；可补充采集，或在训练设置中增大"
+               "「数据倍增倍数」并配合数据增强。"))]
     return []
 
 
@@ -178,11 +182,11 @@ def _check_val_coverage(task, samples: list, classes: list, val_ratio: float,
     missing = [c for c in classes if val_counts.get(c, 0) == 0]
     if missing:
         return [HealthIssue(
-            LEVEL_INFO, "val_missing", "部分类别未进入验证集",
-            f"按当前验证集比例（{val_ratio:.0%}）划分后，这些类别没有验证样本："
-            f"{'、'.join(missing)}。",
-            "验证集看不到该类别时，mAP 指标不覆盖它；可增大验证集比例，"
-            "或保持「训练集 100% + 验证集 20%」的重叠划分方式。")]
+            LEVEL_INFO, "val_missing", tr("部分类别未进入验证集"),
+            tr("按当前验证集比例（{ratio:.0%}）划分后，这些类别没有验证样本："
+               "{names}。").format(ratio=val_ratio, names=", ".join(missing)),
+            tr("验证集看不到该类别时，mAP 指标不覆盖它；可增大验证集比例，"
+               "或保持「训练集 100% + 验证集 20%」的重叠划分方式。"))]
     return []
 
 
@@ -195,9 +199,9 @@ def _check_unlabeled(dataset_dir: Path) -> list:
             n += 1
     if n:
         return [HealthIssue(
-            LEVEL_INFO, "unlabeled", "存在未标注的图片",
-            f"{n} 张图片没有同名 .json 标注，不会参与训练。",
-            "如需使用请到标注平台补标注；若为背景图/废片可忽略。")]
+            LEVEL_INFO, "unlabeled", tr("存在未标注的图片"),
+            tr("{n} 张图片没有同名 .json 标注，不会参与训练。").format(n=n),
+            tr("如需使用请到标注平台补标注；若为背景图/废片可忽略。"))]
     return []
 
 
@@ -205,8 +209,9 @@ def _check_duplicates(dataset_dir: Path, samples: list, opt: DevOptions) -> list
     paths = sorted({Path(s.image_path) for s in samples})
     if len(paths) > opt.dup_scan_cap:
         return [HealthIssue(
-            LEVEL_INFO, "dup_skipped", "重复图检测已跳过",
-            f"图片数 {len(paths)} 超过检测上限 {opt.dup_scan_cap}（可在开发者选项调整）。",
+            LEVEL_INFO, "dup_skipped", tr("重复图检测已跳过"),
+            tr("图片数 {n} 超过检测上限 {cap}（可在开发者选项调整）。").format(
+                n=len(paths), cap=opt.dup_scan_cap),
             "")]
     hashes = {}
     for p in paths:
@@ -219,11 +224,12 @@ def _check_duplicates(dataset_dir: Path, samples: list, opt: DevOptions) -> list
         total = sum(len(g) for g in groups)
         example = "；".join(
             f"{Path(g[0]).name} ↔ {Path(g[1]).name}" for g in groups[:3])
-        more = f" 等 {len(groups)} 组" if len(groups) > 3 else ""
+        more = tr(" 等 {n} 组").format(n=len(groups)) if len(groups) > 3 else ""
         return [HealthIssue(
-            LEVEL_INFO, "duplicates", "疑似重复图",
-            f"{total} 张图片高度相似（{example}{more}）。",
-            "同款工件多角度拍摄可能被误报；确认冗余后删除副本可降低过拟合风险。")]
+            LEVEL_INFO, "duplicates", tr("疑似重复图"),
+            tr("{n} 张图片高度相似（{example}{more}）。").format(
+                n=total, example=example, more=more),
+            tr("同款工件多角度拍摄可能被误报；确认冗余后删除副本可降低过拟合风险。"))]
     return []
 
 
@@ -239,17 +245,18 @@ def _check_size_outliers(samples: list, opt: DevOptions) -> list:
                 if abs(a - med) > k * mad_eff]
     if outliers:
         names = "、".join(Path(s.image_path).name for s, _ in outliers[:5])
-        more = f" 等 {len(outliers)} 张" if len(outliers) > 5 else ""
+        more = tr(" 等 {n} 张").format(n=len(outliers)) if len(outliers) > 5 else ""
         return [HealthIssue(
-            LEVEL_INFO, "size_outlier", "存在尺寸离群的图片",
-            f"{len(outliers)} 张图片面积明显偏离中位数（>{k:g}×MAD）：{names}{more}。",
-            "极端尺寸可能影响训练稳定性；确认是误拍/废片可删除，"
-            "或启用增强策略「调整图像大小」统一输入尺寸。")]
+            LEVEL_INFO, "size_outlier", tr("存在尺寸离群的图片"),
+            tr("{n} 张图片面积明显偏离中位数（>{k:g}×MAD）：{names}{more}。").format(
+                n=len(outliers), k=k, names=names, more=more),
+            tr("极端尺寸可能影响训练稳定性；确认是误拍/废片可删除，"
+               "或启用增强策略「调整图像大小」统一输入尺寸。"))]
     return []
 
 
 def _check_ignore_regions(samples: list) -> list:
-    """O8（V0.7）：`__ignore__` 忽略区域可见性（信息级）。
+    """`__ignore__` 忽略区域可见性（信息级）。
 
     告知用户数据里存在忽略区域、将被近似语义剔除的 GT 数量，避免
     "标注突然变少"的困惑；语义与限制见《XCcv 操作流程手册》。
@@ -264,16 +271,16 @@ def _check_ignore_regions(samples: list) -> list:
     if not n_regions:
         return []
     return [HealthIssue(
-        LEVEL_INFO, "ignore_regions", "存在 __ignore__ 忽略区域",
-        f"数据集共有 {n_regions} 个忽略区域；训练/评估时将剔除与其重叠率"
-        f">50% 的 GT 实例 {n_dropped} 个（近似语义：区域内背景仍参与学习，"
-        "区域内检出不计误检）。",
-        "适用于反光、丝纹等界限模糊区域：标注平台画矩形/多边形、标签填 "
-        "__ignore__ 即可；若非故意标注请删除该标签。")]
+        LEVEL_INFO, "ignore_regions", tr("存在 __ignore__ 忽略区域"),
+        tr("数据集共有 {n} 个忽略区域；训练/评估时将剔除与其重叠率"
+           ">50% 的 GT 实例 {m} 个（近似语义：区域内背景仍参与学习，"
+           "区域内检出不计误检）。").format(n=n_regions, m=n_dropped),
+        tr("适用于反光、丝纹等界限模糊区域：标注平台画矩形/多边形、标签填 "
+           "__ignore__ 即可；若非故意标注请删除该标签。"))]
 
 
 def _check_ok_ratio(dataset_dir: Path, task: TaskType, samples: list) -> list:
-    """O6（V0.7）：OK 负样本利用与比例（对照 VIMO「合格:缺陷 ≈ 1:1~1:2」）。
+    """OK 负样本利用与比例（对照「合格:缺陷 ≈ 1:1~1:2」）。
 
     信息级不阻断；口径与训练侧一致——OK 图 = NEGATIVE_DIR_NAMES 目录内
     无同名 json 的图片（reader.scan_negative_images 同源）。
@@ -286,18 +293,20 @@ def _check_ok_ratio(dataset_dir: Path, task: TaskType, samples: list) -> list:
     n_defect_img = sum(1 for s in samples if s.shapes)
     if n_ok == 0:
         return [HealthIssue(
-            LEVEL_INFO, "ok_missing", "未利用 OK 负样本",
-            f"当前 {n_defect_img} 张含标注图片参与训练，OK 背景图 0 张。",
-            "工业场景误检风险高：建议建一个名为 OK/良品/正常 的子文件夹"
-            "放入良品图（无需标注），训练时保持「负样本训练」勾选。")]
+            LEVEL_INFO, "ok_missing", tr("未利用 OK 负样本"),
+            tr("当前 {n} 张含标注图片参与训练，OK 背景图 0 张。").format(
+                n=n_defect_img),
+            tr("工业场景误检风险高：建议建一个名为 OK/良品/正常 的子文件夹"
+               "放入良品图（无需标注），训练时保持「负样本训练」勾选。"))]
     ratio = n_ok / max(1, n_defect_img)
     if ratio < 0.5 or ratio > 2.0:
         return [HealthIssue(
-            LEVEL_INFO, "ok_ratio", "OK 图与缺陷图比例偏离建议区间",
-            f"OK 图 {n_ok} 张、含标注缺陷图 {n_defect_img} 张"
-            f"（约 {ratio:.1%}）；经验建议区间 OK:缺陷 ≈ 1:1~1:2。",
-            "OK 过少防误检收益有限；OK 过多会稀释缺陷样本（训练侧超量"
-            "自动按种子抽样、验证侧全保留用于误检率统计）。")]
+            LEVEL_INFO, "ok_ratio", tr("OK 图与缺陷图比例偏离建议区间"),
+            tr("OK 图 {a} 张、含标注缺陷图 {b} 张（约 {ratio:.1%}）；"
+               "经验建议区间 OK:缺陷 ≈ 1:1~1:2。").format(
+                a=n_ok, b=n_defect_img, ratio=ratio),
+            tr("OK 过少防误检收益有限；OK 过多会稀释缺陷样本（训练侧超量"
+               "自动按种子抽样、验证侧全保留用于误检率统计）。"))]
     return []
 
 
@@ -313,14 +322,8 @@ def run_health_check(task, dataset_dir, options: DevOptions | None = None,
     dataset_dir = Path(dataset_dir)
     issues: list = []
     is_anomaly = task in (TaskType.ANOMALY, TaskType.OCR)
-    # A1/A2：无监督异常检测与 OCR 无实例级类别语义——不均衡/单类数量/
+    # A1/A2：无监督异常检测与 OCR 无实例级标注语义——不均衡/单类数量/
     # 验证覆盖/未标注四项跳过（见下方分支守卫）
-
-    if task is TaskType.OCR and scan is None:
-        # OCR 数据仍是 labelme 结构（rectangle + label=文本内容），
-        # 不能按分类文件夹扫描（否则体检图片数为 0）
-        samples, classes, _ = scan_labelme_dataset(dataset_dir)
-        scan = (samples, classes)
 
     if task is TaskType.CLASSIFICATION or is_anomaly:
         if scan is None:
@@ -338,7 +341,7 @@ def run_health_check(task, dataset_dir, options: DevOptions | None = None,
         counts = {c: 0 for c in classes}
         for s in samples:
             for sh in s.shapes:
-                if sh.label == IGNORE_LABEL:   # O8：忽略区域不是类别，不进样本统计
+                if sh.label == IGNORE_LABEL:   # 忽略区域不是类别，不进样本统计
                     continue
                 counts[sh.label] = counts.get(sh.label, 0) + 1
 
@@ -363,7 +366,7 @@ def run_health_check(task, dataset_dir, options: DevOptions | None = None,
         issues += _check_unlabeled(dataset_dir)
     if task in (TaskType.DETECTION, TaskType.SEGMENTATION):
         issues += _check_ok_ratio(dataset_dir, task, samples)
-        issues += _check_ignore_regions(samples)  # O8（V0.7）：忽略区域可见性
+        issues += _check_ignore_regions(samples)  # 忽略区域可见性
     issues += _check_duplicates(dataset_dir, samples, opt)
     issues += _check_size_outliers(samples, opt)
 

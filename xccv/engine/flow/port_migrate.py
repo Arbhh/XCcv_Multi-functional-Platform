@@ -1,14 +1,14 @@
-"""旧端口布局迁移（V0.6 修复循环 3/4：端口统一大改的兼容层）。
+"""旧端口布局迁移（端口统一大改的兼容层）。
 
 背景：连线在流程 JSON 里按【槽位序号】存储（[id, src, src槽, dst, dst槽]）。
-修复循环 3 把端口收敛为 image/image_list/result/number 四类并调整了
-各节点的端口表——旧图直接加载会把线接错槽；修复循环 4 取消 image_list
+端口收敛为 image/image_list/result/number 四类并调整了
+各节点的端口表——旧图直接加载会把线接错槽；取消 image_list
 端口类型（图像端口统一承载单张/多张）并删除「取列表第k张」节点（槽位
 一一对应，无需重排；仅移除 list_pick 节点及其连线）。本模块提供：
 
 - `migrate_ports(flow)`：对缺少当前 "schema" 标记的图按表迁移连线槽位；
   缺失的映射（被移除的便利端口，如 centers/line2/saved）连线删除；
-  并按「图像在上、结果在下」重排各节点端口槽位（循环四）；
+  并按「图像在上、结果在下」重排各节点端口槽位；
   schema<3 时删除 list_pick 节点及其连线（并行输入语义下不再需要）。
 - 未列入表的节点 = 槽位一一对应（多数节点旧槽 0 的 result 类端口语义
   平移：detection/geometry/measure/bool → result）。
@@ -41,20 +41,20 @@ _PORT_MIGRATE: dict = {
     "merge_results":      {"in": {1: 0, 0: 1}, "out": {0: 0}},     # 旧 image→图像(0)、results→结果(1)；count 移除
 }
 
-# 修复循环 3 移除的节点参数（裁图族区域筛选 → 由「保留/屏蔽区域」过滤节点承担）
+# 移除的节点参数（裁图族区域筛选 → 由「保留/屏蔽区域」过滤节点承担）
 _PARAM_DROP: dict = {
     "crop_by_detection": ("region_mode", "regions"),
     "crop_by_detection_all": ("region_mode", "regions"),
 }
 
-# 修复循环 4 移除的节点（图内直接删除并断开其连线——并行输入后不再需要中转）
+# 移除的节点（图内直接删除并断开其连线——并行输入后不再需要中转）
 _NODE_DROP: dict = {
     "list_pick",   # 「取列表第k张」：任意节点收到多张自动逐张映射
 }
 
-# ---- 修复循环 4 第二级：端口顺序统一「图像在上、结果在下」（含中文标签统一）。
-# 槽位重排表，按【修复循环 3 布局】的旧槽 → 新槽；schema==2 的图只需本表，
-# schema<2 的图先过上方循环三表再过本表（两级复合）。
+# ---- 第二级：端口顺序统一「图像在上、结果在下」（含中文标签统一）。
+# 槽位重排表，按【旧布局】的旧槽 → 新槽；schema==2 的图只需本表，
+# schema<2 的图先过上方第一级表再过本表（两级复合）。
 _OUT_REORDER: dict = {
     "blob_analysis":        {0: 1, 1: 0},
     "model_detection":      {0: 1, 1: 0},

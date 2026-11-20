@@ -1,0 +1,32 @@
+{
+ "template": "tmpl_blob_prefilter",
+ "title": "缺陷斑点预筛 + 数量判定",
+ "description": "载图 → 高斯去噪 → Otsu 二值化 → 斑点分析（输出检出格式）→ 数量判定。适合亮缺陷（斑点）产品的有无/数量检查；暗目标请在斑点分析里勾选「暗目标」。",
+ "last_node_id": 5, "last_link_id": 4,
+ "nodes": [
+  {"id": 1, "type": "xccv2/image_loader", "pos": [60, 200],
+   "properties": {"path": "", "is_grayscale": false},
+   "inputs": [], "outputs": [{"name": "image", "type": "image", "links": [1]}]},
+  {"id": 2, "type": "xccv2/gaussian_blur", "pos": [330, 200],
+   "properties": {"ksize": 3, "sigma": 0.0},
+   "inputs": [{"name": "image", "type": "image", "link": 1}],
+   "outputs": [{"name": "image", "type": "image", "links": [2]}]},
+  {"id": 3, "type": "xccv2/threshold", "pos": [600, 200],
+   "properties": {"mode": "otsu", "thresh": 127.0, "adaptive_method": "mean",
+                   "block_size": 11, "invert": false},
+   "inputs": [{"name": "image", "type": "image", "link": 2}],
+   "outputs": [{"name": "image", "type": "image", "links": [3]}]},
+  {"id": 4, "type": "xccv2/blob_analysis", "pos": [870, 200],
+   "properties": {"threshold_mode": "otsu", "thresh": 128.0, "invert": false,
+                   "min_area": 20, "max_area": 0, "circularity": 0.0},
+   "inputs": [{"name": "image", "type": "image", "link": 3}],
+   "outputs": [{"name": "detection", "type": "detection", "links": [4]},
+                {"name": "centers", "type": "geometry", "links": []}]},
+  {"id": 5, "type": "xccv2/filter_count_check", "pos": [1140, 200],
+   "properties": {"min": 1, "max": 0},
+   "inputs": [{"name": "detection", "type": "detection", "link": 4}],
+   "outputs": [{"name": "detection", "type": "detection", "links": []},
+                {"name": "passed", "type": "bool", "links": []}]}
+ ],
+ "links": [[1, 1, 0, 2, 0], [2, 2, 0, 3, 0], [3, 3, 0, 4, 0], [4, 4, 0, 5, 0]]
+}

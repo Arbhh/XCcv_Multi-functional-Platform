@@ -1,4 +1,4 @@
-"""旧流程体系适配层（批次十七）。
+"""旧流程体系适配层（）。
 
 - sniff_format：流程 JSON 三格式嗅探（链式 / 旧图格式 / 新 IR 图格式）；
 - chain_to_xcv_graph：过滤链 → 新 IR 图（8 个薄委托过滤节点串行）；
@@ -52,7 +52,7 @@ def chain_to_xcv_graph(chain: dict, start_id: int = 1,
     from .registry import get_node_class
 
     def _slot(node_type: str, out: bool) -> int:
-        """result 端口槽位（修复循环 4 重排后按名解析，不再写死 0）。"""
+        """result 端口槽位。"""
         cls = get_node_class(node_type)
         ports = (cls.OUTPUTS if out else cls.INPUTS)
         for i, p in enumerate(ports):
@@ -100,7 +100,7 @@ def _image_size(pred, img) -> tuple:
 class _FilterNodeBase(VisionNode):
     """旧 8 节点的薄委托基类：单步调用 df.apply_flow（零逻辑复制）。
 
-    端口约定（修复循环 3 统一；修复循环 4 图像在上）：输入 = 图像（可选）
+    端口约定：输入 = 图像（可选）
     + 结果；输出 = 图像 + 结果 + 被滤除（图像原样直通，供预览/落盘）。
     """
 
@@ -130,8 +130,8 @@ class _FilterNodeBase(VisionNode):
         return out
 
 
-# V0.6 T3-2：过滤算子 removed 端口（被滤掉的检出，additive）；修复循环 3 追加
-# 图像直通输出；修复循环 4 统一「图像在上、结果在下」（旧图经迁移表重排槽位）
+# 过滤算子 removed 端口（被滤掉的检出，additive）；追加
+# 图像直通输出；统一「图像在上、结果在下」（旧图经迁移表重排槽位）
 _REMOVED_PORT = Port("removed", "result", label="被滤除")
 _FILTER_OUTPUTS = (Port("image", "image", label="图像"),
                    Port("result", "result", label="结果"),

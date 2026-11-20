@@ -12,7 +12,6 @@ Lucide/Heroicons 线性风格，与主图标族同底座）。
 
 模型工具：
 - prune        ：神经网络三层节点连线 + 橙色虚线剪切线 + 剪刀字形
-- crypto       ：锁体 + 钥匙（加解密）
 - accelerate   ：闪电 + 底部速度线
 
 模型加载：
@@ -273,35 +272,6 @@ def icon_prune() -> Image.Image:
     return img.resize((OUT, OUT), Image.LANCZOS)
 
 
-def icon_crypto() -> Image.Image:
-    """加解密：锁体（fa5s.lock 线性感觉）+ 斜插钥匙。"""
-    img = _badge("#b795ff", "#7243e2")
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    w = int(S * 0.034)
-    # 锁体（圆角矩形）+ 锁梁
-    bx0, by0, bx1, by1 = S * 0.24, S * 0.42, S * 0.68, S * 0.82
-    d.rounded_rectangle([bx0, by0, bx1, by1], radius=int(S * 0.06),
-                        outline=WHITE, width=w)
-    d.arc([S * 0.32, S * 0.20, S * 0.60, S * 0.50], 180, 360,
-          fill=WHITE, width=w)
-    _line(d, (S * 0.32, S * 0.36), (S * 0.32, S * 0.46), w)
-    _line(d, (S * 0.60, S * 0.36), (S * 0.60, S * 0.46), w)
-    # 锁孔（橙）
-    _dot(d, (bx0 + bx1) / 2, (by0 + by1) / 2 - S * 0.02, S * 0.030,
-         fill=ORANGE_SOLID)
-    d.rounded_rectangle([(bx0 + bx1) / 2 - S * 0.014,
-                         (by0 + by1) / 2 - S * 0.01,
-                         (bx0 + bx1) / 2 + S * 0.014,
-                         (by0 + by1) / 2 + S * 0.09],
-                        radius=int(S * 0.008), fill=ORANGE_SOLID)
-    img.alpha_composite(layer)
-    # 钥匙（右下，斜插）
-    g = _glyph("fa5s.key", S).resize((int(S * 0.26),) * 2, Image.LANCZOS)
-    img.alpha_composite(g, (int(S * 0.62), int(S * 0.62)))
-    return img.resize((OUT, OUT), Image.LANCZOS)
-
-
 def icon_accelerate() -> Image.Image:
     """加速：闪电 + 底部速度线。"""
     img = _badge("#ffbc63", "#ec7412")
@@ -435,7 +405,6 @@ BUILDERS = {
     "model_detection": icon_detection,
     "model_segmentation": icon_segmentation,
     "prune": icon_prune,
-    "crypto": icon_crypto,
     "accelerate": icon_accelerate,
     "model_load": icon_model_load,
     "flow": icon_flow,

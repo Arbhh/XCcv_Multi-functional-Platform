@@ -20,7 +20,7 @@ def read_json(path):
 def imread_unicode(path, color: bool = True) -> np.ndarray | None:
     """cv2.imread 在 Windows 中文路径下会失败，这里用 fromfile+imdecode 代替。
 
-    color=False（O5，V0.7 灰度训练）：IMREAD_GRAYSCALE 解码后复制回 3 通道
+    color=False（灰度训练）：IMREAD_GRAYSCALE 解码后复制回 3 通道
     ——灰度信息保留、下游张量化/增强/骨干零改动（"灰度复制 3 通道"口径）。
     """
     data = np.fromfile(str(path), dtype=np.uint8)

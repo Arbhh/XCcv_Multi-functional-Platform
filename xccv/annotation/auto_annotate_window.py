@@ -2,10 +2,12 @@
 """AI 批量预标注窗口（V0.6 T5-4）：选模型/文件夹 → 后台线程逐图预标注。
 
 入口：标注平台菜单「工具 → AI 批量预标注」（annotator_window 接线）。
-线程纪律：QThread 无父对象 + auto_cleanup_thread 收尾（P142/P144）；
+线程纪律：QThread 无父对象 + auto_cleanup_thread 收尾；
 窗口关闭即取消（cancel flag），不驻留后台。
 """
 
+import logging
+log = logging.getLogger(__name__)
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -100,13 +102,13 @@ class AutoAnnotateDialog(QDialog):
             self.model_edit.setText(_p.get("aa_model") or "")
             self.folder_edit.setText(_p.get("aa_folder") or "")
         except Exception:  # noqa: BLE001  偏好缺失不影响对话框
-            pass
+            log.warning("自动标注偏好读取失败", exc_info=True)
         v.addLayout(form)
 
         self.bar = QProgressBar()
         self.bar.setRange(0, 100)
         v.addWidget(self.bar)
-        self.status = QLabel("选择模型与文件夹后点「开始」")
+        self.status = QLabel(tr("选择模型与文件夹后点「开始」"))
         self.status.setWordWrap(True)
         v.addWidget(self.status)
 
@@ -124,7 +126,7 @@ class AutoAnnotateDialog(QDialog):
     # ---------- 选择 ----------
     def _pick_model(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, tr("选择模型权重"), "", tr("模型 (*.pt)"))
+            self, tr("选择模型权重"), "", tr("模型 (*.pt *.engine)"))
         if path:
             self.model_edit.setText(path)
 
@@ -153,7 +155,7 @@ class AutoAnnotateDialog(QDialog):
 
             save_prefs({"aa_model": model_path, "aa_folder": folder})
         except Exception:  # noqa: BLE001  记忆失败不影响运行
-            pass
+            log.warning("自动标注偏好保存失败", exc_info=True)
         self._thread = _AnnotateThread(dict(
             runner=auto_annotate.annotate_folder,
             model_path=model_path, folder=folder,

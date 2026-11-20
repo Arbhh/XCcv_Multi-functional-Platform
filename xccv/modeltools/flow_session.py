@@ -1,4 +1,4 @@
-"""新引擎画布运行会话（批次十九）：运行到此节点 / 单节点重跑 / 快照 / 日志。
+"""新引擎画布运行会话（）：运行到此节点 / 单节点重跑 / 快照 / 日志。
 
 - RunContext 跨调用持有：AI 模型缓存（ai_model:<path>）、会话警告、
   节点日志与快照存储在"同一画布会话"内保留——单节点重跑命中缓存 O(1)；
@@ -18,7 +18,7 @@ from ..engine.flow.snapshot import to_png_base64
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "flow_templates"
 _RUN_LOG_DIR = Path(app_paths.app_root()) / "platform_data" / "logs" / "流程运行日志"
-_RUN_LOG_KEEP = 50    # 保留最近 N 份运行日志，超出自动清理（用户批注 Q3：50 份即可）
+_RUN_LOG_KEEP = 50    # 保留最近 N 份运行日志，超出自动清理
 
 
 class FlowErrorMixed(Exception):
@@ -46,7 +46,7 @@ def list_templates() -> list:
     """官方流程模板清单：[{title, description, template, path, flow}]。
 
     模板标记（template 字段等）存流程 JSON 内部字段——.xvap 容器字节
-    布局零改动（计划书 §5.5）。
+    布局零改动。
     """
     out = []
     if _TEMPLATE_DIR.is_dir():
@@ -63,7 +63,7 @@ def list_templates() -> list:
 
 
 def node_library_payload() -> dict:
-    """节点库 + 端口类型表下发数据（Python 唯一事实源，Q3/计划书 §5.6）。
+    """节点库 + 端口类型表下发数据（Python 唯一事实源）。
 
     无 Qt 依赖：画布桥接与「传统平台」算子工作台共用（本函数首次调用时
     完成全部算子注册，幂等）。
@@ -90,7 +90,7 @@ def _normalize_types(flow: dict) -> dict:
 
     旧 xccv/ 类型不归新引擎管（由检测过滤链引擎处理），保持原样——
     Executor 会对未注册类型报错，正好把混入旧节点的图挡在新引擎之外。
-    同时做旧端口布局迁移（修复循环 3 端口统一，port_migrate.migrate_ports）。
+    同时做旧端口布局迁移。
     """
     from ..engine.flow.port_migrate import migrate_ports
 
@@ -171,7 +171,7 @@ class FlowSession:
 
     @staticmethod
     def write_run_log(summary: dict, label: str = "") -> None:
-        """每次运行落一份日志到 platform_data/logs/流程运行日志/（Q4 用户决策）。
+        """每次运行落一份日志到 platform_data/logs/流程运行日志/（Q4 决策）。
 
         只保留最近 _RUN_LOG_KEEP 份；写日志失败不影响运行（best-effort）。
         """

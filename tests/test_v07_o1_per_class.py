@@ -100,11 +100,20 @@ class TrainingWindowWiringTest(unittest.TestCase):
     """UI 接线源码锁：表格构建 + 三处调用点（开始清空/历史详情/训练完成）。"""
 
     def test_call_sites_present(self):
-        src = Path("xccv/training/training_window.py").read_text(encoding="utf-8")
-        self.assertIn("self.per_class_table = QTableWidget(0, 9)", src)
-        self.assertEqual(src.count("self._update_per_class_table("), 5,
-                         "1 处定义 + 4 处调用（开始/进行中/历史详情/完成）")
-        self.assertIn("from ..engine.metrics.per_class import per_class_rows", src)
+        # 0.7.6 P-1 拆分：逐类表构建在 panels/train_page.py，刷新逻辑与
+        # 导入在 panels/history_view.py——锁改为跨两文件计数（口径不变）
+        train_src = Path("xccv/training/panels/train_page.py").read_text(
+            encoding="utf-8")
+        history_src = Path("xccv/training/panels/history_view.py").read_text(
+            encoding="utf-8")
+        self.assertIn("self.per_class_table = QTableWidget(0, 9)", train_src)
+        self.assertEqual(
+            history_src.count("self._update_per_class_table(")
+            + train_src.count("self._update_per_class_table("), 5,
+            "5 处调用（开始/进行中/历史详情×2/完成×2）；定义在 history_view")
+        self.assertIn(
+            "from ...engine.metrics.per_class import per_class_rows",
+            history_src)
 
     def test_engine_per_class_key_emitted(self):
         # R-CNN/YOLO 评估器的 additive 键（源码锁，不跑真训练）

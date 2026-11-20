@@ -124,4 +124,4 @@ shortcuts:
 
   show_all_polygons: null
   hide_all_polygons: null
-  toggle_all_polygons: [T, V]   # 批注第二批 F4：V=切换标注显隐
+  toggle_all_polygons: [T, V]   # V=切换标注显隐

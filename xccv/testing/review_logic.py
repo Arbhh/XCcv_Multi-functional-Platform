@@ -1,6 +1,6 @@
-"""项目复盘分组逻辑（纯逻辑，不依赖 Qt；用户勘误 2026-11-13）。
+"""项目复盘分组逻辑（纯逻辑，不依赖 Qt）。
 
-复盘页在批量推理完成后，把每张图按当前维度阈值划入三组（VIMO「结果
+复盘页在批量推理完成后，把每张图按当前维度阈值划入三组（「结果
 分析」的过检/漏检口径）：
 
 - 过检：该图存在不命中 GT 的检出（FP），或 OK 图上有任何检出；
@@ -75,11 +75,11 @@ def _entry_from_per_image(img: dict, thresholds: dict,
 def classify_images(match_stats: dict, thresholds: dict) -> dict:
     """按维度阈值把全部图分成 正确/漏检/过检/未评估 四组（过检优先）。
 
-    OK 图口径与训练平台同源（再勘误③）：NEGATIVE_DIR_NAMES 目录内无 json
+    OK 图口径与训练平台同源：NEGATIVE_DIR_NAMES 目录内无 json
     的图（match_stats 已计为 OK）与"已审无缺陷"空 json 图都按 GT 空评估，
-    有检出即过检。无 json 的生产图 = 未评估组（再勘误④：必须可见，
+    有检出即过检。无 json 的生产图 = 未评估组（必须可见，
     否则加载新生产图完全无法确认）。
-    §二：match_stats["task"]="anomaly"/"classification" 为 batch_match
+    match_stats["task"]="anomaly"/"classification" 为 batch_match
     图像级口径（弱 GT），分组逻辑零改动直接复用（徽章随任务改字）。
     thresholds 形如 {"score": 0.25, "area": 500, ...}（enabled_dims；
     空字典=不过滤，等价于仅 score=0）。返回：
@@ -118,7 +118,7 @@ def classify_images(match_stats: dict, thresholds: dict) -> dict:
 
 def sweep_group_counts(match_stats: dict, dim: str, xs,
                        fixed: dict | None = None) -> dict:
-    """阈值扫描（**图口径**，V0.7.2 真机勘误）：曲线读数 = 该阈值下三组的
+    """阈值扫描（**图口径**，V0.7.2 实测修复）：曲线读数 = 该阈值下三组的
     **图数**，与右侧分组/统计行完全同口径（过检 > 漏检 > 正确 优先级）。
 
     已评估范围（有 GT 图 + OK 图）；未评估生产图不进三类曲线（OK/NG

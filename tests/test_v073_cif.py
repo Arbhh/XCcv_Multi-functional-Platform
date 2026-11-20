@@ -275,9 +275,9 @@ class CifIntegrationTest(unittest.TestCase):
     def test_weights_saved_and_reloaded(self):
         from xccv.engine.models import load_model
 
-        pt = Path(self.cfg.output_dir) / "best.pt"
-        self.assertTrue(pt.is_file(), "训练应收尾产出 best.pt")
-        m2 = load_model(pt, device="cpu")
+        xva = Path(self.cfg.output_dir) / "best.pt"
+        self.assertTrue(xva.is_file(), "训练应收尾产出 best.pt")
+        m2 = load_model(xva, device="cpu")
         self.assertEqual(type(m2).__name__, "CifModel")
         self.assertGreater(m2.memory.shape[0], 0)
 
