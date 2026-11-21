@@ -36,6 +36,9 @@ class ServiceConfig:
     min_loaded_models: list[str] = field(default_factory=list)  # 启动即预载的模型路径
     access_log: bool = False                # uvicorn 访问日志（高频调用建议关）
     log_level: str = "info"                 # uvicorn 日志级别
+    max_batch: int = 32                     # 批量推理单请求张数上限（超出 400）
+    max_upload_mb: float = 100.0            # 单请求体体积上限 MB（超出 413）
+    max_pixels: int = 50_000_000            # 单图像素上限 w*h（超出 413）
 
     def __post_init__(self):
         # 非回环绑定强制收口：必须白名单 + 关闭任意路径放行（安全红线）
@@ -53,12 +56,13 @@ def load_config() -> ServiceConfig:
     for f in ("host", "port", "api_key", "model_dirs", "allow_any_path",
               "max_loaded_models", "queue_size", "infer_conf", "infer_iou",
               "timing_enabled", "max_infer_side", "min_loaded_models",
-              "access_log", "log_level"):
+              "access_log", "log_level", "max_batch", "max_upload_mb",
+              "max_pixels"):
         if f in data:
             try:
                 setattr(cfg, f, data[f])
             except (TypeError, ValueError):
-                pass  # 坏值回退默认（坑 57：留痕）
+                pass  # 坏值回退默认（留痕）
     cfg.__post_init__()
     if not cfg.api_key:
         cfg.api_key = generate_api_key()
@@ -74,3 +78,5 @@ def save_config(cfg: ServiceConfig) -> None:
 
 def generate_api_key() -> str:
     return secrets.token_hex(16)
+
+

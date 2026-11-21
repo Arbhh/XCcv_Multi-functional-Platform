@@ -173,3 +173,4 @@ export function openPicker(anchorEl, hex, onChange) {
   apply();
   input.focus();
 }
+

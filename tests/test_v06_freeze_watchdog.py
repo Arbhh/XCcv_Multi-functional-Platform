@@ -1,4 +1,4 @@
-"""V0.6 T2-1 回归：主线程卡顿看门狗 + T2-6 auto_cleanup_thread。
+"""主线程卡顿看门狗 + auto_cleanup_thread。
 
 - 人为阻塞主线程 → freeze_watchdog.log 出现"卡顿开始+栈顶"；
 - 事件循环恢复 → 补记"卡顿结束：持续 Xs"；
@@ -152,10 +152,10 @@ class WatchdogLifetimeTest(unittest.TestCase):
         self.addCleanup(self._dispose, entry)
         gc.collect()
         self.assertTrue(_pump_until(lambda: entry[2]["armed"], 15000),
-                        "心跳 QTimer 被回收：看门狗无法布防（P153 回归）")
+                        "心跳 QTimer 被回收：看门狗无法布防")
         time.sleep(0.45)  # 布防后的真实卡顿
         self.assertTrue(_pump_until(lambda: "卡顿结束" in self._read(), 15000),
-                        "卡顿结束未记录：心跳在卡顿后未恢复（P153 回归）")
+                        "卡顿结束未记录：心跳在卡顿后未恢复")
         self.assertIn("卡顿开始", self._read())
 
     def test_startup_block_before_event_loop_not_logged(self):
@@ -219,3 +219,4 @@ class AutoCleanupThreadTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -115,3 +115,4 @@ class ServiceHealthPoller(QObject):
             "gpu_total_mb": float(gpu.get("total_mb") or 0),
         }
         self.state_changed.emit(state, info)
+

@@ -176,3 +176,4 @@ def migrate_ports(flow: dict) -> dict:
     out["links"] = new_links
     out["schema"] = SCHEMA
     return out
+

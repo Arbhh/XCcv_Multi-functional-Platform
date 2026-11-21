@@ -344,7 +344,7 @@ class NewEngineBridgeTest(unittest.TestCase):
 
 
 class FlowEditorIdentityTest(unittest.TestCase):
-    """v0.5.5追加-③：流程图编辑器独立图标与平台归属（脱离模型工具分类）。"""
+    """流程图编辑器独立图标与平台归属（脱离模型工具分类）。"""
 
     def test_assets_exist(self):
         from xccv.ui_style import icon_path
@@ -578,3 +578,5 @@ class RegionPickerJsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

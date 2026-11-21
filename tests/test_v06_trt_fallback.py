@@ -1,4 +1,4 @@
-"""V0.6 T1-2 回归：.engine（TensorRT）在无 GPU/无 TensorRT 环境友好降级。
+""".engine（TensorRT）在无 GPU/无 TensorRT 环境友好降级。
 
 加载 .engine 时缺 tensorrt 模块此前抛裸 ModuleNotFoundError 堆栈；现转译为
 TrtUnavailableError 中文指引（测试平台对话框/日志 INFO，不裸堆栈）。
@@ -99,7 +99,7 @@ _REAL_XCS = (_ROOT / "traintest" / "seg" / "模型" / "20260913_150930_maskrcnn"
 class TrtNoCudaFallbackTest(unittest.TestCase):
     """实测反馈 3.1：venv 装有 tensorrt 10.x，但本机无 CUDA 设备——
     `import tensorrt` 成功、`trt.Runtime()` 构造返回 nullptr（pybind11
-    TypeError 裸弹窗）。T1-2 只拦了 ModuleNotFoundError，漏掉这条路。"""
+TypeError 裸弹窗）。此前只拦截 ModuleNotFoundError，漏掉这条路。"""
 
     def test_registry_xcs_without_cuda_friendly(self):
         """registry 先验 CUDA：无设备直接友好降级（不触 TensorRT）。"""
@@ -296,3 +296,5 @@ class ComputeMismatchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

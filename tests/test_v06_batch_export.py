@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""V0.6 P8：测试平台增强——批量导出格式/统计摘要/4K 分块推理。
+"""测试平台增强——批量导出格式/统计摘要/4K 分块推理。
 
 - to_labelme 端到端：产物可被 labelme LabelFile.load 加载，形状/标签一致；
 - to_coco：categories 完整（classes 全量含零检出类）、bbox 转 [x,y,w,h]、
@@ -36,7 +36,7 @@ def _payload(file: str, w: int, h: int, dets: list) -> dict:
 
 
 class LabelmeRoundtripTest(unittest.TestCase):
-    """T8-1 验收：to_labelme 产物可被 labelme 标注平台加载（端到端）。"""
+    """to_labelme 产物可被 labelme 标注平台加载（端到端）。"""
 
     def test_labelme_file_loads(self):
         from labelme.label_file import LabelFile
@@ -75,7 +75,7 @@ class LabelmeRoundtripTest(unittest.TestCase):
 
 
 class CocoExportTest(unittest.TestCase):
-    """T8-1 验收：categories 完整 + bbox 转 [x,y,w,h] + id 唯一。"""
+    """categories 完整 + bbox 转 [x,y,w,h] + id 唯一。"""
 
     def test_coco_merge(self):
         payloads = [
@@ -111,7 +111,7 @@ class CocoExportTest(unittest.TestCase):
 
 
 class BatchSummaryTest(unittest.TestCase):
-    """T8-2：每类检出数/平均置信度/耗时 p50。"""
+    """每类检出数/平均置信度/耗时 p50。"""
 
     def test_summary(self):
         results = [
@@ -162,7 +162,7 @@ class _BrightSquareModel:
 
 
 class TiledInferTest(unittest.TestCase):
-    """T8-3：整图漏检 vs 分块检出；坐标还原；跨块重复去重；小图回退。"""
+    """整图漏检 vs 分块检出；坐标还原；跨块重复去重；小图回退。"""
 
     def _synth(self, w: int, h: int, squares: list) -> np.ndarray:
         img = np.zeros((h, w, 3), np.uint8)
@@ -212,7 +212,7 @@ class TiledInferTest(unittest.TestCase):
 
 
 class DialogFormatTest(unittest.TestCase):
-    """T8-1：批量设置对话框格式下拉（默认 xcv，可选 labelme/coco）。"""
+    """批量设置对话框格式下拉（默认 xcv，可选 labelme/coco）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -235,7 +235,7 @@ class DialogFormatTest(unittest.TestCase):
 
 
 class BatchThreadFormatTest(unittest.TestCase):
-    """T8-1/T8-2：_BatchThread 分格式落盘（labelme 可加载；coco 汇总+摘要）。"""
+    """_BatchThread 分格式落盘（labelme 可加载；coco 汇总+摘要）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -285,7 +285,7 @@ class BatchThreadFormatTest(unittest.TestCase):
             self.assertEqual([c["name"] for c in coco["categories"]], ["sq"])
             names = {f.name for f in (Path(td) / "out" / "检出结果").glob("*.json")}
             self.assertEqual(names, {"results_coco.json", "摘要.json"})
-            # T8-2：摘要落盘
+            # 摘要落盘
             summary_p = Path(td) / "out" / "检出结果" / "摘要.json"
             self.assertTrue(summary_p.is_file())
             summary = json.loads(summary_p.read_text(encoding="utf-8"))
@@ -306,3 +306,5 @@ class BatchThreadFormatTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

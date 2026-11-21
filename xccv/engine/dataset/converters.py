@@ -173,3 +173,4 @@ def _yolo_seg_line(shape: Shape, w: int, h: int, cls: int) -> str | None:
         return None
     coords = " ".join(f"{x / w:.6f} {y / h:.6f}" for x, y in pts)
     return f"{cls} {coords}"
+

@@ -134,3 +134,4 @@ def scan_classification_dataset(dataset_dir: Path) -> tuple[list[Sample], list[s
                 w, h = image_size(img)
                 samples.append(Sample(image_path=img, width=w, height=h, label=cls))
     return samples, classes
+

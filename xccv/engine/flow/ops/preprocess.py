@@ -429,7 +429,7 @@ class RoiExtract(VisionNode):
         return {"image": ImageData(mat=out, meta=meta)}
 
 
-# ---------------------------------------------------------------- V0.6 T4-1
+# ---------------------------------------------------------------- 预处理算子
 
 
 def _lut_apply(mat, lut):
@@ -634,3 +634,5 @@ class BitPlane(VisionNode):
         else:
             out = (((gray >> p) & 1) * 255).astype(np.uint8)
         return {"image": _as_image(out, img.meta)}
+
+

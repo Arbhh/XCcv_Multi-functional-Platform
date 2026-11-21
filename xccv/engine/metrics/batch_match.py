@@ -111,7 +111,7 @@ def _match_full(det_boxes, det_labels, det_scores,
     """贪心匹配内部实现 → (检出侧命中列表, GT 侧被命中列表)。
 
     同类 + IoU≥iou_thr，按分数降序贪心，GT 一对一；与
-    detection_confusion_matrix 同款匹配语义。
+    与 detection_confusion_matrix 相同的匹配语义。
     """
     n_det, n_gt = len(det_boxes), len(gt_boxes)
     matched_gt = [False] * n_gt
@@ -605,3 +605,5 @@ def sweep_metrics(stats: dict, dim: str, thr: float,
             "ok_fp_per_img": (round(fp_ok / n_ok, 3) if n_ok else None),
             "ng_img": un["ng"][0], "ok_img": un["ok"][0],
             "unjudged_total": un["unjudged_total"]}
+
+

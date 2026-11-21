@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""AI 批量预标注（V0.6 T5-4）：对文件夹逐图跑检测/分割模型 → labelme JSON。
+"""AI 批量预标注：对文件夹逐图跑检测/分割模型 → labelme JSON。
 
 - 模型走 engine.models.registry.load_model 唯一入口（.pt/.engine；GPU 可用自动用）；
 - 形状映射：检出框→rectangle；分割掩码→多边形（cv2.findContours + approxPolyDP，
-  eps 控制简化程度）；每图一个 JSON（不内嵌 imageData，与 T5-1 瘦身一致）；
+  eps 控制简化程度）；每图一个 JSON（不内嵌 imageData，与瘦身一致）；
 - 跳过已有同名 JSON 的图（可关）；进度/取消由调用方（窗口 QThread）驱动；
 - 输出可被 labelme.label_file.load 直接打开（旧 JSON 兼容加载已验）。
 """
@@ -136,3 +136,5 @@ def annotate_folder(model_path: str, folder: str, conf: float = 0.25,
             "cancelled": bool(cancel is not None and cancel()),
             "failed": sum(1 for r in per_image if r["error"]),
             "images": per_image}
+
+

@@ -9,7 +9,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from .. import __version__
@@ -20,6 +20,13 @@ from .config import load_config
 from .core.model_manager import ModelManager
 
 log = logging.getLogger(__name__)
+
+
+def body_over_limit(content_length: str | None, limit_mb: float) -> bool:
+    """Content-Length 声明体积是否超限（无声明/非法值不拦，由像素上限兜底）。"""
+    if not content_length or not content_length.isdigit():
+        return False
+    return int(content_length) > int(max(1.0, float(limit_mb)) * 1024 * 1024)
 
 
 def create_app(config=None) -> FastAPI:
@@ -50,6 +57,18 @@ def create_app(config=None) -> FastAPI:
         description="XCcv 模型推理 HTTP 接口（响应=统一检出 JSON schema_version=1，"
                     "字段说明见 docs/result_schema.md）",
     )
+
+    # ---- 请求体体积护栏：multipart 先整包落盘再进端点，超大请求会耗尽
+    #      内存/磁盘（Content-Length 声明即拒；分块上传无声明时由像素上限兜底） ----
+    @app.middleware("http")
+    async def _limit_request_body(request: Request, call_next):
+        limit_mb = float(getattr(request.app.state.config, "max_upload_mb", 100.0))
+        if body_over_limit(request.headers.get("content-length"), limit_mb):
+            return JSONResponse(status_code=413, content=error_envelope(
+                "error_413",
+                f"请求体超过上限 {limit_mb:g} MB（max_upload_mb），"
+                "请压缩图片或分批调用"))
+        return await call_next(request)
 
     # ---- /docs 自托管（A3：默认 swagger 资源走 CDN，离线客户环境空白） ----
     from pathlib import Path as _Path
@@ -148,14 +167,16 @@ def create_app(config=None) -> FastAPI:
 
     @app.get("/v1/config", tags=["health"], dependencies=[Depends(require_key)])
     def get_runtime_config(request: Request):
-        """运行时配置（不含 api_key——凭据不下发）。"""
+        """运行时配置（字段白名单：凭据/文件系统布局不下发——
+        api_key、model_dirs、allow_any_path 均不返回）。"""
         cfg_ = request.app.state.config
         return {"host": cfg_.host, "port": cfg_.port,
                 "max_loaded_models": cfg_.max_loaded_models,
                 "queue_size": cfg_.queue_size,
-                "allow_any_path": cfg_.allow_any_path,
-                "model_dirs": cfg_.model_dirs,
-                "infer_conf": cfg_.infer_conf, "infer_iou": cfg_.infer_iou}
+                "infer_conf": cfg_.infer_conf, "infer_iou": cfg_.infer_iou,
+                "max_batch": cfg_.max_batch,
+                "max_pixels": cfg_.max_pixels,
+                "max_upload_mb": cfg_.max_upload_mb}
 
     # ---- 业务路由 ----
     from .api.routes_flow import router as flow_router
@@ -176,7 +197,8 @@ def create_app(config=None) -> FastAPI:
     class _ShutdownReq(_BM):
         confirm: bool = False
 
-    @app.post("/v1/admin/shutdown", tags=["health"])
+    @app.post("/v1/admin/shutdown", tags=["health"],
+              dependencies=[Depends(require_key)])
     async def admin_shutdown(request: Request, req: _ShutdownReq):
         if not req.confirm:
             raise HTTPException(status_code=400, detail="confirm 必须为 true")
@@ -206,7 +228,7 @@ def create_app(config=None) -> FastAPI:
 
 def main(argv=None) -> None:
     # 必须最先兜底 stdio：从 GUI 主界面 Popen（无重定向）拉起时继承无效
-    # 句柄，任何库写 stderr 即异常退出（v0.5.1 A2 根因实锤 exit 1）
+    # 句柄，任何库写 stderr 即异常退出
     from ..gui_utils import ensure_console_streams
 
     ensure_console_streams()
@@ -247,7 +269,7 @@ def main(argv=None) -> None:
         app, host=host, port=port, workers=1, http=http_impl,
         access_log=cfg.access_log, log_level=cfg.log_level))
     app.state.server = server
-    # uvicorn.Config 构造时 dictConfig 会禁用既有 logger（坑：配置必须在
+    # uvicorn.Config 构造时 dictConfig 会禁用既有 logger（注意：配置必须在
     # 其之后，否则被 disable_existing_loggers 覆盖、错误依旧不落盘）——
     # 显式把 uvicorn 错误接入平台日志文件（bind 失败等必可见）
     root = logging.getLogger()
@@ -262,3 +284,5 @@ def main(argv=None) -> None:
 
 if __name__ == "__main__":
     main()
+
+

@@ -32,3 +32,4 @@ def app_root() -> Path:
         env = Path(sys.prefix).resolve()
         return env.parent if env.name.lower() == "app" else env
     return here.parents[1]  # 开发态：xccv 包上级 = 仓库根
+

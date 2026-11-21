@@ -1,4 +1,4 @@
-"""平台多语言（V0.7.2 平台总体①）：中文为源语言，英文走替换层。
+"""平台多语言：中文为源语言，英文走替换层。
 
 设计（全平台中文串 3 万+，逐处包裹不现实）：
 - tr(s)：英语言模式查 EN_TABLE，命中返回英文，未命中回退原文（增量覆盖，
@@ -21,6 +21,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,9 +33,17 @@ _lang_cache: str | None = None
 
 
 def lang() -> str:
-    """当前界面语言（"zh"/"en"；进程内缓存，文件为准）。"""
+    """当前界面语言（"zh"/"en"；进程内缓存，文件为准）。
+
+    环境变量 XCCV_UI_LANG 显式指定时优先（测试/CI 固定口径，避免读入
+    用户偏好使断言随外部状态漂移）；未设置时照常读偏好文件。
+    """
     global _lang_cache
     if _lang_cache is None:
+        env_v = os.environ.get("XCCV_UI_LANG")
+        if env_v in ("zh", "en"):
+            _lang_cache = env_v
+            return _lang_cache
         try:
             v = json.loads(_LANG_FILE.read_text(encoding="utf-8")).get("lang")
         except Exception:  # noqa: BLE001（缺文件/坏 JSON → 默认中文）
@@ -228,10 +237,13 @@ def install_language_watcher(rebuild, parent=None):
 
     rebuild：无参回调——销毁旧窗口并按当前语言重建（由宿主提供：先建新窗
     再关旧窗，避免 quitOnLastWindowClosed 误退）。本进程保存偏好后同样
-    经此回调生效（与主题切换的文件监听同款体验，V0.7.2 实测修复）。
+    经此回调生效（与主题切换的文件监听同款体验）。
     返回监听器（宿主窗口重建时经 set_rebuild 转移回调并保留引用；
     返回 None=文件不可监听，重开生效）。"""
     try:
         return _LangWatcher(rebuild, parent=parent)
     except Exception:  # noqa: BLE001（无 Qt 环境/监听失败 → 重开生效）
         return None
+
+
+

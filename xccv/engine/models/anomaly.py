@@ -349,7 +349,7 @@ class AnomalyModel(BaseModel):
             gx2 = max(gx1 + 1, min(gw, int((x + bw) * gw / w_img) + 1))
             gy2 = max(gy1 + 1, min(gh, int((y + bh) * gh / h_img) + 1))
             scores.append(round(float(z_map[gy1:gy2, gx1:gx2].max()), 4))
-            # drawContours 不收 bool 图（P162 同族）：uint8 绘制后转 bool
+            # drawContours 不收 bool 图：uint8 绘制后转 bool
             m = np.zeros((h_img, w_img), dtype=np.uint8)
             cv2.drawContours(m, [cnt], -1, 1, -1)
             masks.append(m.astype(bool))
@@ -395,3 +395,4 @@ class AnomalyModel(BaseModel):
             except Exception:
                 log.warning("异常检测骨干权重恢复失败（用当前骨干继续）",
                             exc_info=True)
+

@@ -106,7 +106,7 @@ def classify_images(match_stats: dict, thresholds: dict) -> dict:
         else:
             groups["correct"].append(entry)
     groups["unjudged"] = unjudged
-    # V0.7.2 任务③：未评估按检出过阈与否分 OK/NG（与切换后曲线同口径）
+    # 未评估按检出过阈与否分 OK/NG（与切换后曲线同口径）
     groups["unjudged_ok"] = sum(
         1 for e in groups["unjudged_list"] if not e.get("fp"))
     groups["unjudged_ng"] = sum(
@@ -170,3 +170,5 @@ def stats_line(groups: dict, scope: str = "evaluated",
     if un:
         text += f" · {tr('未评估')} {un}（{tr('无 GT')}）"
     return text
+
+

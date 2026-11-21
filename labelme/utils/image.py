@@ -126,3 +126,4 @@ def apply_exif_orientation(image):
         return image.transpose(PIL.Image.ROTATE_90)
     else:
         return image
+

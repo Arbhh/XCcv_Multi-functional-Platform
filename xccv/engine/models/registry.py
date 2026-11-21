@@ -246,3 +246,4 @@ def load_model(weights_path: Path, device: str = "auto") -> BaseModel:
     model = YoloModel("yolo11n", TaskType.DETECTION, 1, device, use_pretrained=False)
     model.load_weights(path)
     return model
+

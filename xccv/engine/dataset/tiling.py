@@ -2,8 +2,8 @@
 """切图训练纯逻辑（opt-in；R-CNN 家族）。
 
 大图小目标在整图训练口径下目标占比过小、检测头难学到；切图训练把每张
-原图按滑窗切成 tile 训练（与 T8-3 分块推理配对）。设计要点（与方案 §四.2.2
-一致）：
+原图按滑窗切成 tile 训练（与测试平台「4K 大图分块推理」配对）。设计要点：
+
 
 - **索引现场裁剪、不落盘**：仅预生成 `(样本序号, x, y)` 索引，训练时按索引
   从内存原图裁剪；
@@ -152,3 +152,5 @@ def crop_target_boxes(boxes, x: int, y: int, tile: int, w: int, h: int,
             continue
         out.append((bi, [tx1 - x, ty1 - y, tx2 - x, ty2 - y]))
     return out
+
+

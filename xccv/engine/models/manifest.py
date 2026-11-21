@@ -67,7 +67,7 @@ def build_run_manifest(cfg, metrics: dict) -> dict:
     """TrainConfig + 最终指标 → manifest dict（纯函数，便于测试）。
 
     TrainConfig 含 Path 字段（dataset_dir/output_dir）——asdict 后统一
-    转 str，否则 json.dumps 直接 TypeError（f7e 门禁实锤：写入静默失败）。
+    转 str，否则 json.dumps 直接 TypeError（写入静默失败）。
     """
     from dataclasses import asdict
 
@@ -120,3 +120,4 @@ def write_run_manifest(cfg, metrics: dict, output_dir) -> None:
         log.info("run_manifest.json 已写入: %s", output_dir)
     except Exception:
         log.warning("run_manifest.json 写入失败（不阻塞训练收尾）", exc_info=True)
+

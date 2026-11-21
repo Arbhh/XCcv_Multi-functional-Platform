@@ -1,4 +1,4 @@
-/* Defect Augment Studio — Recipe 录制与回放（规格 §6.5）
+/* Defect Augment Studio — Recipe 录制与回放
  * 录制：监听历史条目，转成语义步骤（place/transform/enhance/blend），
  *       位置存为图像宽高比例、缩放锚定短边，保证跨分辨率回放一致。
  * 回放：在任意目标图上重放步骤；批量时由后端按背景图逐张实例化并叠加抖动。
@@ -178,3 +178,5 @@ export function currentRecipeSummary() {
   const r = state.recipe;
   return { recording: r.recording, steps: r.steps.length };
 }
+
+

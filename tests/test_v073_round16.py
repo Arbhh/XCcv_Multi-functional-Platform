@@ -51,7 +51,7 @@ class LangWatcherCacheTest(unittest.TestCase):
             while time.time() < deadline and not fired:
                 app.processEvents()
                 time.sleep(0.05)
-            self.assertTrue(fired, "外部改语言文件未触发重建（P258 回归）")
+            self.assertTrue(fired, "外部改语言文件未触发重建")
             self.assertEqual(lang(), "en")  # 进程缓存已同步（重建渲染 EN 的前提）
         finally:
             set_lang("zh")                  #1937复位偏好与缓存
@@ -298,3 +298,4 @@ import torch  # noqa: E402 （SubspaceAdMathTest 用；置底避免顶部拖慢�
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -95,3 +95,4 @@ class ExternalOp(VisionNode):
         return {"image": out_img,
                 "value": NumberVal(value=values[0] if values else 0.0),
                 "result": MeasureResult(values=values, unit="")}
+

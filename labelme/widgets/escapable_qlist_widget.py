@@ -7,3 +7,4 @@ class EscapableQListWidget(QtWidgets.QListWidget):
         super(EscapableQListWidget, self).keyPressEvent(event)
         if event.key() == Qt.Key_Escape:
             self.clearSelection()
+

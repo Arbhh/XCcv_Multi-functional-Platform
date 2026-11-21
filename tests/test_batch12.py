@@ -325,13 +325,13 @@ class BatchThreadImageSaveTest(unittest.TestCase):
         saved = sorted(p.name for p in vis.glob("*.jpg"))
         self.assertEqual(saved, ["img00.jpg", "img01.jpg"])
         # 每张图片一个同名 .json（无汇总文件）
-        # 统一检出结果 schema（Q1/Q2 契约）
+        # 统一检出结果 schema 契约
         import json as _json
 
         self.assertFalse((out_dir / "检出结果.json").exists())
         jdir = out_dir / "检出结果"
         jsaved = sorted(p.name for p in jdir.glob("*.json"))
-        # P8/T8-2 起新增批量统计摘要（摘要.json）随逐图 json 一同落盘
+        # 起新增批量统计摘要（摘要.json）随逐图 json 一同落盘
         self.assertEqual(jsaved, ["img00.json", "img01.json", "摘要.json"])
         payload = _json.loads((jdir / "img00.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["schema_version"], 1)
@@ -354,3 +354,5 @@ def _make_thread(model, files, out_dir, root=None):
 
 if __name__ == "__main__":
     unittest.main()
+
+

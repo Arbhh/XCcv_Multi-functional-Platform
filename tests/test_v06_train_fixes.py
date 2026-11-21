@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""V0.6 P9：训练平台可选项——T9-1 freeze bug / T9-2 两段式缩放 / T9-3 切图训练。
+"""训练平台可选项：骨干冻结 / 两段式缩放 / 切图训练。
 
-- T9-1：maskrcnn18 骨干冻结标志必须真正生效（requires_grad 断言，CPU 可验）；
-- T9-2：_apply_train_input 启用/回退边界（0=现状默认、32 倍数、小于画布短边）；
-- T9-3：tiling 纯逻辑（网格覆盖/中心归属去重/可见面积过滤/背景保留/整图混入）
+- maskrcnn18 骨干冻结标志必须真正生效（requires_grad 断言，CPU 可验）；
+- _apply_train_input 启用/回退边界（0=现状默认、32 倍数、小于画布短边）；
+- tiling 纯逻辑（网格覆盖/中心归属去重/可见面积过滤/背景保留/整图混入）
   + RcnnDataset 切图条目 CPU tiny 冒烟 + 开关关闭=现状（len 不变）。
 """
 import os
@@ -25,7 +25,7 @@ from xccv.engine.dataset.tiling import (  # noqa: E402
 
 
 class FreezeBackboneTest(unittest.TestCase):
-    """T9-1：maskrcnn18 冻结标志（0 or 3 假值覆盖 bug 的回归）。"""
+    """maskrcnn18 冻结标志（0 or 3 假值覆盖 bug 的回归）。"""
 
     def test_maskrcnn18_freeze_all(self):
         import torch
@@ -56,7 +56,7 @@ class FreezeBackboneTest(unittest.TestCase):
 
 
 class ApplyTrainInputTest(unittest.TestCase):
-    """T9-2：两段式缩放启用/回退边界。"""
+    """两段式缩放启用/回退边界。"""
 
     class _T:
         def __init__(self):
@@ -107,7 +107,7 @@ class _FakeSample:
 
 
 class TilingLogicTest(unittest.TestCase):
-    """T9-3 纯逻辑：网格/归属去重/可见面积/背景保留/整图混入。"""
+    """纯逻辑：网格/归属去重/可见面积/背景保留/整图混入。"""
 
     def test_starts_coverage(self):
         s = _starts(1600, 400, 0.25)  # 步长 300
@@ -181,7 +181,7 @@ class TilingLogicTest(unittest.TestCase):
 
 
 class DatasetTiledTest(unittest.TestCase):
-    """T9-3 RcnnDataset：开关关闭=现状；切图条目 tiny 冒烟（CPU）。"""
+    """RcnnDataset：开关关闭=现状；切图条目 tiny 冒烟（CPU）。"""
 
     def _samples(self, root: Path):
         import cv2
@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
 
 class SlimHeadTest(unittest.TestCase):
-    """T9-5：maskrcnn18 slim 头（FPN64+两层256FC+4×64 掩码）。"""
+    """maskrcnn18 slim 头（FPN64+两层256FC+4×64 掩码）。"""
 
     def test_structure_and_param_budget(self):
         from xccv.engine.models.rcnn import RCNNModel
@@ -271,7 +271,7 @@ class SlimHeadTest(unittest.TestCase):
         body = list(net.backbone.body.parameters())
         self.assertTrue(body)
         self.assertFalse(any(p.requires_grad for p in body),
-                         "slim 分支冻结语义须与 T9-1 一致")
+                         "slim 分支冻结语义须与完整训练一致")
         self.assertTrue(any(p.requires_grad
                             for p in net.backbone.fpn.parameters()))
 
@@ -317,3 +317,5 @@ class SlimHeadTest(unittest.TestCase):
         for k, v in rt.items():
             self.assertEqual(v.shape, model_sd[k].shape, k)
         net.load_state_dict(rt, strict=True)
+
+

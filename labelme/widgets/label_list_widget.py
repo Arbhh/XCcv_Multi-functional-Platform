@@ -180,3 +180,4 @@ class LabelListWidget(QtWidgets.QListView):
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+

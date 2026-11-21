@@ -84,3 +84,4 @@ def scale_issue_text(stat: dict) -> tuple | None:
                   "大小」/训练输入宽高）；②启用切图训练（tile 640 + 推理侧 "
                   "4K 分块推理配对）。")
     return detail, suggestion
+

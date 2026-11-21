@@ -78,7 +78,7 @@ def _hamming(a: int, b: int) -> int:
 def _duplicate_groups(hashes: dict, threshold: int) -> list[list]:
     """按汉明距离 ≤ threshold 把图片聚成组（并查集）。hashes: {路径: dhash}。
 
-    T2-4 分桶加速（原实现全量两两比对 O(n²)，万图目录体检冻结主线程）：
+分桶加速（原实现全量两两比对 O(n²)，万图目录体检冻结主线程）：
     64 位 dHash 切成 8 个 8bit 块建倒排索引——鸽笼原理保证距离 ≤7 的图片
     对至少有一块完全相同，只需块内两两比对；threshold ≥ 8 时块探测不再
     保证召回，回退全量两两比对（结果等价，仅速度差异）。
@@ -372,3 +372,5 @@ def run_health_check(task, dataset_dir, options: DevOptions | None = None,
 
     report.issues = issues
     return report
+
+

@@ -184,3 +184,4 @@ class SnapshotStore:
 
     def clear(self) -> None:
         self._items.clear()
+

@@ -410,3 +410,4 @@ def _build_engine_from_onnx(onnx_bytes: bytes, dst: Path, meta: dict | None = No
         raise RuntimeError("TensorRT 引擎构建失败（详见日志输出）")
     _safe_progress(progress, 0.92, "构建完成，保存引擎…")
     _write_engine(bytes(engine), dst, meta=meta, extra=extra)
+

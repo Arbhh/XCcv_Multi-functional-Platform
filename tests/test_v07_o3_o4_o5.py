@@ -145,7 +145,7 @@ class GrayModeTest(unittest.TestCase):
 
 
 class ManifestTest(unittest.TestCase):
-    """run_manifest 序列化回归（f7e 实锤坑：asdict 含 Path → TypeError
+    """run_manifest 序列化回归（asdict 含 Path → TypeError
     静默写入失败）。"""
 
     def test_manifest_serializes_with_path_fields(self):
@@ -190,3 +190,4 @@ class SplitDonutTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

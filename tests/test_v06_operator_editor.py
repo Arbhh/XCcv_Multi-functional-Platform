@@ -1,4 +1,4 @@
-"""V0.6 T4-5 QtTest E2E：工作台「编辑算子」新建→Ctrl+S 保存→列表出现→试跑→改代码 Ctrl+S 覆盖→再试跑。
+"""QtTest E2E：工作台「编辑算子」新建→Ctrl+S 保存→列表出现→试跑→改代码 Ctrl+S 覆盖→再试跑。
 
 自定义算子目录用临时目录（替换 custom_ops.operators_dir），不触碰真实 platform_data。
 """
@@ -138,3 +138,4 @@ class OperatorEditorE2ETest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

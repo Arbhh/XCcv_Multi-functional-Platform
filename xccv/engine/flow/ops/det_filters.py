@@ -221,3 +221,4 @@ class FilterGrayDiff(_ResultFilterBase):
             return abs(float(crop.mean()) - bg) >= lo
 
         return self._run(inputs, ctx, decide)
+

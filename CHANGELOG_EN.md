@@ -6,6 +6,62 @@ Notable changes to the XCcv Multi-functional Platform. The format follows
 
 Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.8.1] - 2026-11-21
+
+> Hotfix for stop-the-bleeding correctness and security issues found in reviews.
+> This release contains one **evaluation-protocol fix** (R-CNN NMS); historical
+> evaluation metrics may not be fully comparable with 0.8.0.
+
+### Security
+
+- `/v1/admin/shutdown` now requires the API Key (previously any local process
+  could stop the service unauthenticated);
+- `/v1/config` response is field-whitelisted: `api_key`, `model_dirs` and
+  `allow_any_path` are no longer exposed;
+- **Inference-service upload guards**: per-request batch count cap (`max_batch`,
+  default 32, exceeding → 400), request body size cap (`max_upload_mb`,
+  default 100 MB, exceeding → 413) and single-image pixel cap (`max_pixels`,
+  default 50M, exceeding → 413); new fields live in `ServiceConfig`
+  (missing fields in old config files fall back to defaults);
+- **Model-pool concurrency fixes**: per-path single-flight loading (one real
+  load only, preventing doubled VRAM); unload/LRU eviction is now mutually
+  exclusive with in-flight inference (released after it finishes); `last_used`
+  updated under the entry lock; the flow pool follows the same semantics;
+- **Defect-synthesis directory whitelist**: batch background/output directories
+  are restricted to `platform_data` (default root) and explicitly authorized
+  directories (`platform_data/defectgen/allowed_dirs.json`, registered via the
+  UI after user confirmation); out-of-scope requests get 400 without leaking
+  directory existence; job table TTL cleanup + table size cap + concurrent job
+  cap (429);
+- `SECURITY.md` adds a trust boundary: model files are trusted input
+  (`weights_only` migration planned for 0.8.6).
+
+### Fixed
+
+- **R-CNN evaluation NMS never took effect**: evaluation wrote the invalid
+  attribute `box_nms_thresh` (the real attribute is `roi_heads.nms_thresh`),
+  so the effective NMS threshold drifted with whatever the last inference left
+  behind. Evaluation now pins NMS to 0.2 and restores the previous value on
+  exit; **historical evaluation metrics are not fully comparable with 0.8.0**;
+- Downscaled inference (`max_side`/adaptive) dropped OCR texts when rebuilding
+  the prediction — `texts` are now passed through;
+- The result JSON `conf`/`iou` fields echo the effective values (previously
+  null when the caller omitted them);
+- `params_mb` was always 0 for wrapped models — the wrapper chain
+  (`model`/`net`) is unwrapped to reach real parameters (with a `state_dict`
+  fallback), so the status page shows real sizes again;
+- Full regression no longer reads the user's language preference:
+  `tools/run_tests.py` injects `XCCV_UI_LANG=zh` into every subprocess and
+  `i18n` honors the explicit environment override.
+
+### Tests
+
+- New `tests/test_v081_hotfix.py` contract suite (28 cases): shutdown auth /
+  config whitelist / body-pixel-batch limits / conf-iou echo / params_mb /
+  OCR texts / model-pool concurrency (single-flight + unload mutex) /
+  evaluation NMS protocol / defectgen directory whitelist and job-table
+  governance.
+
 ## [0.8.0] - 2026-11-20
 
 > **Major update**: the project is renamed to **XCcv Multi-functional Platform**
@@ -71,7 +127,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
   message.
 - The model-loading entry (registry) is refactored: routing by ckpt format /
   `.engine` metadata; TensorRT engines now use the `.engine` suffix.
-- `requirements.txt` adds `torch-pruning`, `onnx`, `psutil`, `python-multipart`; `onnxruntime` is
+- `requirements.txt` adds `torch-pruning`, `onnx`, `psutil`; `onnxruntime` is
   kept for EfficientSAM-assisted annotation.
 - Testing-platform texts/filters referencing `.xva` now use the plaintext
   `.pt` / `.engine` wording.
@@ -90,6 +146,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - Full regression: unit tests (historical locks + module locks + page snapshot
   locks) and per-platform offscreen self-tests; results are in the release
   acceptance notes. Use `python tools/run_tests.py` to run per module.
+
 - CI green on both platforms (Ubuntu / Windows): the test runner now sets up
   the subprocess environment itself (UTF-8 output, headless Qt/matplotlib
   defaults, VC++ OpenMP runtime preload on Windows), and cross-platform
@@ -154,7 +211,8 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - `python -m unittest discover -s tests -p "test_*.py"`: **239 tests passed**
   (194 from 0.7.2 + 45 CIF/review/semantics/language regressions; 5 CIF
   integration tests skipped by design when DINO weights are absent).
-- `compileall` and the four-platform offscreen self-tests: passed.
+- `compileall` and the four-platform offscreen self-tests are recorded in the
+  release acceptance material.
 
 ### Third-party license changes
 
@@ -220,7 +278,8 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
   reuse, the bilingual replacement layer / tree localization / language persistence /
   real-window integration, and the missing-import static scan).
 - Offscreen self-tests of four platforms (workbench / training / testing / flowchart): passed.
-- English-mode UI verified: the workbench and the testing platform render fully in English.
+- English-mode rendering verified by real screenshots of the workbench and the testing platform
+  (acceptance evidence archived with the local release materials).
 
 ## [0.7.1-community] - 2026-11-14
 
@@ -335,7 +394,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - The annotation platform's `_ai_loading` flag stuck after an AI model load failure, making
   later clicks ineffective.
 - Threshold-line out-of-range dragging, leftover review cache and crowded Standard-page entries
-  found during 0.7 testing.
+  found during 0.7 real-machine testing.
 
 ### Tests
 
@@ -343,7 +402,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - `python -m compileall -q xccv labelme`: passed.
 - Offscreen UI smoke tests: training platform (5 task types), testing platform (dual pages /
   review page), flowchart page, threshold panel and data grid all instantiate.
-- UI acceptance: workbench → training task dropdown (anomaly / OCR) → testing
+- Real-machine UI acceptance: workbench → training task dropdown (anomaly / OCR) → testing
   Standard / Project Review switch → annotation [OK] / help menu → flowchart editing, all
   passed.
 

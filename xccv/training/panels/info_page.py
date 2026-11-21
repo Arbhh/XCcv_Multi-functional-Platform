@@ -792,7 +792,7 @@ class InfoPageMixin:
         p.k_shot = int(self.par_kshot.value())
         p.aug_count = int(self.par_augcount.value())
         if p.train_input > 960:
-            # T9-6：opt-in 大输入提示（显存显著上升）
+            # opt-in 大输入提示（显存显著上升）
             self.statusBar().showMessage(
                 tr("⚠ 网络输入尺寸 >960：训练显存占用显著上升，")
                 + tr("请确认显卡预算（或降低该值 / 开启 AMP 与梯度检查点）"), 15000)
@@ -968,7 +968,7 @@ class InfoPageMixin:
             f"{getattr(self, '_preview_name', '')}　{tr('原始')} "
             f"{src_w}×{src_h}　{tag}")
     def _refresh_stats(self):
-        """数据集统计（A-7①：移后台线程，主线程不再被万图目录卡住）。"""
+        """数据集统计（移后台线程，主线程不再被万图目录卡住）。"""
         if getattr(self, "_stats_thread", None) is not None:
             return  # 统计中，忽略重复触发
         from ...i18n import tr
@@ -1188,3 +1188,6 @@ def rotate_guard_decision(ops: dict, probs: dict, aspects: set) -> tuple | None:
 from xccv.qt_slots import apply_auto_slot_class  # noqa: E402
 
 apply_auto_slot_class(InfoPageMixin)
+
+
+

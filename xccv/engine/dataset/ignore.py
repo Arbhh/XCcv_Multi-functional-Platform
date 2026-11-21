@@ -93,3 +93,4 @@ def suppress_boxes(boxes, labels, regions, ratio: float = OVERLAP_DROP_RATIO):
         if not any(_inter_ratio(bb, r) > ratio for r in regions):
             keep.append(i)
     return [boxes[i] for i in keep], [labels[i] for i in keep]
+

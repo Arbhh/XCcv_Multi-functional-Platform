@@ -24,3 +24,4 @@ class ToolBar(QtWidgets.QToolBar):
         for i in range(self.layout().count()):
             if isinstance(self.layout().itemAt(i).widget(), QtWidgets.QToolButton):
                 self.layout().itemAt(i).setAlignment(QtCore.Qt.AlignCenter)
+

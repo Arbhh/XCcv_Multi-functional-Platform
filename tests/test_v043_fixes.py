@@ -27,7 +27,7 @@ import tempfile as _tempfile
 
 _fs._RUN_LOG_DIR = Path(_tempfile.gettempdir()) / "xccv_test_v043_logs"
 
-# 桥接类守卫导入（坑 40 变体）：全量套件中其他模块已创建 QApplication 时，
+# 桥接类守卫导入：全量套件中其他模块已创建 QApplication 时，
 # flowgraph_web_window（含 QtWebEngineWidgets 导入）会 ImportError——
 # 此时跳过桥接顺序用例（windows E2E 探针兜底）；独立运行本模块时可用
 try:
@@ -48,7 +48,7 @@ class NodeLibraryOrderTest(unittest.TestCase):
     """A1 修复回归：js_ready 握手必须先发节点库再冲刷缓冲事件。
 
     用 _Bridge + mock window 验证（offscreen 下构造 QtWebEngine 真窗口会
-    原生崩溃——坑 44）。
+    原生崩溃）。
     """
 
     def _bridge(self):
@@ -56,7 +56,7 @@ class NodeLibraryOrderTest(unittest.TestCase):
 
         if not _BRIDGE_OK:
             self.skipTest("全量套件中 QApplication 先于 QtWebEngine 存在，"
-                          "桥接顺序用例由 windows E2E 探针兜底（坑 40）")
+                          "桥接顺序用例由 windows E2E 探针兜底")
         _app()   # QObject 必须在 QApplication 之后创建
         win = _mock.MagicMock()
         win._pending_js = []
@@ -197,7 +197,7 @@ class XcvBatchThreadTest(unittest.TestCase):
             th = _XcvBatchThread(flow, ["图A.png", "图B.png"], root, out_dir,
                                  flow_name="检测.json")
             # 同步调 run()：批量逻辑是测试目标，线程机制不在覆盖范围
-            # （QThread+QEventLoop 的信号时序在测试进程内偶发不可达，坑 44 同族）
+            # （QThread+QEventLoop 的信号时序在测试进程内偶发不可达 同族）
             emitted = []
             th.finished_ok.connect(emitted.append)
             th.failed.connect(lambda m: emitted.append(f"FAIL:{m}"))
@@ -221,7 +221,7 @@ class TestingPlatformHintTest(unittest.TestCase):
     """Q6：测试平台加载纯传统流程包给明确人话指引。
 
     testing_window 为重模块（torch + Qt 线程类），与本进程既有 QApplication
-    组合会触发 sip 原生崩溃（坑 44）——用子进程验证。
+    组合会触发 sip 原生崩溃——用子进程验证。
     """
 
     def test_pure_xcv_xvap_rejected_with_hint(self):
@@ -256,7 +256,7 @@ class TestingPlatformHintTest(unittest.TestCase):
 class WatcherTest(unittest.TestCase):
     """Q7：流程下拉目录监视（画布保存新文件后实时刷新）。
 
-    flow_platform 与 QtWebEngine/重模块同进程时 sip 托管顺序敏感（坑 44），
+    flow_platform 与 QtWebEngine/重模块同进程时 sip 托管顺序敏感，
     用子进程验证真实 FlowPage 行为。
     """
 
@@ -303,3 +303,4 @@ _WINDOW_HOLDER = []
 
 if __name__ == "__main__":
     unittest.main()
+

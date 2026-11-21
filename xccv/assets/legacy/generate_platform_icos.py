@@ -12,3 +12,4 @@ for name in ("annotation", "training", "testing"):
     out = ASSETS / f"{name}.ico"
     img.save(out, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     print(f"OK {out.name}  {out.stat().st_size // 1024} KB")
+

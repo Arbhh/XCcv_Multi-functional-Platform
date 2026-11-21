@@ -201,7 +201,7 @@ class ResultView(VisionNode):
 
 @register_node
 class ImageSink(VisionNode):
-    """保存图像：把图像（可选叠加检出框蒙版）写盘，中文路径安全（V0.6 T3-5）。
+    """保存图像：把图像（可选叠加检出框蒙版）写盘，中文路径安全。
 
     what=image 保存原图；overlay 把结果输入的检出以半透明蒙版+
     描边叠加后保存（与快照叠加同一画法）。文件名=来源图名+后缀。

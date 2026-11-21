@@ -1,4 +1,4 @@
-"""「传统平台」算子工作台（Q3，；V0.6 F2-4 布局修订）。
+"""「传统平台」算子工作台。
 
 三区布局（数据源 = engine.flow 注册表，无新引擎）：
 - 左：算子库——注册表全量算子，按分类过滤，点选显示功能说明与参数 schema；
@@ -88,7 +88,7 @@ def build_preview(executor, node_id: int):
     name, mat = _first_image(res.outputs)
     if mat is not None:
         # 图像直通节点（检出/定位类）结果仍有价值：有几何/检出输出时优先
-        # 展示「输出+结果叠加」（F2-4 语义在端口统一后保持）
+        # 展示「输出+结果叠加」（语义在端口统一后保持）
         drawable = any(
             isinstance(v, Geometry)
             or (getattr(v, "boxes", None) is not None and not isinstance(v, type(None)))
@@ -181,7 +181,7 @@ def _to_pixmap(img: np.ndarray) -> QPixmap:
 
 
 class _RunWorker(QThread):
-    """试跑工作线程（T2-2：大图/慢算子不再阻塞主线程）。
+    """试跑工作线程（大图/慢算子不再阻塞主线程）。
 
     FlowSession.run 与预览取图（叠加绘制）都在工作线程执行；结果经信号回
     主线程渲染（主线程读 executor.results 时工作线程已结束，无并发读）。
@@ -319,7 +319,7 @@ class OperatorWorkbench(QWidget):
         self._session = FlowSession()
         self._param_edits: dict = {}
         self._chain_types: list = []
-        self._run_thread = None  # 试跑工作线程（运行中禁再次启动，T2-2）
+        self._run_thread = None  # 试跑工作线程（运行中禁再次启动）
         self._preview_owner = None   # 预览/会话结果归属：("single", None) | ("chain", 链签名)
         self._pending_chain_sig = None
         self._build_ui()
@@ -387,7 +387,7 @@ class OperatorWorkbench(QWidget):
         mv.addLayout(img_row)
         btn_run = QPushButton(tr("▶ 试跑所选算子"))
         btn_run.clicked.connect(self._run_single)
-        self.btn_run = btn_run  # T2-2：运行中禁用
+        self.btn_run = btn_run  # 运行中禁用
         mv.addWidget(btn_run)
         mid.addWidget(mid_top)
 
@@ -405,7 +405,7 @@ class OperatorWorkbench(QWidget):
         self.preview.setToolTip(tr("滚轮缩放、左键拖拽平移、双击恢复适应窗口"))
         pg.addWidget(self.preview, stretch=1)
         pv.addWidget(preview_group, stretch=1)
-        # 自定义算子按钮排（V0.6 T4-5：试跑结果预览之后）
+        # 自定义算子按钮排（试跑结果预览之后）
         op_row = QHBoxLayout()
         self.btn_import_op = QPushButton(tr("导入算子"))
         self.btn_import_op.setToolTip(tr("导入 .xcvop 自定义算子包"))
@@ -448,7 +448,7 @@ class OperatorWorkbench(QWidget):
         rv.addLayout(chain_btns)
         btn_chain_run = QPushButton(tr("▶ 运行组合链"))
         btn_chain_run.clicked.connect(self._run_chain)
-        self.btn_chain_run = btn_chain_run  # T2-2：运行中禁用
+        self.btn_chain_run = btn_chain_run  # 运行中禁用
         rv.addWidget(btn_chain_run)
         right.addWidget(right_top)
 
@@ -592,7 +592,7 @@ class OperatorWorkbench(QWidget):
         if path:
             self.run_image_edit.setText(path)
 
-    # ---------- 自定义算子（V0.6 T4-4/T4-5） ----------
+    # ---------- 自定义算子 ----------
     def _custom_root(self):
         """自定义算子目录（None=platform_data/operators；测试可替换 custom_ops.operators_dir）。"""
         return None
@@ -667,7 +667,7 @@ class OperatorWorkbench(QWidget):
             QMessageBox.warning(self, tr("自定义算子"),
                                 tr("以下文件未加载：") + "\n" + "\n".join(errors[:10]))
 
-    # ---------- 试跑执行（T2-2 后台化：QThread + 忙态 + 完成信号回填） ----------
+    # ---------- 试跑执行（后台化：QThread + 忙态 + 完成信号回填） ----------
     def _run_async(self, graph: dict, label: str, on_done, focus: int,
                    title: str) -> bool:
         """在工作线程跑 FlowSession.run（+预览取图）；运行中禁用试跑按钮并拒绝重入。"""
@@ -894,3 +894,6 @@ if __name__ == "__main__":  # 独立调试入口
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+
+

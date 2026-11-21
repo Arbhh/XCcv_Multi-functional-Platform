@@ -3,7 +3,7 @@
 - DetectionPlus：检出扩展字段的**组合式包装**（决策 D3：Prediction
   保持冻结）。__getattr__ 委托内部 Prediction，下游过滤节点/apply_flow
   可直接消费；经旧链过滤后 extra 会丢失（展平为普通 Prediction，属预期）。
-- 模型节点**按任务拆分为三个**（Q5：像旧版一样分模型暴露流程步骤）：
+- 模型节点**按任务拆分为三个**（像旧版一样分模型暴露流程步骤）：
   model_detection / model_instance_seg / model_classification，共用
   AiModelBase 加载链路（engine.models.registry.load_model 唯一入口，
   D5 不另造加载链路），加载后校验任务类型与节点一致。
@@ -452,7 +452,7 @@ class RelabelMap(VisionNode):
         return out
 
 
-# ---------------------------------------------------------------- V0.6 T4-3
+# ---------------------------------------------------------------- 检出过滤算子
 
 
 def _subset(det, idx) -> "object":
@@ -573,3 +573,5 @@ class FilterTopK(VisionNode):
         if img is not None:
             out["image"] = img
         return out
+
+

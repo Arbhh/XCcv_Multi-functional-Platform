@@ -7,3 +7,4 @@ __all__ = [
     "BaseModel", "Prediction", "TrainConfig", "TrainReporter", "resolve_device",
     "create_model", "list_models", "load_model",
 ]
+

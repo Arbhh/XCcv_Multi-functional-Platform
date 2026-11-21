@@ -92,3 +92,4 @@ def tiled_predict(model, image: np.ndarray, tile: int = 640,
         scores=[round(scores[i], 4) for i in keep],
         boxes=[[round(v, 2) for v in boxes[i]] for i in keep],
     )
+

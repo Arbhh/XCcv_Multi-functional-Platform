@@ -1,4 +1,4 @@
-"""V0.6 P4 回归：T4-1 预处理六枚 / T4-2 定位与测量四枚 / T4-3 过滤两枚。
+"""预处理六枚 / 定位与测量四枚 / 过滤两枚。
 
 几何类一律用已知真值的合成图断言（旋转矩形、平行条带、3-4-5 三角形）。
 """
@@ -34,7 +34,7 @@ def _run(cls, img, ctx=None, **params):
     return node.run({"image": ImageData(mat=img)}, full, ctx or RunContext())
 
 
-# ---------------------------------------------------------------- T4-1
+# ---------------------------------------------------------------- 预处理算子
 class PreprocessP4Test(unittest.TestCase):
     def test_sharpen_identity_and_edge_boost(self):
         img = np.zeros((40, 40), np.uint8)
@@ -104,7 +104,7 @@ class PreprocessP4Test(unittest.TestCase):
         self.assertEqual(_run(pp.BitPlane, color, plane=3)["image"].mat.ndim, 2)
 
 
-# ---------------------------------------------------------------- T4-2
+# ---------------------------------------------------------------- 定位与测量算子
 def _rot_rect_img(cx=100, cy=80, w=120, h=40, ang=30.0):
     img = np.zeros((160, 200), np.uint8)
     pts = cv2.boxPoints(((cx, cy), (w, h), ang)).astype(np.int32)
@@ -226,7 +226,7 @@ class MeasureOpsTest(unittest.TestCase):
         self.assertAlmostEqual(res[3].outputs["angle"].value, 20.0, delta=1.5)
 
 
-# ---------------------------------------------------------------- T4-3
+# ---------------------------------------------------------------- 过滤算子
 def _det():
     masks = [np.full((10, 10), i, np.uint8) for i in range(4)]
     return Prediction(labels=[0, 0, 1, 0], scores=[0.9, 0.8, 0.85, 0.3],
@@ -288,7 +288,7 @@ class OperatorCountTest(unittest.TestCase):
         "result_output",
         # V0.6 P3（+6）
         "crop_by_detection", "grid_tile", "relabel_map", "image_sink", "csv_sink", "bool_op",
-        # V0.6 P4（+12，T4-1~T4-3）
+
         "sharpen_unsharp", "gamma_corr", "invert", "brightness_contrast", "flat_field_corr",
         "bit_plane", "fit_rectangle", "find_line_pair", "measure_distance", "measure_angle",
         "filter_overlap", "filter_topk",
@@ -319,3 +319,5 @@ class OperatorCountTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

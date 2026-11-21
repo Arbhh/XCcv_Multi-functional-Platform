@@ -1,4 +1,4 @@
-"""T10-1 分段打点：推理请求分段计时（§四.5.1）。
+"""分段打点：推理请求分段计时（§四.5.1）。
 
 分段口径：decode（图片字节→np）/ pre（缩放与入模前处理）/ infer（模型推理）/
 post（结果行构建）/ serialize（响应编码，含渲染 imencode）/ total（全程）。
@@ -42,3 +42,5 @@ class StageTimer:
                  for k, v in self.stages.items()]
         parts.append(f"total={round(self.total() * 1000, 1)}ms")
         return ",".join(parts)
+
+

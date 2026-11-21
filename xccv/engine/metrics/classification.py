@@ -19,3 +19,4 @@ def confusion_matrix(y_true, y_pred, n_classes: int) -> np.ndarray:
         if 0 <= t < n_classes and 0 <= p < n_classes:
             m[t, p] += 1
     return m
+

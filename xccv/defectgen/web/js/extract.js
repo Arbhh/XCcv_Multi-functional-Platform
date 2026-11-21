@@ -1,4 +1,4 @@
-/* Defect Augment Studio — 抠图工作流（规格 §6.1）
+/* Defect Augment Studio — 抠图工作流
  * 多边形/矩形/椭圆选区 → GrabCut（默认）/ FastSAM（吞吐）/ MobileSAM（精度）
  * → 笔刷修正 → 边缘收缩/羽化 → 入库。抠图前代理图最长边 ≤2048。
  */
@@ -313,3 +313,5 @@ export async function markEngineAvailability(status) {
     opt.textContent = opt.textContent.replace(/（未部署）|（可用）/, '') + (ok ? '（可用）' : '（未部署）');
   }
 }
+
+

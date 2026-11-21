@@ -13,7 +13,7 @@ v0.5 UI 升级（期1）：图标化导航 + 底部系统区；顶栏页面标�
 运行：python -m xccv.app
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再做下方重型模块级导入
+if __name__ == "__main__":  # -m 直启先亮加载中界面，再做下方重型模块级导入
     from xccv.platform_entry import early_splash
 
     early_splash("main", "主界面")
@@ -278,7 +278,7 @@ class HomeWindow(ChromeMainWindow):
         outer.addWidget(right, stretch=1)
         # 无边框基座：内容追加到标题栏之下（setCentralWidget 会覆盖标题栏）
         self.set_chrome_central(central)
-        self._trad_workbench = None  # 算子工作台（Q6：首次导航才导入，冷启动零开销）
+        self._trad_workbench = None  # 算子工作台（首次导航才导入，冷启动零开销）
 
     # ---- 窗口顶栏（品牌角块 + 原页面顶栏内容合并）----
     def _build_header_content(self):
@@ -330,7 +330,7 @@ class HomeWindow(ChromeMainWindow):
         self.search_edit.setPlaceholderText("搜索平台 / 项目…")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.setFixedWidth(220)
-        # T2-7：连续输入 300ms 防抖后才重过滤（直接调 _apply_search 的派发点
+        # 连续输入 300ms 防抖后才重过滤（直接调 _apply_search 的派发点
         # ——导航切换/窗口激活等——仍即时生效）
         self._search_debounce = QTimer(self)
         self._search_debounce.setSingleShot(True)
@@ -390,7 +390,7 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 最近项目实时刷新 ----
     def _refresh_recent_projects(self):
-        """重建最近项目小卡（需求 v0.5.5追加-①：不再只在启动时读一次）。
+        """重建最近项目小卡（需求：不再只在启动时读一次）。
 
         触发时机：主界面显示（showEvent）、切回 AI 平台页（导航）、
         窗口重新激活（从训练平台开/关项目后回到主界面）。训练平台是
@@ -558,7 +558,7 @@ class HomeWindow(ChromeMainWindow):
         key = _NAV_ITEMS[row][0] if 0 <= row < len(_NAV_ITEMS) else ""
         self.page_title.setText(_tr(_PAGE_TITLES.get(key, "")))
         if key == "trad" and self._trad_workbench is None:
-            # 首次进入传统平台才加载算子工作台（Q6：主界面冷启动零开销）
+            # 首次进入传统平台才加载算子工作台（主界面冷启动零开销）
             from .workbench import OperatorWorkbench
 
             self._trad_workbench = OperatorWorkbench()
@@ -731,10 +731,13 @@ class HomeWindow(ChromeMainWindow):
         set_theme(theme)        # 本进程即时生效
 
     def _open_docs(self):
-        from .i18n import tr
+        from .i18n import lang, tr
 
         docs_dir = app_root() / "docs"
-        for name in ("使用文档.md", "result_schema.md"):
+        # 按界面语言优先打开对应版本；另一语言版本与接口契约作为回退
+        zh_order = ("使用文档.md", "使用文档_EN.md", "result_schema.md")
+        en_order = ("使用文档_EN.md", "使用文档.md", "result_schema.md")
+        for name in (en_order if lang() == "en" else zh_order):
             doc = docs_dir / name
             if doc.is_file():
                 try:
@@ -777,12 +780,12 @@ def main():
     if "--selftest" not in sys.argv and already_running("main", forward_args()):
         sys.exit(0)
     apply_app_font(app)  # 全局字体放大
-    install_freeze_watchdog()  # T2-1：主线程卡顿留痕
+    install_freeze_watchdog()  # 主线程卡顿留痕
     from .ui_style import install_theme_watcher
 
     install_theme_watcher()  # F2-5：主题偏好文件监听（OS 通知，非轮询）
     app.setWindowIcon(QIcon(str(icon_path("app.png"))))
-    # 全局"加载中"界面（V0.6 T1-3）：主界面与其他九入口行为一致
+    # 全局"加载中"界面：主界面与其他九入口行为一致
     from .splash import LoadingSplash
 
     splash = LoadingSplash.show_splash("主界面", "正在加载…",
@@ -838,3 +841,6 @@ if __name__ == "__main__":
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+
+

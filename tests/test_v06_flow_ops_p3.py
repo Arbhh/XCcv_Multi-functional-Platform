@@ -1,4 +1,4 @@
-"""V0.6 P3 回归：T3-2 removed 端口 / T3-3 裁图族 / T3-4 relabel_map / T3-5 输出与逻辑算子。
+"""检出过滤回归：removed 端口 / 裁图族 / relabel_map / 输出与逻辑算子。
 
 纪律：中文路径一律 io_utils；判空不用真值；检出输入同时覆盖
 list 与 ndarray 两种 boxes 形态。
@@ -51,7 +51,7 @@ def _pred(as_array=False, masks=False):
     return Prediction(labels=labels, scores=scores, boxes=boxes, masks=m)
 
 
-# ---------------------------------------------------------------- T3-2
+# ---------------------------------------------------------------- removed 端口过滤
 class RemovedPortTest(unittest.TestCase):
     def test_apply_flow_kept_plus_removed(self):
         from xccv.engine.detection_flow import apply_flow
@@ -111,7 +111,7 @@ class RemovedPortTest(unittest.TestCase):
         self.assertEqual(got.scores, ref.scores)
 
 
-# ---------------------------------------------------------------- T3-3
+# ---------------------------------------------------------------- 裁图族
 class CropByDetectionTest(unittest.TestCase):
     P = {"select": "largest", "index": 0, "margin_pct": 0.0, "square": False,
          "min_side": 0, "save_dir": "", "name_prefix": "crop"}
@@ -226,7 +226,7 @@ class GridTileTest(unittest.TestCase):
         self.assertIn("端口类型不匹配", str(cm.exception))
 
 
-# ---------------------------------------------------------------- T3-4
+# ---------------------------------------------------------------- relabel_map
 class RelabelMapTest(unittest.TestCase):
     CLASSES = ["scratch", "dirt"]
 
@@ -272,7 +272,7 @@ class RelabelMapTest(unittest.TestCase):
         self.assertEqual(node.validate({"mapping": "a：b，c:d", "default_action": "keep"}), [])
 
 
-# ---------------------------------------------------------------- T3-5
+# ---------------------------------------------------------------- 输出与逻辑算子
 class ImageSinkTest(unittest.TestCase):
     P = {"out_dir": "", "what": "image", "fmt": "png", "quality": 95, "name_suffix": ""}
 
@@ -397,3 +397,5 @@ class RegistryCountP3Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

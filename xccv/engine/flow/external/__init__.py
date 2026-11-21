@@ -71,3 +71,4 @@ def list_engines() -> list:
         ok, msg = e.available()
         out.append({"name": e.name, "title": e.title, "available": bool(ok), "message": msg})
     return out
+

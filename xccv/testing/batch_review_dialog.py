@@ -22,7 +22,7 @@ from .batch_review import (
     execute_reflow, load_review, plan_reflow, review_stats, save_review,
     suggest_status,
 )
-from ..i18n import tr  # 模块级：动态文案站点直接用（P246 教训：漏导即 NameError）
+from ..i18n import tr  # 模块级：动态文案站点直接用（漏导即 NameError）
 
 _STAT_ORDER = (STATUS_OK, STATUS_MISSED, STATUS_FP, STATUS_UNCERTAIN,
                STATUS_UNJUDGED)
@@ -87,7 +87,7 @@ class BatchReviewDialog(QDialog):
         btns2.addWidget(btn_close)
         lay.addLayout(btns2)
         self._reload_table()
-        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
+        from ..i18n import localize_widget_tree
 
         localize_widget_tree(self)
 
@@ -169,3 +169,4 @@ class BatchReviewDialog(QDialog):
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+

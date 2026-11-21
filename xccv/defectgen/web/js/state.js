@@ -1,5 +1,5 @@
 /* Defect Augment Studio — 中央状态 + 事件总线
- * 主线程持有编辑器状态的唯一真相；渲染 Worker 不持有业务状态（规格 §11）。
+ * 主线程持有编辑器状态的唯一真相；渲染 Worker 不持有业务状态。
  */
 import { uid, normAppearance, elasticMesh, clampMesh, instCorners, pointInQuad } from './util.js';
 
@@ -37,7 +37,7 @@ export const state = {
   },
 };
 
-export const PROXY_MAX = 2048;  // 编辑代理图最长边（规格 §7.2）
+export const PROXY_MAX = 2048;  // 编辑代理图最长边
 
 /* ---------------- 实例 ---------------- */
 
@@ -45,7 +45,7 @@ export function createInstance(asset, x, y, opts = {}) {
   const variant = opts.variant || null;
   let mesh = null;
   if (variant?.form_seed) {
-    // 形态变体：按种子生成弹性扰动网格（规格 §6.2.4）
+    // 形态变体：按种子生成弹性扰动网格
     mesh = clampMesh(elasticMesh(variant.form_seed, 4, 4, asset.w, asset.h, 0.22), asset.w, asset.h);
   }
   // 绘制类缺陷（平色块、无内部梯度）走 Poisson 会被梯度域洗掉 → 默认 Feather；
@@ -204,3 +204,5 @@ export function raiseSelection() {
   state.instances = state.instances.filter((i) => !state.selection.has(i.id)).concat(sel);
   emit('render');
 }
+
+

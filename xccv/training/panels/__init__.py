@@ -9,3 +9,4 @@
 组合根 ProjectWindow 在 training_window.py 经 mixin 继承装配；
 页级结构由 tests/modules/snapshots/training_pages.json 快照锁核对。
 """
+

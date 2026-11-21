@@ -210,3 +210,4 @@ def _multiply(samples: list[Sample], factor: int) -> list[Sample]:
     log.info("每轮重复学习 x%d：训练集在 epoch 内重复 %d 遍（增强随机启用，零副本）",
              factor, factor)
     return list(samples) * factor
+

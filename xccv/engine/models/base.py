@@ -56,7 +56,7 @@ class TrainConfig:
     rpn_reduced: bool = False      # R-CNN 系列：削减 RPN 候选框（2000→256），其他家族忽略
     use_amp: bool = True           # AMP 混合精度（仅 GPU 生效，CPU 自动关闭）
     mask_head_light: bool = False  # Mask R-CNN：轻量掩码头（4 层 256 → 2 层 128），其他家族忽略
-    slim_head: bool = False        # T9-5 slim 头（仅 maskrcnn18）：FPN64+两层256FC+4×64 掩码
+    slim_head: bool = False        # slim 头（仅 maskrcnn18）：FPN64+两层256FC+4×64 掩码
     anchor_small: bool = False     # 小目标锚框自适应（R-CNN 家族 opt-in）：底径=入网短边/80
     # ---- R-CNN 优化器（默认 AdamW 1e-4，可回退 SGD）----
     rcnn_optimizer: str = "adamw"    # R-CNN 家族优化器（adamw|sgd），其他家族忽略
@@ -309,3 +309,5 @@ class BaseModel(ABC):
     @abstractmethod
     def load_weights(self, path: Path) -> None:
         """加载本模型保存的权重（测试平台用），同时恢复 classes。"""
+
+

@@ -1,4 +1,4 @@
-"""全局"加载中"启动界面（V0.6 T1-3）。
+"""全局"加载中"启动界面。
 
 任意平台入口点击后立即（<500ms）显示：平台图标 + 名称 + "加载中…" +
 不确定进度动画；超过 20s 提示"仍在加载，可继续等待或查看日志"。
@@ -176,3 +176,4 @@ class LoadingSplash(QWidget):
 def make_splash(name: str, message: str = "") -> LoadingSplash:
     """兼容旧入口的工厂（v0.5.x 语义）：显示一张居中的加载提示卡。"""
     return LoadingSplash.show_splash(name, message)
+

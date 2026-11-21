@@ -28,7 +28,7 @@ def weights_ready() -> bool:
 
 
 class JsonSlimTest(unittest.TestCase):
-    """T5-1：JSON 瘦身——默认不内嵌 imageData；旧 JSON（外链/内嵌）持续可载。"""
+    """JSON 瘦身——默认不内嵌 imageData；旧 JSON（外链/内嵌）持续可载。"""
 
     def test_default_config_store_data_off(self):
         from labelme.config import get_default_config
@@ -86,7 +86,7 @@ class JsonSlimTest(unittest.TestCase):
 
 
 class AiAssistContractTest(unittest.TestCase):
-    """T5-2：引擎契约（注册表/可用性指引/请求响应形状；不需要权重）。"""
+    """引擎契约（注册表/可用性指引/请求响应形状；不需要权重）。"""
 
     def test_available_models_structure(self):
         from xccv.annotation import ai_assist
@@ -121,7 +121,7 @@ class AiAssistContractTest(unittest.TestCase):
                          and weights_ready(),
                          "需要 SAM 权重完整落盘（下载完成后设 XCCV_SAM_READY=1）")
     def test_decode_on_real_photo(self):
-        """真权重冒烟（G-8）：真实照片点提示 → 掩码覆盖点击点、占比合理。
+        """真权重冒烟：真实照片点提示 → 掩码覆盖点击点、占比合理。
 
         注：不用合成黑底图——SAM2 对无纹理合成图会把整张"照片"当对象（固有
         行为），真实照片（ultralytics 自带 bus.jpg）才是几何正确性的基准。
@@ -171,7 +171,7 @@ class AiAssistContractTest(unittest.TestCase):
 
 
 class CanvasAiBrushTest(unittest.TestCase):
-    """T5-3/T5-5：画布模式注册与状态机（不依赖权重）。"""
+    """画布模式注册与状态机（不依赖权重）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -270,7 +270,7 @@ class CanvasAiBrushTest(unittest.TestCase):
 
 
 class AutoAnnotateTest(unittest.TestCase):
-    """T5-4：掩码转多边形 / Prediction→shapes / JSON 可被 labelme 打开。"""
+    """掩码转多边形 / Prediction→shapes / JSON 可被 labelme 打开。"""
 
     def test_mask_to_polygons(self):
         from xccv.annotation.auto_annotate import mask_to_polygons
@@ -363,7 +363,7 @@ if __name__ == "__main__":
 
 
 class T56InteractionTest(unittest.TestCase):
-    """T5-6：交互精选（路径记忆/标签显隐 C/灰度 G/直线 I）。"""
+    """交互精选（路径记忆/标签显隐 C/灰度 G/直线 I）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -437,7 +437,7 @@ class T56InteractionTest(unittest.TestCase):
 
 
 class BigImagePerfTest(unittest.TestCase):
-    """T5-6：大图三件套核验（4K 打开 / 缩放 / 建形状计时，断言宽松上限）。"""
+    """大图三件套核验（4K 打开 / 缩放 / 建形状计时，断言宽松上限）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -495,6 +495,9 @@ class BigImagePerfTest(unittest.TestCase):
             # 关窗不触发保存确认（防 offscreen 模态挂起）
             win.canvas.current = None
             win.dirty = False
-            # 记录（G-8 同款留痕）
-            print(f"\n[T5-6 大图三件套] 4K 打开 {t_open:.2f}s / 重绘 {t_zoom:.3f}s"
+            # 记录留痕
+            print(f"\n[大图三件套] 4K 打开 {t_open:.2f}s / 重绘 {t_zoom:.3f}s"
                   f" / 建形状 {t_shape:.2f}s")
+
+
+

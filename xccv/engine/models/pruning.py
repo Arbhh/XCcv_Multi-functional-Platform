@@ -34,7 +34,7 @@ def _classifier_ex():
 
 
 def _rcnn_ex():
-    # 注意：检测模型要求 3D 单图 [C, H, W]（训练数据管线同款），不能给 batch 维；
+    # 注意：检测模型要求 3D 单图 [C, H, W]（与训练数据管线一致），不能给 batch 维；
     # masks 必须是 (N, H, W)——N 为该图目标数（与 boxes 行数一致），
     # 给成 (H, W) 会让 torchvision 的 roi_align 以 3D 输入崩溃
     img = torch.randn(3, 160, 160)
@@ -453,3 +453,5 @@ def _prune_yolo_ckpt(ckpt: dict, raw: bytes | None, src: Path, dst: Path,
     after = sum(p.numel() for p in model.model.parameters())
     ckpt["model"] = model.model  # ultralytics ckpt 本就以模块形式保存
     return _finish(ckpt, dst, model.model, info, before, after, progress)
+
+

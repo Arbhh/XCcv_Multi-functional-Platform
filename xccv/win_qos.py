@@ -83,3 +83,4 @@ def power_throttling_state() -> tuple | None:
     except Exception:
         log.debug("QoS 状态查询失败（返回 None）")
         return None
+

@@ -44,7 +44,7 @@ class TrainingUiBehaviorTest(unittest.TestCase):
     def tearDownClass(cls):
         from xccv.training import project as project_mod
 
-        project_mod.PROJECTS_DIR = Path.home()  # 占位（P241 家族约定）
+        project_mod.PROJECTS_DIR = Path.home()  # 占位
         cls._tmp.cleanup()
 
     def _window(self, name, model):
@@ -123,7 +123,7 @@ class TrainingPageSnapshotTest(unittest.TestCase):
 
     ProjectWindow.training_window 拆分为 panels/* 时，以本快照核对
     页面组合未漂移。有意变更页面结构时：跑 runs/gen_page_snapshot19.py
-    重新生成快照并在交接卡登记（差异属于有意的 UI 变更）。
+重新生成快照（差异属于有意的 UI 变更）。
     """
 
     @classmethod
@@ -224,3 +224,5 @@ class TrainingPageSnapshotTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

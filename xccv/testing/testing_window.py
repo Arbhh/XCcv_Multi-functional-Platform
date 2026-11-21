@@ -9,7 +9,7 @@
 运行：python -m xccv.testing.testing_window
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再做下方重型模块级导入
+if __name__ == "__main__":  # -m 直启先亮加载中界面，再做下方重型模块级导入
     from xccv.platform_entry import early_splash
 
     early_splash("testing", "测试平台", heavy=True)
@@ -109,10 +109,10 @@ class _BatchThread(QThread):
         self._jpg_quality = int(jpg_quality)
         self._root = Path(root) if root else None   # 输入文件夹（相对目录镜像用）
         self._model_text = model_text               # JSON 元信息里的权重名
-        self._json_format = json_format             # P8/T8-1：xcv/labelme/coco
-        self._tiled = tiled                         # P8/T8-3：4K 分块推理
+        self._json_format = json_format             # xcv/labelme/coco
+        self._tiled = tiled                         # 4K 分块推理
         self._coco_payloads: list = []              # coco 模式的逐图缓冲
-        self._costs_ms: list = []                   # P8/T8-2 统计：逐图耗时
+        self._costs_ms: list = []                   # 统计：逐图耗时
         self.summary: dict | None = None            # 运行结束后的统计摘要
 
     def run(self):
@@ -240,7 +240,7 @@ class _BatchThread(QThread):
             except Exception:  # noqa: BLE001  统计失败不影响批量结果
                 log.warning("批量 GT 匹配统计失败", exc_info=True)
             if self._save_json and self._out_dir is not None:
-                # P8/T8-2：统计摘要随批量产物落盘（属批量任务而非 UI 职责）
+                # 统计摘要随批量产物落盘（属批量任务而非 UI 职责）
                 try:
                     save_result_json(
                         self._out_dir / "检出结果" / "摘要.json", self.summary)
@@ -260,7 +260,7 @@ class _BatchThread(QThread):
         return out
 
     def _save_json_file(self, path: Path, result: dict, pred):
-        """每张图片一个同名 .json——统一检出结果 schema（Q1/Q2/Q5 契约）。"""
+        """每张图片一个同名 .json——统一检出结果 schema 契约。"""
         try:
             from ..engine.result_json import build_result_json, save_result_json
 
@@ -290,7 +290,7 @@ class _BatchThread(QThread):
             log.error("批量检出 JSON 保存失败 %s: %s", path.name, e, exc_info=True)
 
     def _save_coco_file(self):
-        """P8/T8-1：COCO 汇总落盘（全部分图合并为一份 results_coco.json）。"""
+        """COCO 汇总落盘（全部分图合并为一份 results_coco.json）。"""
         try:
             from ..engine.result_json import save_result_json, to_coco
 
@@ -747,7 +747,7 @@ class TestingWindow(QMainWindow):
         if not path:
             return
         path = Path(path)
-        # 传统算法流程（Q3：测试平台可测软件产出的所有模型、流程文件）
+        # 传统算法流程（测试平台可测软件产出的所有模型、流程文件）
         if path.suffix.lower() in (".json", ".xvap"):
             flow = self._peek_xcv_flow(path)
             if flow is not None:
@@ -1366,7 +1366,7 @@ class TestingWindow(QMainWindow):
             except Exception:  # noqa: BLE001
                 log.warning("旧结果窗关闭失败", exc_info=True)
         w = getattr(self, "_loaded_weights_path", None)
-        # V0.7.2 任务④：比对结果缓存（同模型/参数/B 权重重开免重推）
+        # 比对结果缓存（同模型/参数/B 权重重开免重推）
         if not hasattr(self, "_ab_cache"):
             self._ab_cache = {}
         self._ab_dialog = ModelCompareDialog(
@@ -1586,7 +1586,7 @@ class TestingWindow(QMainWindow):
             self._set_canvas_image(rendered)
             self._fill_result_list(prediction)
         except Exception as e:
-            # 可视化异常只降级（显示原图+状态提示），不再整窗未捕获（T1-1 crash 面收窄）
+            # 可视化异常只降级（显示原图+状态提示），不再整窗未捕获（crash 面收窄）
             log.error("结果可视化失败: %s: %s", type(e).__name__, e, exc_info=True)
             try:
                 self._set_canvas_image(image)
@@ -1663,3 +1663,5 @@ if __name__ == "__main__":
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+

@@ -53,7 +53,7 @@ class Project:
     rpn_reduced: bool = False      # R-CNN 系列：削减 RPN 候选框（其他家族忽略）
     use_amp: bool = True           # AMP 混合精度（仅 GPU 生效，CPU 自动关闭）
     mask_head_light: bool = False  # Mask R-CNN：轻量掩码头（其他家族忽略）
-    slim_head: bool = False        # T9-5 slim 头（仅 maskrcnn18）：FPN64 轻量结构
+    slim_head: bool = False        # slim 头（仅 maskrcnn18）：FPN64 轻量结构
     anchor_small: bool = False     # 小目标锚框自适应（R-CNN 家族，默认关）
     # R-CNN 优化器（默认 AdamW 1e-4，可回退 SGD）
     rcnn_optimizer: str = "adamw"
@@ -176,3 +176,5 @@ def list_pruned_models(project: Project) -> list[Path]:
     """列出项目文件夹下可用的剪枝预训练模型（.pt，按名称排序）。"""
     d = Path(project.model_dir) / PRUNED_DIR_NAME
     return sorted(d.glob("*.pt")) if d.is_dir() else []
+
+

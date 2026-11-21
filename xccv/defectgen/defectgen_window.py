@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""DefectAugmentStudio 缺陷生成窗口（V0.6 P6/T6-2）：creat_seg 移植的 Qt 壳。
+"""DefectAugmentStudio 缺陷生成窗口：creat_seg 移植的 Qt 壳。
 
 - 后端：`xccv/defectgen/backend/app.py`（FastAPI，create_app）经 **uvicorn 子线程**
   托管，端口=动态分配（port=0 由 OS 分派），窗口关闭即 `should_exit` 停服——
-  不驻留后台、不写死端口（与流程图编辑器同时打开无冲突，T6-4 验收项）；
+  不驻留后台、不写死端口（与流程图编辑器同时打开无冲突）；
 - 前端：QtWebEngine 内嵌 `http://127.0.0.1:<port>/`（本机回环；**不用
   webbrowser.open**）；
 - QtWebEngine 必须在 QApplication 建立前导入（AA_ShareOpenGLContexts），
-  与流程图 web 窗口同款纪律；关窗先销毁页面再退出（同款段错误防线）。
+  与流程图 web 窗口同一纪律；关窗先销毁页面再退出（段错误防线）。
 """
 
 import logging
@@ -228,3 +228,6 @@ if __name__ == "__main__":
 
     early_splash("defectgen", "缺陷生成")
     main()
+
+
+

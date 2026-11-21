@@ -144,3 +144,4 @@ def execute_reflow(actions: list[dict]) -> tuple[int, list[str]]:
             errors.append(f"{Path(str(a.get('image'))).name}: {e}")
             log.warning("回流失败: %s", a.get("image"), exc_info=True)
     return copied, errors
+

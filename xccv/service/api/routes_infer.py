@@ -25,12 +25,18 @@ router = APIRouter(prefix="/v1", tags=["inference"],
                    dependencies=[Depends(require_key)])
 
 
-def decode_image(data: bytes, name: str = "image") -> np.ndarray:
+def decode_image(data: bytes, name: str = "image",
+                 max_pixels: int = 0) -> np.ndarray:
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400,
                             detail=f"无法解码图片: {name}（支持 jpg/png/bmp）")
+    if max_pixels and img.shape[0] * img.shape[1] > int(max_pixels):
+        raise HTTPException(
+            status_code=413,
+            detail=f"图片像素超过上限 {int(max_pixels)}（w*h）：{name} 为 "
+                   f"{img.shape[1]}x{img.shape[0]}，请降采样后再调用")
     return img
 
 
@@ -79,14 +85,14 @@ def _infer_one(request: Request, image: np.ndarray, filename: str,
     try:
         with _stage(timer, "infer"):
             if tiled:
-                # P8/T8-3：大图分块推理（切块原生口径推理+同类 NMS 合并去重）
+                # 大图分块推理（切块原生口径推理+同类 NMS 合并去重）
                 from ...engine.tiled_infer import tiled_predict
 
                 entry = manager.get(model_id)
                 with entry.lock:
                     pred = tiled_predict(entry.model, image, conf=_conf,
                                          iou=_iou)
-                entry.last_used = time.time()
+                    entry.last_used = time.time()
             else:
                 pred, entry = manager.infer(model_id, image, conf=_conf,
                                             iou=_iou,
@@ -97,7 +103,7 @@ def _infer_one(request: Request, image: np.ndarray, filename: str,
         payload = build_result_json(
             task=entry.task, source=_source_of(filename, image),
             model={"file": Path(entry.path).name, "name": entry.alias},
-            inference={"conf": conf, "iou": iou},
+            inference={"conf": _conf, "iou": _iou},   # 回显实际生效值（含默认值补齐）
             prediction=pred, classes=entry.classes,
             score_semantics=getattr(entry.model, "score_semantics", None))
     return payload, entry, pred
@@ -115,7 +121,8 @@ def infer_image(request: Request, image: UploadFile = File(...),
     try:
         name = decode_upload_name(image.filename)
         with _stage(timer, "decode"):
-            img = decode_image(image.file.read(), name)
+            img = decode_image(image.file.read(), name,
+                               max_pixels=get_config(request).max_pixels)
         payload, _entry, _pred = _infer_one(request, img, name, model_id,
                                             conf, iou, tiled=tiled, timer=timer)
         resp = JSONResponse(content=payload)
@@ -134,6 +141,12 @@ def infer_batch(request: Request, images: list[UploadFile] = File(...),
     """批量推理（服务端串行逐帧；响应为数组，顺序与上传一致）。"""
     if not images:
         raise HTTPException(status_code=400, detail="images 为空")
+    cfg = get_config(request)
+    if len(images) > int(cfg.max_batch):
+        raise HTTPException(
+            status_code=400,
+            detail=f"单请求批量张数超过上限 {int(cfg.max_batch)}"
+                   f"（max_batch），当前 {len(images)}；请分批调用")
     acquire_gate(request)
     timer = StageTimer()
     try:
@@ -141,7 +154,8 @@ def infer_batch(request: Request, images: list[UploadFile] = File(...),
         for f in images:
             try:
                 fname = decode_upload_name(f.filename)
-                img = decode_image(f.file.read(), fname)
+                img = decode_image(f.file.read(), fname,
+                                   max_pixels=cfg.max_pixels)
                 payload, _e, _p = _infer_one(request, img, fname,
                                              model_id, conf, iou,
                                              tiled=tiled, timer=timer)
@@ -174,7 +188,8 @@ def render_overlay(request: Request, image: UploadFile = File(...),
 
         name = decode_upload_name(image.filename)
         with _stage(timer, "decode"):
-            img = decode_image(image.file.read(), name)
+            img = decode_image(image.file.read(), name,
+                               max_pixels=get_config(request).max_pixels)
         payload, entry, pred = _infer_one(request, img, name, model_id, conf,
                                           iou, timer=timer)
         with _stage(timer, "render"):
@@ -195,3 +210,4 @@ def render_overlay(request: Request, image: UploadFile = File(...),
         return resp
     finally:
         release_gate(request)
+

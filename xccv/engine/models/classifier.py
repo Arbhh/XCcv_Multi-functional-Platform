@@ -403,3 +403,4 @@ class ClassifierModel(BaseModel):
 
             load_state_dict_compat(self.net, ckpt["state_dict"])
         self.net.to(self.device).eval()
+

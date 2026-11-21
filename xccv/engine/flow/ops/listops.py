@@ -632,3 +632,4 @@ def _paste_mask(m: np.ndarray, ox: int, oy: int, W: int, H: int) -> np.ndarray:
     if x2 > x1 and y2 > y1:
         canvas[y1:y2, x1:x2] = m[y1 - oy:y2 - oy, x1 - ox:x2 - ox]
     return canvas
+

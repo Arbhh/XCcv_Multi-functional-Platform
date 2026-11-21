@@ -38,7 +38,7 @@ def _app():
     return QApplication.instance() or QApplication([])
 
 
-_WINDOW_HOLDER = []   # 测试窗口持引用：防测试进程尾部析构原生崩溃（坑 11 同族）
+_WINDOW_HOLDER = []   # 测试窗口持引用：防测试进程尾部析构原生崩溃
 
 
 class WorkbenchNavTest(unittest.TestCase):
@@ -280,7 +280,7 @@ class PackRelaxationTest(unittest.TestCase):
 
 
 class FlowPageXcvRunTest(unittest.TestCase):
-    """流程图平台页的新算子流程运行路由（Q7 修复）。"""
+    """流程图平台页的新算子流程运行路由。"""
 
     def test_flow_page_runs_xcv_flow(self):
         """Q7：流程图平台页「运行流程」对纯传统流程走新引擎并回写状态栏。
@@ -297,7 +297,7 @@ class FlowPageXcvRunTest(unittest.TestCase):
             img_path = Path(tmp) / "目标.png"
             from xccv.engine.io_utils import imwrite_unicode
 
-            imwrite_unicode(img_path, img)   # cv2.imwrite 中文文件名静默失败（P265 复验）
+            imwrite_unicode(img_path, img)   # cv2.imwrite 中文文件名静默失败
             flow = {"last_node_id": 2, "last_link_id": 1, "nodes": [
                 {"id": 1, "type": "xccv2/image_loader", "pos": [0, 0],
                  "properties": {"path": "", "is_grayscale": False}},
@@ -347,3 +347,5 @@ class BatchConcurrencyGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

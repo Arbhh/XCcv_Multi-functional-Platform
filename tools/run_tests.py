@@ -65,6 +65,9 @@ def _child_env() -> dict:
     env = os.environ.copy()
     for key, value in _CHILD_ENV.items():
         env.setdefault(key, value)
+    # 测试口径固定中文：i18n 优先读 XCCV_UI_LANG，强制 zh 以免随用户
+    # 语言偏好变化导致断言漂移
+    env["XCCV_UI_LANG"] = "zh"
     preload = _vcomp_preload_dir()
     if preload:
         pp = env.get("PYTHONPATH")
@@ -133,3 +136,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

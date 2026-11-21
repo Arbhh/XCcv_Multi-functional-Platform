@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI 智能标注引擎（V0.6 T5-2）：SAM2 / MobileSAM 经 ultralytics 预测器直连。
+"""AI 智能标注引擎：SAM2 / MobileSAM 经 ultralytics 预测器直连。
 
 选型（R4 修订：GPU 环境已到位，onnxruntime 仅 CPU EP——改为 ultralytics 原生
 SAM 预测器，编码走 GPU/CPU 均可，与训练/推理共用同一依赖，无新 wheels）：
@@ -19,7 +19,7 @@ SAM 预测器，编码走 GPU/CPU 均可，与训练/推理共用同一依赖，
 - `generate(request)` → `GenerateResponse(annotations=[Annotation(mask, bounding_box)])`
   （canvas: `osam.apis.generate(GenerateRequest(model, image_embedding, Prompt))`）；
 - `decode_points(weights, image_bgr, points, labels, multimask)` → (masks, scores)
-  （供批量预标注 T5-4 与画布悬停预览直接调用，绕开请求对象）。
+  （供批量预标注 与画布悬停预览直接调用，绕开请求对象）。
 
 线程纪律：编码/解码在【工作线程】执行（画布悬停预览由 QTimer 节流 + 后台线程；
 批量预标注走 QThread）——同一 predictor 并发调用不安全，加 threading.Lock。
@@ -800,7 +800,7 @@ def get_model_type_by_name(name: str):
 
 def decode_points(name: str, image_bgr: np.ndarray, points, labels,
                   multimask: bool = True):
-    """便捷入口（T5-4 批量预标注/测试用）：一次编码 + 一次解码，返回 Annotation。"""
+    """便捷入口（批量预标注/测试用）：一次编码 + 一次解码，返回 Annotation。"""
     eng = _engine_by_name(name)
     if eng is None:
         raise ValueError(f"AI 模型「{name}」不可用（权重缺失，见 available_models）")
@@ -834,3 +834,4 @@ def decode_best(name: str, image_rgb: np.ndarray, points, labels) -> np.ndarray 
     emb.meta["orig_hw"] = (int(image_rgb.shape[0]), int(image_rgb.shape[1]))
     ann = eng.decode(emb, np.asarray(points, dtype=float), list(labels))
     return None if ann is None else ann.mask
+

@@ -116,3 +116,4 @@ def apply_language(app) -> None:
     translator = MergedZhTranslator(app)
     app.installTranslator(translator)
     _installed_translators.append(translator)  # 关键：保活 Python 包装对象
+

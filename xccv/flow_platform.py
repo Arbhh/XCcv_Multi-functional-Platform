@@ -14,7 +14,7 @@
 运行：python -m xccv.flow_platform
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再做下方重型模块级导入
+if __name__ == "__main__":  # -m 直启先亮加载中界面，再做下方重型模块级导入
     from xccv.platform_entry import early_splash
 
     early_splash("flowmain", "流程图平台")
@@ -111,7 +111,7 @@ class _FlowBatchThread(QThread):
                     filt, info = apply_flow_safe(pred, (img.shape[1], img.shape[0]),
                                                  chain, classes=classes)
                     n_det = len(filt.boxes)
-                    # 统一检出结果 JSON（Q1/Q2 契约）：每图一个同名 .json，
+                    # 统一检出结果 JSON 契约：每图一个同名 .json，
                     # 镜像相对目录；分类任务经 classification_topk 导出
                     payload = build_result_json(
                         task=task_v,
@@ -161,7 +161,7 @@ class _FlowBatchThread(QThread):
 class _XcvBatchThread(QThread):
     """新算子（含纯传统）流程批量线程：逐图跑新引擎。
 
-    产物与 AI 检出批量一致（Q1 统一口径）：检出结果/<相对路径>/<图名>.json
+    产物与 AI 检出批量一致（统一口径）：检出结果/<相对路径>/<图名>.json
     （统一 schema，几何/测量在扩展数组、剔除无效信息）+ 可视化/<相对路径>/
     <图名>.jpg（原图 + 结果蒙版叠加）+ 批量摘要.json。
     """
@@ -343,7 +343,7 @@ class FlowPage(QWidget):
         self._preview_rendered: QImage | None = None
         self._preview_mode = "原图"
         self._batch_thread: _FlowBatchThread | None = None
-        self._scan_thread: _TreeScanWorker | None = None   # T2-3 目录扫描线程
+        self._scan_thread: _TreeScanWorker | None = None   # 目录扫描线程
         self._scan_gen = 0                                  # 丢弃过期扫描结果
         self._thumb_cache: dict = {}                        # path->QImage LRU
         self._thumb_cache_order: list = []
@@ -507,7 +507,7 @@ class FlowPage(QWidget):
             self._tree_total = 0
             self.count_label.setText("图片数量: 0/0")
             return
-        # T2-3：目录扫描移后台线程（千图目录不再冻结主线程）；
+        # 目录扫描移后台线程（千图目录不再冻结主线程）；
         # 完成后回主线程一次性建树（QTreeWidgetItem 只能在主线程创建）
         self.count_label.setText("图片数量: 扫描中…")
         self._scan_gen += 1
@@ -615,7 +615,7 @@ class FlowPage(QWidget):
             "图片 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff);;所有文件 (*)")
         return Path(path) if path else None
 
-    _THUMB_CACHE_MAX = 32  # 预览解码缓存上限（T2-3：来回点选不重复解码）
+    _THUMB_CACHE_MAX = 32  # 预览解码缓存上限（来回点选不重复解码）
 
     def _on_tree_click(self, item: QTreeWidgetItem, _col: int):
         kind, val = item.data(0, Qt.UserRole) or ("", "")
@@ -694,7 +694,7 @@ class FlowPage(QWidget):
             self._refresh_flow_combo()
 
     def _watch_model_dir(self):
-        """监视流程所在目录（Q7：画布保存新流程后下拉实时刷新，无需重选）。"""
+        """监视流程所在目录（画布保存新流程后下拉实时刷新，无需重选）。"""
         if not hasattr(self, "_dir_watcher"):
             self._dir_watcher = QFileSystemWatcher(self)
             self._dir_watcher.directoryChanged.connect(self._on_watched_dir_changed)
@@ -1084,7 +1084,7 @@ class FlowPage(QWidget):
             return
         out_dir = Path(settings.out_dir) if settings.out_dir else out_dir
         if self._is_xcv_flow(flow):
-            # 纯传统/新算子流程批量（Q5：流程图要有 JSON 结果产出）——
+            # 纯传统/新算子流程批量（流程图要有 JSON 结果产出）——
             # 逐图跑新引擎，统一 schema JSON（与 AI 检测批量一致）+ 蒙版可视化
             self._batch_thread = _XcvBatchThread(flow, images, root, out_dir,
                                                  flow_name=path.name,
@@ -1177,3 +1177,6 @@ if __name__ == "__main__":
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+
+
+

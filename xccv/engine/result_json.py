@@ -47,7 +47,7 @@ def detection_rows(prediction, classes: list) -> list:
     texts = getattr(prediction, "texts", None)
     rows = []
     boxes = getattr(prediction, "boxes", None)
-    boxes = [] if boxes is None else boxes   # 判空不用真值（ndarray 歧义，P150）
+    boxes = [] if boxes is None else boxes   # 判空不用真值（ndarray 歧义）
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = (float(v) for v in box)
         label_id = int(prediction.labels[i]) \
@@ -96,7 +96,7 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
     if prediction is not None:
         probs = list(getattr(prediction, "probs", None) or [])
         boxes = getattr(prediction, "boxes", None)
-        boxes = [] if boxes is None else boxes   # 判空不用真值（ndarray 歧义，P150）
+        boxes = [] if boxes is None else boxes   # 判空不用真值（ndarray 歧义）
         # 分类样预测（携带类别概率且无检出框）按分类口径导出——流程链
         # task="flow" 的分类模型此前走 detections 分支，classifications
         # 恒为空（resnet18 九色分类 json 空）
@@ -222,7 +222,7 @@ def build_flow_result_json(*, source: dict, detections: list | None = None,
     return payload
 
 
-# ---- P8/T8-1 导出格式扩展（纯函数，批量线程与测试共用）----
+# ---- 导出格式扩展（纯函数，批量线程与测试共用）----
 
 LABELME_VERSION = "5.8.1"  # 与随包 labelme 版本一致
 
@@ -307,7 +307,7 @@ def to_coco(payloads: list, classes: list | None = None,
             "categories": cats}
 
 
-# ---- P8/T8-2 批量统计摘要 ----
+# ---- 批量统计摘要 ----
 
 def batch_summary(results: list, costs_ms: list | None = None) -> dict:
     """批量运行统计摘要：图片/检出总数、每类检出数与平均置信度、耗时 p50/max。
@@ -403,3 +403,4 @@ def verdict_from_node_results(results: dict) -> dict | None:
     source = "count_check" if any(n == "filter_count_check" for n, _ in flags) \
         else "logic"
     return {"passed": passed, "source": source, "detail": detail}
+

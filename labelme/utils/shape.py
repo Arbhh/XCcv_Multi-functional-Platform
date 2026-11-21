@@ -123,3 +123,4 @@ def masks_to_bboxes(masks):
         bboxes.append((y1, x1, y2, x2))
     bboxes = np.asarray(bboxes, dtype=np.float32)
     return bboxes
+

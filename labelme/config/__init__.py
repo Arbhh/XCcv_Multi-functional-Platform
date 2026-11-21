@@ -72,3 +72,4 @@ def get_config(config_file_or_yaml=None, config_from_args=None):
         update_dict(config, config_from_args, validate_item=validate_config_item)
 
     return config
+

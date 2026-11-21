@@ -50,6 +50,7 @@ class FlowManager:
         self._lock = threading.RLock()
         self._entries: dict[str, FlowEntry] = {}
         self._seq = itertools.count(1)
+        self._loading: dict[str, threading.Lock] = {}  # per-path 单飞锁（与模型池同语义）
 
     def list(self) -> list[dict]:
         with self._lock:
@@ -81,33 +82,41 @@ class FlowManager:
                 if e.path == key:
                     e.last_used = time.time()
                     return e
-        safe = (alias or path.stem)
-        flow_id = f"flow-{next(self._seq)}-{safe}"[:64]
-        # 持久化到服务数据目录（解包出的模型在服务生命周期内保持有效）
-        pkg_dir = _data_dir() / flow_id
-        pkg_dir.mkdir(parents=True, exist_ok=True)
-        if path.suffix.lower() == ".xvap":
-            local_pkg = pkg_dir / path.name
-            shutil.copyfile(path, local_pkg)
-            flow, _model_dir = fp.unpack_to_dir(local_pkg)
-        elif path.suffix.lower() == ".json":
-            flow = json.loads(path.read_text(encoding="utf-8"))
-            _check_flow_model_paths(flow, cfg)
-        else:
-            raise ValueError("流程文件仅支持 .json / .xvap")
-        with self._lock:
-            while len(self._entries) >= self._max:
-                oldest = min(self._entries.values(), key=lambda e: e.last_used)
-                log.info("LRU 卸载流程 %s：超过驻留上限 %d",
-                         oldest.flow_id, self._max)
-                self._drop(oldest.flow_id)
-            entry = FlowEntry(flow_id=flow_id, alias=alias or path.stem,
-                              path=key, flow=flow,
-                              session=FlowSession(), loaded_at=time.time())
-            self._entries[flow_id] = entry
-        log.info("流程已加载: %s（%s，%d 节点）", flow_id, path.name,
-                 len(flow.get("nodes") or []))
-        return entry
+            path_gate = self._loading.setdefault(key, threading.Lock())
+        with path_gate:
+            with self._lock:
+                # 等锁期间他人可能已完成加载——单飞复用出口
+                for e in self._entries.values():
+                    if e.path == key:
+                        e.last_used = time.time()
+                        return e
+            safe = (alias or path.stem)
+            flow_id = f"flow-{next(self._seq)}-{safe}"[:64]
+            # 持久化到服务数据目录（解包出的模型在服务生命周期内保持有效）
+            pkg_dir = _data_dir() / flow_id
+            pkg_dir.mkdir(parents=True, exist_ok=True)
+            if path.suffix.lower() == ".xvap":
+                local_pkg = pkg_dir / path.name
+                shutil.copyfile(path, local_pkg)
+                flow, _model_dir = fp.unpack_to_dir(local_pkg)
+            elif path.suffix.lower() == ".json":
+                flow = json.loads(path.read_text(encoding="utf-8"))
+                _check_flow_model_paths(flow, cfg)
+            else:
+                raise ValueError("流程文件仅支持 .json / .xvap")
+            with self._lock:
+                while len(self._entries) >= self._max:
+                    oldest = min(self._entries.values(), key=lambda e: e.last_used)
+                    log.info("LRU 卸载流程 %s：超过驻留上限 %d",
+                             oldest.flow_id, self._max)
+                    self._drop(oldest.flow_id)
+                entry = FlowEntry(flow_id=flow_id, alias=alias or path.stem,
+                                  path=key, flow=flow,
+                                  session=FlowSession(), loaded_at=time.time())
+                self._entries[flow_id] = entry
+            log.info("流程已加载: %s（%s，%d 节点）", flow_id, path.name,
+                     len(flow.get("nodes") or []))
+            return entry
 
     def run(self, flow_id: str, image_path: Path, source_name: str,
             flow_name: str = ""):
@@ -119,7 +128,7 @@ class FlowManager:
             payload, session, base = run_flow_payload(
                 entry.flow, flow_name or entry.alias, image_path, source_name,
                 session=entry.session)
-        entry.last_used = time.time()
+            entry.last_used = time.time()   # 锁内更新（与 LRU 淘汰互斥）
         return payload, session, base
 
     def unload(self, flow_id: str) -> bool:
@@ -133,8 +142,10 @@ class FlowManager:
         entry = self._entries.pop(flow_id, None)
         if entry is None:
             return
-        pkg_dir = _data_dir() / flow_id
-        shutil.rmtree(pkg_dir, ignore_errors=True)
+        # 与运行互斥：entry.lock 被 in-flight 运行持有时延迟到其结束再清理
+        with entry.lock:
+            pkg_dir = _data_dir() / flow_id
+            shutil.rmtree(pkg_dir, ignore_errors=True)
         log.info("流程已卸载: %s", flow_id)
 
 
@@ -147,3 +158,4 @@ def _check_flow_model_paths(flow: dict, cfg) -> None:
         mp = str(props.get("model_path") or "").strip()
         if mp and Path(mp).suffix.lower() in (".pt", ".engine"):
             ensure_path_allowed(mp, cfg)
+

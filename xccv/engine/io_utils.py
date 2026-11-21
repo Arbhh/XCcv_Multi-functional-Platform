@@ -42,3 +42,4 @@ def imwrite_unicode(path, image: np.ndarray) -> bool:
     if ok:
         buf.tofile(str(path))
     return bool(ok)
+

@@ -89,7 +89,7 @@ class BatchSettingsDialog(QDialog):
         box.accepted.connect(self._accept)
         box.rejected.connect(self.reject)
         form.addRow(box)
-        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
+        from ..i18n import localize_widget_tree
 
         localize_widget_tree(self)
 
@@ -146,3 +146,4 @@ def show_warning(dialog, text: str):
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+

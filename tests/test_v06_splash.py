@@ -1,4 +1,4 @@
-"""V0.6 T1-3 回归：全局"加载中"启动界面（LoadingSplash）。
+"""全局"加载中"启动界面（LoadingSplash）。
 
 - 显示即见（show+processEvents 后可见）；
 - finish() 关闭并 setParent(None)+deleteLater（防残影，）;
@@ -91,7 +91,7 @@ class HeavyStaticDeclarationTest(unittest.TestCase):
 
 
 class EarlySplashTest(unittest.TestCase):
-    """T1-3 收尾核验：入口顶部预显示（模块级重型导入之前），run_platform 接管。
+    """收尾核验：入口顶部预显示（模块级重型导入之前），run_platform 接管。
 
     实测（runs/probe_startup_v06.py）：训练平台首窗 765ms→~285ms——原先
     pyqtgraph/matplotlib/cv2 等模块级导入全部发生在 run_platform 显示之前。
@@ -228,7 +228,7 @@ class EarlySplashTest(unittest.TestCase):
         self.assertTrue(sp._EARLY.isVisible())
 
     def test_early_splash_keeps_app_alive_fresh_process(self):
-        """坑8083early_splash 内创建的 QApplication 必须保活。
+        """early_splash 内创建的 QApplication 必须保活。
 
         局部变量持有时函数返回即被 GC 销毁（连带加载卡）→ run_platform 再建
         新 app+新卡、重付 ~300ms 字体加载（实测轻量平台主窗晚出 ~400ms）。
@@ -261,3 +261,5 @@ class EarlySplashTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

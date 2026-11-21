@@ -58,3 +58,4 @@ def format_gpu_line(info: dict) -> str:
     return (f"GPU：性能状态 {info.get('pstate')}　温度 {info.get('temp_c'):.0f}℃"
             f"　功耗 {info.get('power_w'):.0f}W　利用率 {info.get('util_pct'):.0f}%"
             f"　SM 频率 {info.get('sm_mhz'):.0f}MHz{warn}")
+

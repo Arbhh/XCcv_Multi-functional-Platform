@@ -4,3 +4,4 @@
 - web/：前端静态页面
 - defectgen_window.py：Qt 壳窗口（ChromeMainWindow + QtWebEngine）
 """
+

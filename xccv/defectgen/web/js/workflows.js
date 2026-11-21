@@ -1,4 +1,4 @@
-/* Defect Augment Studio — 批量粘贴到背景池 + 导出（规格 §6.4.3 / §8.5 / §7.2） */
+/* Defect Augment Studio — 批量粘贴到背景池 + 导出 */
 import { state, emit, on } from './state.js';
 import * as api from './api.js';
 import { materializeSteps } from './recipe.js';
@@ -23,7 +23,7 @@ export function initWorkflows() {
     $('batchDirInfo').textContent = `已选择 ${files.length} 张背景图（上传模式）`;
     $('batchDirInput')._files = files;
   };
-  $('batchDoRun').onclick = startBatch;
+  $('batchDoRun').onclick = () => startBatch(false);
   $('batchCancelRun').onclick = () => api.batch.cancel(currentJob).catch(() => { });
   $('batchClose').onclick = () => { if (!batchRunning) $('batchDlg').close(); };
 
@@ -124,7 +124,7 @@ async function doExport() {
   try {
     let targetB64, tw, th;
     if ($('expRes').value === 'full' && state.target.originalBlob) {
-      // 原分辨率重算（规格 §7.2）：实例几何按 k 映射回原图坐标系
+      // 原分辨率重算：实例几何按 k 映射回原图坐标系
       const bmp = await createImageBitmap(state.target.originalBlob);
       tw = bmp.width; th = bmp.height;
       targetB64 = await canvasToB64(tw, th, (c) => c.drawImage(bmp, 0, 0));
@@ -173,7 +173,7 @@ function onBatchSourceChange() {
   $('batchUploadRow').style.display = v === 'files' ? '' : 'none';
 }
 
-async function startBatch() {
+async function startBatch(isRetry) {
   if (batchRunning) return;
   const src = state.recipe.steps.length && $('batchUseRecipe').checked
     ? 'recipe' : 'canvas';
@@ -270,8 +270,33 @@ async function startBatch() {
     $('batchReport').innerHTML = '';
     poll();
   } catch (e) {
+    // 目录白名单拦截：用户确认后登记授权目录，再重试一次（不重复弹窗）
+    if (!isRetry && /授权白名单/.test(String(e.message)) && await maybeAuthorize(payload)) {
+      return startBatch(true);
+    }
     emit('toast', { text: '批量任务启动失败：' + e.message, kind: 'err' });
   }
+}
+
+/* 目录不在白名单 → 用户确认 → 登记授权 → 返回是否可重试 */
+async function maybeAuthorize(payload) {
+  const dirs = [];
+  if (payload.background?.mode === 'dir') dirs.push(payload.background.dir);
+  const out = String(payload.output_dir || '');
+  if (/^[a-zA-Z]:[\\/]/.test(out) || out.startsWith('\\\\')) dirs.push(out);
+  if (!dirs.length) return false;
+  if (!confirm('以下目录未在缺陷合成白名单内：\n' + dirs.join('\n')
+      + '\n\n是否将其登记为授权目录？（登记记录保存在 platform_data/defectgen/allowed_dirs.json）')) {
+    return false;
+  }
+  for (const d of dirs) {
+    try { await api.allowDir(d); } catch (err) {
+      emit('toast', { text: '授权登记失败：' + err.message, kind: 'err' });
+      return false;
+    }
+  }
+  emit('toast', { text: '目录已授权，正在重新发起批量作业…', kind: 'ok' });
+  return true;
 }
 
 async function poll() {
@@ -318,3 +343,5 @@ function openRecipeDialog() {
     : (r.steps.length ? `当前已录制 ${r.steps.length} 步（源图 ${r.srcDims?.w}×${r.srcDims?.h}），可直接回放或加载外部 Recipe JSON。`
       : '尚未录制。点击工具条「● 录制 Recipe」开始，或加载外部 .recipe.json 文件回放。');
 }
+
+

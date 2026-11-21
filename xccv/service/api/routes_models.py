@@ -55,3 +55,4 @@ def unload_model(req: UnloadModelRequest, request: Request):
 def model_status(request: Request):
     return {"models": get_manager(request).list(),
             "uptime_s": round(time.time() - request.app.state.started, 1)}
+

@@ -253,7 +253,7 @@ class ModelLoadInferTest(unittest.TestCase):
         self.assertEqual(TestingWindow._fmt_cost(1.2561), "1.26 s")
 
     def test_single_image_cost_display(self):
-        """单图推理完成后状态摘要须包含「推理耗时」（v0.5.5追加批次）。"""
+        """单图推理完成后状态摘要须包含「推理耗时」。"""
         win = TestingWindow()
         _load_weights_sync(win, self.yolo_ckpt)
         win._set_image_list(sorted(self.det_dir.glob("*.png")))  # 选中即自动推理
@@ -276,3 +276,4 @@ class ModelLoadInferTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

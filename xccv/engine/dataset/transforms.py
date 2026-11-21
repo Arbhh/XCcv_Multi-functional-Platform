@@ -278,3 +278,4 @@ def preview_apply_ops(image: np.ndarray, ops: dict, probs: dict | None = None,
         out, _shapes = fn(out, [], **{**defaults, **(params or {})}, rng=rng)
         applied.append(name)
     return out, applied
+

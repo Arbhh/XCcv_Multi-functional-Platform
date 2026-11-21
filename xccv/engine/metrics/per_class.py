@@ -87,3 +87,4 @@ def ultralytics_per_class_ap50(metric) -> list[float] | None:
         return [round(by_idx.get(i, 0.0), 4) for i in range(size)]
     except Exception:
         log.debug("分类 AP 解析失败（按未知处理）")
+

@@ -48,3 +48,4 @@ def setup_offline_weights() -> None:
         os.environ.setdefault("YOLO_CONFIG_DIR", str(base / "ultralytics"))
     except Exception:
         pass  # 目录不可写时退回 ultralytics 默认配置位置
+

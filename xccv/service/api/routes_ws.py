@@ -1,4 +1,4 @@
-"""T10-10 WebSocket 二进制推理通道：/v1/ws/infer。
+"""WebSocket 二进制推理通道：/v1/ws/infer。
 
 协议（与 HTTP /v1/infer/image 同口径：同 manager/gate/result_json）：
 - 连接后**首帧 JSON 文本头**：{"api_key": "...", "model_id": "…",
@@ -9,7 +9,7 @@
 - 客户端断开即结束（无粘性状态，重连重发头部即可）。
 
 C# SDK：XccvClient.InferImageWsAsync（ClientWebSocket，C#5 语法）；
-gRPC 是否开工留决策点（方案 §九.2，默认仅 WebSocket）。
+gRPC 是否实现留待后续版本（默认仅 WebSocket）。
 """
 
 import json
@@ -66,3 +66,6 @@ async def ws_infer(ws: WebSocket):
                 gate.release()
     except Exception:
         pass  # 客户端断开（WebSocketDisconnect 等）——正常结束
+
+
+

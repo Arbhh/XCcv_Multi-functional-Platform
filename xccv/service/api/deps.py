@@ -59,3 +59,4 @@ def release_gate(request: Request) -> None:
         request.app.state.gate.release()
     except ValueError:
         pass
+

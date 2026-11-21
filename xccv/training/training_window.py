@@ -10,7 +10,7 @@
 运行：python -m xccv.training.training_window
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再做下方重型模块级导入
+if __name__ == "__main__":  # -m 直启先亮加载中界面，再做下方重型模块级导入
     from xccv.platform_entry import early_splash
 
     early_splash("training", "训练平台", heavy=True)
@@ -163,7 +163,7 @@ class ProjectWindow(InfoPageMixin, TrainPageMixin, QuickPanelMixin, HistoryViewM
         if self.on_closed is not None:
             self.on_closed(self.project.name)
         dg = getattr(self, "data_grid", None)
-        if dg is not None:      # 缩略/扫描线程收尾（P144 纪律）
+        if dg is not None:      # 缩略/扫描线程收尾
             dg.shutdown()
         event.accept()
 
@@ -535,4 +535,5 @@ if __name__ == "__main__":
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
 

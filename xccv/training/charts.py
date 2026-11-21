@@ -214,3 +214,4 @@ class ConfusionMatrixCanvas(_WheelThroughCanvas):
                                  color="white" if vmax and v > vmax / 2 else "black")
         self.fig.colorbar(im, ax=self.ax, fraction=0.046)
         self.draw()
+

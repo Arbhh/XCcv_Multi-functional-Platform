@@ -12,8 +12,10 @@ python_path.txt
 platform_data/
 
 # 权重与数据（体积大且许可各异，不随仓库分发；见 xccv/engine/weights/download_weights.py）
-weights/
-xccv/engine/weights/
+weights/*
+!**/weights/download_weights.py
+xccv/engine/weights/*
+!xccv/engine/weights/download_weights.py
 *.pt
 *.pth
 *.onnx
@@ -44,6 +46,7 @@ docs/开源合规参考_*.md
 # 按版本文档目录（本地留存；远端 docs/ 仅保留 quickstart、images 与简介 docx）
 docs/0.7.*/
 docs/0.8.0/
+docs/0.8.1/
 
 # Office 锁文件
 ~$*.docx

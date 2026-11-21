@@ -55,7 +55,7 @@ class GridEntry:
 def scan_grid_entries(dataset_dir) -> list:
     """扫描数据集目录 → GridEntry 列表（后台线程调用；只读盘不解码像素）。
 
-    与 scan_labelme_dataset 同款遍历规则：递归、跳过隐藏目录；json 最小化
+    与 scan_labelme_dataset 相同的遍历规则：递归、跳过隐藏目录；json 最小化
     解析（只取 shapes 的 label），损坏 json 按"无标注"降级不中断扫描。
     """
     from ..engine.dataset.ignore import IGNORE_LABEL
@@ -410,3 +410,5 @@ def _build_widget_classes():
             QDesktopServices.openUrl(QUrl.fromLocalFile(item.data(Qt.UserRole)))
 
     return DataGridWidget
+
+

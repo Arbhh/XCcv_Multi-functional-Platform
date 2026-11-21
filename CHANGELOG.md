@@ -5,6 +5,46 @@
 
 English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 
+## [0.8.1] - 2026-11-21
+
+> 止血与正确性 hotfix：集中修复安全与正确性评审中的"立即级"缺陷。
+> 本版包含一处**评估口径修正**（R-CNN NMS），历史评估指标可能与 0.8.0 不完全可比。
+
+### 安全
+
+- `/v1/admin/shutdown` 挂 API Key 依赖（此前本机任意进程可无鉴权停服）；
+- `/v1/config` 字段白名单化：`api_key`、`model_dirs`、`allow_any_path` 不再下发；
+- **推理服务上传护栏**：单请求批量张数上限（`max_batch`，默认 32，超出 400）、
+  请求体体积上限（`max_upload_mb`，默认 100 MB，超出 413）、单图像素上限
+  （`max_pixels`，默认 50M，超出 413）；新配置项进 `ServiceConfig`（旧配置缺字段自动回退默认）；
+- **模型池并发三修**：同路径并发加载单飞化（只加载一次，防显存翻倍）；
+  卸载 / LRU 淘汰与 in-flight 推理互斥（延迟到推理结束再释放）；`last_used`
+  锁内更新；流程池同语义对齐；
+- **缺陷合成目录白名单**：批量作业的背景/输出目录限定 `platform_data`
+  （默认根）与显式授权目录（`platform_data/defectgen/allowed_dirs.json`，
+  界面确认后登记），越界 400 且存在性探测不泄漏；作业表 TTL 清理 +
+  表容量上限 + 并发作业上限（超限 429）；
+- `SECURITY.md` 新增信任边界：模型文件属可信输入（`weights_only` 安全加载
+  迁移规划于 0.8.6）。
+
+### 修复
+
+- **R-CNN 评估 NMS 从未生效**：评估期写入的是无效属性 `box_nms_thresh`
+  （正确属性为 `roi_heads.nms_thresh`），实际 NMS 阈值随上一次推理残留值漂移。
+  现评估口径固定 0.2 并在进出时恢复原值；**历史评估指标与 0.8.0 不完全可比**；
+- 降采样推理（`max_side`/自适应）重建 Prediction 时丢失 OCR 文本——`texts` 透传修复；
+- 结果 JSON 的 `conf`/`iou` 回显实际生效值（此前未传参时回显请求原值 null）；
+- `params_mb` 恒 0：包装类模型沿 `model`/`net` 解包取真实参数量
+  （`state_dict` 计数兜底），状态页恢复显示；
+- 全量回归不再读入用户语言偏好：`tools/run_tests.py` 子进程统一注入
+  `XCCV_UI_LANG=zh`，`i18n` 支持环境变量显式覆盖。
+
+### 测试
+
+- 新增 `tests/test_v081_hotfix.py` 契约测试 28 例：shutdown 鉴权 / config 白名单 /
+  体积-像素-批量限额 / conf-iou 回显 / params_mb / OCR texts / 模型池并发
+  （单飞 + 卸载互斥）/ 评估 NMS 口径 / defectgen 目录白名单与作业表治理。
+
 ## [0.8.0] - 2026-11-20
 
 > **重大更新**：项目正式更名为 **XCcv 多功能视觉平台（XCcv Multi-functional Platform）**，
@@ -53,7 +93,7 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
   `.engine` 明文引擎）；加载旧版 `.xva/.xcs` 容器时给出明确迁移提示。
 - 模型加载入口（registry）重构：按 ckpt format / `.engine` 元数据路由；
   TensorRT 引擎改用 `.engine` 后缀。
-- `requirements.txt` 新增 `torch-pruning`、`onnx`、`psutil`、`python-multipart`；`onnxruntime`
+- `requirements.txt` 新增 `torch-pruning`、`onnx`、`psutil`；`onnxruntime`
   保留用于 EfficientSAM 辅助标注。
 - 测试平台 `.xva` 相关文案/过滤器全部改为明文 `.pt` / `.engine` 口径。
 
@@ -67,7 +107,8 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 ### 测试
 
 - 全量回归：单测（历史锁 + 模块行为锁 + 页快照锁）与四平台离屏自检，
-  全部通过；推荐使用 `python tools/run_tests.py` 逐模块运行。
+  结果见发布验收材料；推荐使用 `python tools/run_tests.py` 逐模块运行。
+
 - CI 双平台（Ubuntu / Windows）全绿：测试运行器自动带齐子进程环境
   （UTF-8 输出、无显示器 Qt/matplotlib 前提、Windows 下 VC++ OpenMP
   运行库预加载），并修正跨平台测试的平台假设（WebEngine 平台选择、
@@ -120,7 +161,7 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 - `python -m unittest discover -s tests -p "test_*.py"`：**239 例通过**
   （0.7.2 的 194 例 + CIF/复盘/语义/语言回归 45 例；5 例 CIF 集成测试因
   本地无 DINO 权重按设计跳过）。
-- `compileall` 与四平台离屏自检：通过。
+- `compileall` 与四平台离屏自检见发布验收材料。
 
 ### 第三方许可变更
 
@@ -166,7 +207,7 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
   0.7.2 新增回归 20 例 + 存量用例随新语义更新 4 例；含阈值面板渲染级回归、扫描曲线数值口径、
   范围切换联动、A/B 缓存复用、双语替换层 / 树遍历 / 语言持久化 / 真窗口集成、文案漏导入静态扫描）。
 - 四平台离屏自检（主界面 / 训练 / 测试 / 流程图）：通过。
-- 英文模式界面验收：主界面、测试平台全英文渲染正常。
+- 英文模式真机截图验收：主界面、测试平台全英文渲染（验收留证随本地发布材料归档）。
 
 ## [0.7.1-community] - 2026-11-14
 
@@ -247,14 +288,14 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 
 - 分割验证器在 OK 负样本图上的空张量索引导致整批检出丢失（改为逐图隔离、自行还原坐标）。
 - 标注平台 AI 模型加载失败后 `_ai_loading` 卡住导致后续点击无效。
-- 阈值拖线越界、复盘页缓存残留、标准页入口拥挤等 0.7 测试问题。
+- 阈值拖线越界、复盘页缓存残留、标准页入口拥挤等 0.7 真机测试问题。
 
 ### 测试
 
 - `python -m unittest discover -s tests -p "test_*.py"`：128 例全部通过（30.3s）。
 - `python -m compileall -q xccv labelme`：通过。
 - 离屏 UI 冒烟：训练平台（5 类任务）、测试平台（双页/复盘页）、流程图页、阈值面板、数据网格均实例化通过。
-- 界面 UI 验收：主界面 → 训练平台任务下拉（异常检测/OCR）→ 测试平台标准/项目复盘切换 →
+- 真机 UI 验收：主界面 → 训练平台任务下拉（异常检测/OCR）→ 测试平台标准/项目复盘切换 →
   标注平台 [OK]/帮助菜单 → 流程图编辑，均通过。
 
 ## [0.6.2-community] - 2026-11-12

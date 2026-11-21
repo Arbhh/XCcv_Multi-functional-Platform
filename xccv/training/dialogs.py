@@ -384,3 +384,4 @@ def rows_from_issues(issues) -> list:
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+

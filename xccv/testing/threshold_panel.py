@@ -1,4 +1,4 @@
-"""维度阈值扫描曲线面板（0.7.2 重设计）：维度阈值扫描曲线面板。
+"""维度阈值扫描曲线面板（V0.7.2 重设计）。
 
 曲线含义（V0.7.2 实测修复定稿）——**图口径**：每条曲线给出阈值=x 时
 对应**分组的图数**，与右侧分组/统计行完全同口径：
@@ -290,7 +290,7 @@ class ThresholdPanel(QWidget):
         self.btn_flow.setEnabled(True)
 
     def set_scope(self, scope: str):
-        """评估范围切换（V0.7.2 任务③）：evaluated=正常/过检/漏检；
+        """评估范围切换：evaluated=正常/过检/漏检；
         unjudged=未评估生产图 OK/NG。轴按数据集不随范围变化，
         切换即重绘曲线并同步输入框。"""
         scope = "unjudged" if scope == "unjudged" else "evaluated"
@@ -530,7 +530,7 @@ class ThresholdPanel(QWidget):
         dec = _DIM_SPECS[key][1]
         self.plot.setXRange(0.0, x_max, padding=0)
         # 注意：底部轴禁止 setWidth——那会钳死轴控件宽度，刻度文字全部
-        # 挤进左端几十像素（V0.7.2 任务①根因，P237）；左轴保留预留宽度
+        # 挤进左端几十像素；左轴保留预留宽度
         self.plot.getAxis("bottom").setTicks(_axis_ticks(x_max, dec))
         self.plot.getAxis("left").setWidth(42)
 
@@ -573,3 +573,5 @@ class ThresholdPanel(QWidget):
 
         return any(not _is_unjudged(img) and img.get("dets")
                    for img in (self._stats.get("per_image") or []))
+
+

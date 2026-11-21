@@ -395,7 +395,7 @@ QListWidget::item:hover { background: @list_hover; color: @text_1; }
 QListWidget::item:selected:hover { background: #c2e9f3; color: @primary_deep; }
 QTreeWidget::item { padding: 7px 9px; }
 /* 多行文本（日志/说明框）：缺此规则时暗色下沿用系统白底 + 全局浅色字 =
-   白底浅字不可读（F2-5 暗色截图实测，工作台日志/算子说明框） */
+   白底浅字不可读（暗色模式：工作台日志/算子说明框） */
 QPlainTextEdit, QTextEdit {
     background: @panel;
     color: @text_1;
@@ -794,3 +794,5 @@ def install_theme_watcher() -> bool:
     except Exception:
         _LOG.warning("主题文件监听安装失败（不影响使用，仅跨进程同步失效）", exc_info=True)
         return False
+
+

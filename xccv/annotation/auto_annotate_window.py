@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI 批量预标注窗口（V0.6 T5-4）：选模型/文件夹 → 后台线程逐图预标注。
+"""AI 批量预标注窗口：选模型/文件夹 → 后台线程逐图预标注。
 
 入口：标注平台菜单「工具 → AI 批量预标注」（annotator_window 接线）。
 线程纪律：QThread 无父对象 + auto_cleanup_thread 收尾；
@@ -190,3 +190,4 @@ class AutoAnnotateDialog(QDialog):
         self.btn_start.setEnabled(True)
         self.btn_cancel_run.setEnabled(False)
         self.status.setText(f"{tr('失败：')}{msg}")
+

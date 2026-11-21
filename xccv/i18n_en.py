@@ -1,4 +1,4 @@
-"""英文语言表（V0.7.2 平台总体①）：键 = 源码中文文案（精确匹配）。
+"""英文语言表：键 = 源码中文文案（精确匹配）。
 
 范围口径（v1）：常驻界面文案（窗口标题/页面标题/组标题/按钮/标签/复选/
 页签/下拉项/表头/占位符）+ 高频动态消息前缀；tooltip、一次性弹窗正文、
@@ -1739,7 +1739,7 @@ TABLE = {
     "仿射变换：6 元矩阵 \"a,b,tx,c,d,ty\"（行优先），边界复制防黑边。": "Affine: 6-element matrix \"a,b,tx,c,d,ty\" (row-major); border replication avoids black edges.",
     "传统算子几何结果合并成检出时使用的类别序号": "Class index used when merged classic geometry becomes detections",
     "位平面：提取灰度图第 N 位（0=最低位，7=最高位）为黑白图；": "Bit plane: extracts bit N of a gray image (0 = lowest, 7 = highest) as a binary image;",
-    "保存图像：把图像（可选叠加检出框蒙版）写盘，中文路径安全（V0.6 T3-5）。": "Image sink: writes the image (optionally with detection overlay) to disk; Unicode-path safe (V0.6 T3-5).",
+    "保存图像：把图像（可选叠加检出框蒙版）写盘，中文路径安全。": "Image sink: writes the image (optionally with detection overlay) to disk; Unicode-path safe .",
     "保存结果：把结果按统一 JSON schema 写盘（传统算法流程的出口之一）。": "Result sink: writes results in the unified JSON schema (one of the classic-flow outputs).",
     "保存表格：检出/测量/判定按行写 CSV（utf-8-sig，Excel 打开中文不乱码）。": "Table sink: writes detections/measures/verdicts as CSV rows (utf-8-sig, Excel-safe).",
     "保留区域（旧链 region_keep 的薄委托）：仅保留区域内目标。": "Keep-region (thin wrapper of legacy region_keep): keeps only targets inside the regions.",
@@ -2152,3 +2152,5 @@ TABLE = {
     "已由测试平台复盘页跳转打开":
         "Opened via the jump from the Testing Platform review page",
 }
+
+

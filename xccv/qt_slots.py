@@ -127,3 +127,4 @@ def apply_auto_slot_module(globals_: dict) -> None:
     for obj in list(globals_.values()):
         if isinstance(obj, type) and obj.__module__ == mod:
             apply_auto_slot(obj)
+

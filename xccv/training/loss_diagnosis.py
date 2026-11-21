@@ -98,3 +98,4 @@ def _metric_series(history: list) -> list:
         if series:
             return series
     return []
+

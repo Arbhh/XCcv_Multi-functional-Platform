@@ -2,7 +2,7 @@
 # 运行环境以 requirements.txt 为准（含 torch 安装源说明），本文件不参与 pip 安装。
 [project]
 name = "xccv-multi-functional-platform"
-version = "0.8.0"
+version = "0.8.1"
 description = "XCcv Multi-functional Platform：离线工业视觉平台（标注 / 训练 / 测试 / 部署服务 / 模型工具 / 流程图 / 缺陷样本合成）"
 readme = "README.md"
 requires-python = ">=3.11"

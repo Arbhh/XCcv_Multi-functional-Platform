@@ -1,4 +1,4 @@
-"""检出过滤区域（V0.6 T3-1）：矩形 / 圆 / 多边形三种形状，旧串零改动兼容。
+"""检出过滤区域：矩形 / 圆 / 多边形三种形状，旧串零改动兼容。
 
 区域串语法（多条区域以 ``;`` 分隔，可混合形状；中文逗号自动当英文逗号）：
 
@@ -180,3 +180,4 @@ def region_problems(value, context: str = "") -> list:
         if msg:
             problems.append(f"{where}{msg}")
     return problems
+

@@ -51,3 +51,4 @@ def make_classification_dataset(root: Path, classes=("cat", "dog"), per_class: i
             img = rng.integers(0, 255, size=(size[1], size[0], 3), dtype=np.uint8)
             imwrite_unicode(d / f"{c}_{i}.png", img)
     return root, list(classes)
+

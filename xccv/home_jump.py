@@ -75,3 +75,4 @@ def wire(window, argv=None) -> None:
     pending = forward_args(argv)
     if pending:
         handle_args(window, pending)
+

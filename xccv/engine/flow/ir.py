@@ -75,7 +75,7 @@ class Geometry:
 class MeasureResult:
     """测量结果：单点值 value 与多点序列 values 二选一（勿混用）。
 
-    unit 常用 "px" | "mm"（mm 需标定，二期）；角度测量为 "deg"（V0.6 T4-2）；
+    unit 常用 "px" | "mm"（mm 需标定，二期）；角度测量为 "deg"；
     tolerance=(下限, 上限) 时 passed 给出判定，无 tolerance 时 passed 为 None。
     """
 
@@ -236,3 +236,4 @@ class ResultList:
     def to_json(self) -> dict:
         return {"count": len(self.items), "items": [it.to_json() for it in self.items],
                 "meta": dict(self.meta)}
+

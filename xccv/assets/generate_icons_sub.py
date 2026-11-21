@@ -44,7 +44,7 @@ def _hex(c: str, a=255):
 
 
 def _badge(top: str, bottom: str) -> Image.Image:
-    """对角渐变圆角底（与主图标族同款）。"""
+    """对角渐变圆角底（与主图标族同一风格）。"""
     import numpy as np
 
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -354,7 +354,7 @@ def icon_flow() -> Image.Image:
 
 
 def icon_defectgen() -> Image.Image:
-    """缺陷生成（DefectAugmentStudio，P6/T6-3）：画布 + 橙色瑕疵斑 + 加号。
+    """缺陷生成（DefectAugmentStudio）：画布 + 橙色瑕疵斑 + 加号。
 
     家族规则：单一暖橙焦点=画布上的瑕疵斑（有机形）；画布白描边圆角框；
     右下角白圆底加号=「生成」语义。
@@ -428,3 +428,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

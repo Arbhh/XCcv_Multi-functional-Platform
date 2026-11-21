@@ -1,4 +1,4 @@
-"""统一检出结果 JSON（Q1/Q2/Q5 契约）测试。"""
+"""统一检出结果 JSON 契约测试。"""
 
 import json
 import os
@@ -122,3 +122,5 @@ class ContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

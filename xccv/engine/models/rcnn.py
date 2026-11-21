@@ -3,6 +3,7 @@
 import logging
 import math
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import cv2
@@ -514,7 +515,7 @@ def _rcnn_train_step(net, imgs, tgts, opt, scaler, use_amp: bool,
     裁剪+更新——物理小批次凑等效大批次；sched 由调用方按同序号推进。
     """
     if accum <= 1 or (accum_idx - 1) % accum == 0:
-        opt.zero_grad(set_to_none=True)  # T9-6：梯度清零不驻留旧张量
+        opt.zero_grad(set_to_none=True)  # 梯度清零不驻留旧张量
     with torch.amp.autocast("cuda", enabled=use_amp):
         loss_dict = net(imgs, tgts)
         loss = sum(loss_dict.values())
@@ -618,6 +619,23 @@ def _restore_grad_checkpoint(patched: list) -> None:
             module.__dict__.pop("forward", None)
 
 
+@contextmanager
+def eval_nms_guard(net, value: float = 0.2):
+    """评估期 NMS 口径覆写（进出恢复原值）。
+
+    属性名必须是 roi_heads.nms_thresh——box_nms_thresh 是 RoIHeads 的构造
+    参数名，运行期写入不生效（只会新增一个无人读取的属性，评估口径随
+    上一次 predict 残留值漂移）。
+    """
+    prev = getattr(net.roi_heads, "nms_thresh", None)
+    net.roi_heads.nms_thresh = value
+    try:
+        yield net.roi_heads
+    finally:
+        if prev is not None:
+            net.roi_heads.nms_thresh = prev
+
+
 def _install_cpu_mask_postprocess(net) -> None:
     """推理/验证期把 mask 后处理挪到 CPU 分块执行（用后需 _restore）。
 
@@ -701,7 +719,7 @@ class RCNNModel(BaseModel):
 
             weights18 = ResNet18_Weights.IMAGENET1K_V1 if use_pretrained else None
             if slim_head:
-                # T9-5 slim（FPN64，约 12.5M）：FPN 输出 64 通道；
+                # slim（FPN64，约 12.5M）：FPN 输出 64 通道；
                 # 官方 _resnet_fpn_extractor 硬编码 256，须直构 BackboneWithFPN。
                 # 冻结口径与官方一致（从 layer4 起数 trainable_layers）。
                 from torchvision.models import resnet18
@@ -722,7 +740,7 @@ class RCNNModel(BaseModel):
             else:
                 backbone = resnet_fpn_backbone(
                    backbone_name="resnet18", weights=weights18,
-                   # T9-1 freeze bug：不能写 `trainable_layers or 3`——冻结标志 0
+                   # 冻结语义：不能写 `trainable_layers or 3`——冻结标志 0
                    # 是假值会被覆盖成 3（骨干冻结在 maskrcnn18 上从未生效）
                    trainable_layers=3 if trainable_layers is None
                    else trainable_layers)
@@ -738,7 +756,7 @@ class RCNNModel(BaseModel):
             net.roi_heads.mask_head = MaskRCNNHeads(256, [128, 128], 1)
             net.roi_heads.mask_predictor = MaskRCNNPredictor(128, 128, num_classes)
         if arch == "maskrcnn18" and slim_head:
-            # T9-5 slim 头组：FPN64 → 两层 256 FC + 4×64 掩码头（light 时 2×64）。
+            # slim 头组：FPN64 → 两层 256 FC + 4×64 掩码头（light 时 2×64）。
             # 键名按 torchvision 0.22 实测（TwoMLPHead 两参签名、mask 头 ModuleList
             # 索引直挂、predictor 键 conv5_mask/mask_fcn_logits）——转换器依赖此结构。
             from torchvision.models.detection.faster_rcnn import (
@@ -1030,7 +1048,7 @@ class RCNNModel(BaseModel):
                 "industrial_opt": cfg.industrial_opt, "mask_head_light": cfg.mask_head_light,
                 "slim_head": cfg.slim_head,
                 "anchor_base": anchor_used,
-                # T10-3 联动：部署侧读 meta 决定推理口径（0=跟随画布）
+                # 部署侧读 meta 决定推理口径（0=跟随画布）
                 "train_input": applied_input,
                 # 灰度训练标记随权重走（load_weights/predict 同口径）
                 "color_mode": getattr(cfg, "color_mode", "color"),
@@ -1078,7 +1096,7 @@ class RCNNModel(BaseModel):
                 _restore_rcnn_loss_patches()
 
     # ---- 评估 ----
-    @torch.inference_mode()  # T9-6：评估期免版本图（更省内存）
+    @torch.inference_mode()  # 评估期免版本图（更省内存）
     def _eval_coco(self, vloader) -> dict:
         """COCO mAP 评估（低置信度阈值，保证指标客观）。
 
@@ -1093,15 +1111,16 @@ class RCNNModel(BaseModel):
         if _ts:   # 切图训练：整图验证恢复画布尺寸
             self.net.transform.min_size, self.net.transform.max_size = _ts[2], _ts[3]
         self.net.roi_heads.score_thresh = 0.05
-        # 评估口径对齐参考工具：低 NMS（默认 0.5 压掉密集小目标检出）
-        self.net.roi_heads.box_nms_thresh = 0.2
         if self.device == "cuda":
             # 训练期缓存块先释放：验证期 postprocess 按原图尺寸贴 mask，
             # 需要大块连续显存（此前大图训练在验证阶段 OOM 的直接原因）
             torch.cuda.empty_cache()
         _install_cpu_mask_postprocess(self.net)
         try:
-            dets = self._collect_detections(vloader)
+            # 评估 NMS 固定 0.2 口径：与 predict 的可调 iou 解耦，评估口径
+            # 不受此前 predict(image, conf, iou) 残留的 nms_thresh 影响
+            with eval_nms_guard(self.net, 0.2):
+                dets = self._collect_detections(vloader)
         finally:
             _restore_mask_postprocess(self.net)
         if not dets:
@@ -1264,3 +1283,5 @@ class RCNNModel(BaseModel):
                     "权重结构与模型配置不匹配（常见原因：slim 头/轻量掩码头开关"
                     "与训练时不一致）：" + str(e)) from e
         self.net.to(self.device).eval()
+
+

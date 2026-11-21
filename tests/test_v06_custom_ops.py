@@ -1,4 +1,4 @@
-"""V0.6 T4-4 回归：自定义算子运行时（复合 / 脚本 / .xcvop / 热重载 / 安检）。
+"""自定义算子运行时（复合 / 脚本 / .xcvop / 热重载 / 安检）。
 
 全部用临时算子目录（operators_dir(root)），不触碰真实 platform_data。
 """
@@ -220,3 +220,4 @@ class XcvopAndReloadTest(_TmpRootCase):
 
 if __name__ == "__main__":
     unittest.main()
+

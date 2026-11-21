@@ -480,3 +480,4 @@ class TrtClassifierModel(BaseModel):
         top = int(np.argmax(probs))
         return Prediction(labels=[top], scores=[float(probs[top])],
                           probs=[float(p) for p in probs])
+

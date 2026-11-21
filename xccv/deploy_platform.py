@@ -10,7 +10,7 @@
 JSON 原文）。
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面（argv 分发须与 _MODES 一致）
+if __name__ == "__main__":  # -m 直启先亮加载中界面（argv 分发须与 _MODES 一致）
     import sys as _sys
 
     from xccv.platform_entry import early_splash
@@ -73,7 +73,7 @@ class _HttpMixin:
 
     禁止 `reply.finished.connect(lambda: cb(reply))` 这类持引用写法——
     连接失败/超时时 C++ 侧会立即回收 reply，lambda 访问悬空包装即
-    access violation 原生崩溃（crash.log 实锤）。改为 sender() 模式：
+    access violation 原生崩溃。改为 sender() 模式：
     连接 self 方法，回调内经 self.sender() 取 reply（Qt 保证 slot 执行
     期间有效），cb 用 {reply: cb} 表传递，处理后 deleteLater。
     """
@@ -912,7 +912,7 @@ class ServicePanel(QWidget, _HttpMixin):
             self.tip_label.setText(tr("服务已在运行，无需重复启动"))
             return
         self._service_stopping = False   # 停止过程中允许重新启动
-        # 启动前持久化地址/端口（Q1：监听地址可设；跨机监听时服务端安全
+        # 启动前持久化地址/端口（监听地址可设；跨机监听时服务端安全
         # 收口由 ServiceConfig.__post_init__ 强制启用路径白名单）
         host = self._bind_host()
         if host not in ("127.0.0.1", "localhost", "::1"):
@@ -1277,7 +1277,7 @@ class ServiceWindow(ChromeMainWindow):
         self._page.island_check.toggled.connect(self._sync_island_action)
 
     def _on_tray_activated(self, reason):
-        # 托盘单击/双击恢复窗口（F4/F5 修复：QSystemTrayIcon 此前未在
+        # 托盘单击/双击恢复窗口（QSystemTrayIcon 此前未在
         # 本方法作用域导入 → 每次点击托盘图标 NameError）
         from PyQt5.QtWidgets import QSystemTrayIcon
 
@@ -1589,3 +1589,5 @@ if __name__ == "__main__":
 # ---- Cython 编译态槽包装（见 xccv/qt_slots.py；新增 UI 模块必须加） ----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+

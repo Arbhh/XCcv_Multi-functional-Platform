@@ -2,7 +2,7 @@
 
 来源：CIF（AAAI 2026，arXiv 2511.05966）少样本多模态异常检测；本地复现
 `E:\Zcode\Study\CIF`（B+）。平台集成口径按集成设计落地。
-依赖对齐：主路径与复现工程同款——timm ViT 特征
+依赖对齐：主路径与参考实现一致——timm ViT 特征
 （dino_vit.py）、sklearn.KMeans(random_state=0)、anomalib SRP(eps=0.9)
 （三包均已随复现装在平台 venv，不新增安装）；anomalib/timm/sklearn 缺失
 时各自回退（cv2.kmeans / 纯 torch ViT / 原始特征直算），零依赖能力保留。
@@ -17,7 +17,7 @@ torchmetrics 仍不需要（平台自有 image_auroc/image_ap）。
    K-Center-Greedy 共采样收缩（整体 10%，绝对上限 MAX_MEMORY_NODES）；
 4. 推理：测试图超图与记忆库超图拼联合超图做 Bi-TF-MP（L=1、α=0.9、topk=1、
    双向）→ 传播后节点 1-NN 距离 × 超边级检索（topk=3）分数相乘 → 上采样
-   224 → ^1.5 → 均值卷积平滑（5×5×5 + 7×7×3）→ 与 patchcore 同款 z 标定
+   224 → ^1.5 → 均值卷积平滑（5×5×5 + 7×7×3）→ 与 patchcore 一致的 z 标定
    阈值语义（conf→z=1/conf−1）→ 连通域出框/掩码 + 图像级 z 分数。
 
 ------------------------------------------------------------------------
@@ -93,7 +93,7 @@ def _kmeans(feats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """K-Means（返回 (labels(M,), centers(k,D))）。
 
     主路径 = sklearn.KMeans(n_clusters=k, random_state=0, n_init='auto')，
-    与复现工程逐参同款。
+    与参考实现逐参一致。
     回退 = cv2.kmeans（kmeans++ 同语义；内部 RNG 随进程推进，先
     setRNGSeed(0) 复位保持同输入 ⇒ 同输出）。
     """
@@ -114,7 +114,7 @@ def _kmeans(feats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _make_srp(seed: int):
-    """anomalib SparseRandomProjection(eps=0.9)（复现工程 KCenter 同款）。
+    """anomalib SparseRandomProjection(eps=0.9)（参考实现 KCenter 算法）。
 
     返回工厂函数；anomalib 缺失回退复现工程 anomalib_compat 的本地 JL 实现；
     两者都缺返回 None（调用方退原始特征直算）。
@@ -131,7 +131,7 @@ def _make_srp(seed: int):
         from sklearn.random_projection import johnson_lindenstrauss_min_dim
 
         class _LocalSRP:
-            """复现工程 utils/anomalib_compat.py 的 fallback 同款（sklearn-JL）。"""
+            """anomalib 兼容层的 fallback 实现（sklearn-JL）。"""
 
             def __init__(self, eps: float, random_state: int | None):
                 self.eps = eps
@@ -235,7 +235,7 @@ class _BiTFMP:
         h = torch.zeros(b, n + a, e_cross, device=dev)
         idx = torch.arange(n, device=dev)
         for bi in range(b):
-            h[bi, idx, idx] = 1.0                      # 自环边（上游同款）
+            h[bi, idx, idx] = 1.0                      # 自环边（与上游实现一致）
             for k in range(self.topk):
                 # 前向边 j（列 j）：行 = j + knn[j,k]（上游 scatter_ 语义：
                 # 边含测试节点 j 与其最近记忆节点，列=边 id、行=成员）
@@ -358,7 +358,7 @@ def _hyper_search(features_test: torch.Tensor, adj: torch.Tensor,
                 dist = _euclidean_dist(n1, n2)
                 scores[b, mask_e1] = dist.min(dim=1).values
             elif n1.shape[0] > 0:
-                scores[b, mask_e1] = 1e6                # 无匹配簇（上游同款）
+                scores[b, mask_e1] = 1e6                # 无匹配簇（与上游实现一致）
     return scores
 
 
@@ -386,8 +386,8 @@ def _kcenter_greedy(feats: torch.Tensor, n_select: int,
                     rng: np.random.Generator) -> torch.Tensor:
     """K-Center-Greedy coreset（原始特征直算，SRP 不可用时的回退路径）。
 
-    feats (M,D)；返回选中索引。选 1 个时取 medoid（最小化最大距离，上游
-    n_sample==1 分支同款）；多个时逐中心增量更新最小距离，起始点由 rng
+    feats (M,D)；返回选中索引。选 1 个时取 medoid（最小化最大距离，与上游
+    n_sample==1 分支一致）；多个时逐中心增量更新最小距离，起始点由 rng
     抽取。
     """
     m = feats.shape[0]
@@ -414,7 +414,7 @@ def _kcenter_greedy_srp(feats: torch.Tensor, n_select: int, seed: int,
                         ) -> torch.Tensor:
     """上游 sampling.KCenterGreedy 对齐版：SRP(eps=0.9) 降维后贪心。
 
-    起始点 = torch.randint（上游同款，全局 torch 种子由 BaseModel.train
+    起始点 = torch.randint（与上游实现一致，全局 torch 种子由 BaseModel.train
     的 manual_seed(cfg.seed) 驱动）；SRP 由 seed 显式定随机矩阵（确定）。
     SRP 库缺失时退 _kcenter_greedy 原始特征路径。
     """
@@ -426,7 +426,7 @@ def _kcenter_greedy_srp(feats: torch.Tensor, n_select: int, seed: int,
     proj = factory().fit(feats).transform(feats)        # (M, D')
     min_dist: torch.Tensor | None = None
     selected: list[int] = []
-    idx = int(torch.randint(high=m, size=(1,)).item())  # 上游同款起始
+    idx = int(torch.randint(high=m, size=(1,)).item())  # 与上游实现一致的起始
     for _ in range(n_select):
         d = torch.cdist(proj[idx:idx + 1], proj).reshape(-1)
         min_dist = d if min_dist is None else torch.minimum(min_dist, d)
@@ -445,7 +445,7 @@ def _sample_nodes(node_bank: torch.Tensor, num_clusters: int,
     """按簇 K-Center-Greedy 共采样（上游 sampling.sample_nodes 对齐版）。
 
     node_bank (M,769) 末列簇 id；目标 = min(总量×ratio, max_nodes)；
-    n_sel==1 取 medoid（上游原始 cdist 分支同款），多选走 SRP 贪心。
+    n_sel==1 取 medoid（与上游原始 cdist 分支一致），多选走 SRP 贪心。
     """
     total = node_bank.shape[0]
     target = min(max(1, int(total * sampling_ratio)), max_nodes, total)
@@ -624,7 +624,7 @@ class CifModel(BaseModel):
     # ---- 训练 ----
     def fit(self, data, cfg: TrainConfig, reporter: TrainReporter | None = None) -> dict:
         reporter = reporter or TrainReporter()
-        self.image_size = self.default_image_size     # CIF 固定 224（§2.3 口径）
+        self.image_size = self.default_image_size     # CIF 固定 224（论文 §2.3 口径）
         ok_labels = {c for c in (data.classes or []) if is_negative_dir_name(c)}
         pool = ([s for s in data.train_samples if s.label in ok_labels]
                 if ok_labels else list(data.train_samples))
@@ -821,3 +821,6 @@ class CifModel(BaseModel):
         if sha and not fingerprint_matches(sha):
             log.warning("DINO 权重指纹与训练时不一致（%s ≠ 当前权重），"
                         "特征空间可能漂移，建议用同权重文件复训", sha[:16])
+
+
+

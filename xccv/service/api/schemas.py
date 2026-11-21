@@ -27,3 +27,4 @@ class AdminShutdownRequest(BaseModel):
 def error_envelope(code: str, message: str, detail: str = "") -> dict:
     """统一错误结构（SDK 映射为 XccvException 子类）。"""
     return {"code": code, "message": message, "detail": detail}
+

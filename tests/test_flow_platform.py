@@ -23,7 +23,7 @@ from xccv.engine.models.base import Prediction
 
 
 def _wait_scan(page, timeout_s: float = 30.0):
-    """T2-3：目录扫描已后台化——泵事件直到扫描线程收尾。"""
+    """目录扫描已后台化——泵事件直到扫描线程收尾。"""
     from PyQt5.QtCore import QEventLoop, QTimer
 
     from PyQt5.QtWidgets import QApplication
@@ -214,3 +214,4 @@ class FlowBatchThreadTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -384,3 +384,4 @@ def dice_bce_mask_loss(mask_logits, mask_targets) -> torch.Tensor:
     card = probs.sum(dim=dims) + mask_targets.sum(dim=dims)
     dice = 1 - ((2 * inter + 1) / (card + 1)).mean()
     return 0.5 * bce + 0.5 * dice
+

@@ -9,7 +9,7 @@
 运行：python -m xccv.annotation.annotator_window [数据集目录]
 """
 
-if __name__ == "__main__":  # V0.6 T1-3：-m 直启先亮加载中界面，再做下方重型模块级导入
+if __name__ == "__main__":  # -m 直启先亮加载中界面，再做下方重型模块级导入
     from xccv.platform_entry import early_splash
 
     early_splash("annotation", "标注平台")
@@ -46,7 +46,7 @@ def build_window(dataset=None):
     from ..status_bus import attach_platform_status
 
     attach_platform_status(window, "标注平台", "annotation")
-    # V0.6 T5-4：AI 批量预标注入口（工具菜单；labelme 子目录从外部挂菜单）
+    # AI 批量预标注入口（工具菜单；labelme 子目录从外部挂菜单）
     try:
         from PyQt5.QtWidgets import QAction
 
@@ -93,3 +93,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,7 +1,7 @@
 """拓扑执行引擎：Kahn 排序 + 环检测（报环路径）+ 端口类型检查 + 会话缓存。
 
 - 输入图 JSON 与画布 serialize 同源（LiteGraph 兼容 nodes/links；
-  链接兼容 5 元与 6 元格式，见坑 17/）；
+链接兼容 5 元与 6 元格式）；
 - 端口按槽序对齐注册类的 INPUTS/OUTPUTS；一个输入端口只允许一条入线；
 - 缓存 = 会话内记忆化：键 (node_id, params_hash, 各输入对象 id)，
   生命周期与 RunContext 相同——"单节点重跑"是调试语义，不做跨运行缓存；
@@ -60,7 +60,7 @@ class Executor:
     def __init__(self, graph: dict, ctx: RunContext | None = None,
                  external: dict | None = None):
         """external：{(节点id, 输入槽): 数据}——无连线的输入槽从这里取值
-        （自定义复合算子把外部输入注入子流程，V0.6 T4-4；默认 None 行为不变）。"""
+        （自定义复合算子把外部输入注入子流程；默认 None 行为不变）。"""
         self.ctx = ctx or RunContext()
         self._external = dict(external or {})
         self._specs: dict = {}
@@ -437,3 +437,5 @@ def format_session_logs(logs: list) -> str:
     for e in logs:
         lines.append(f"[{e['level']}] {e['node']}(#{e['node_id']})：{e['message']}")
     return "\n".join(lines)
+
+

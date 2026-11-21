@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""V0.6 P6/T6-4：缺陷生成（DefectAugmentStudio 移植）测试。
+"""缺陷生成（DefectAugmentStudio 移植）测试。
 
 三层结构：
 - 后端契约（FastAPI 经真实 uvicorn port=0 起服）——任何平台都跑；
@@ -29,13 +29,13 @@ import uvicorn  # noqa: E402
 from xccv.defectgen.backend.app import create_app  # noqa: E402
 
 
-_APP_HOLD = None  # QApplication 必须持引用，否则被 GC（P188 同族）
+_APP_HOLD = None  # QApplication 必须持引用，否则被 GC
 
 
 def _ensure_app():
     """创建/复用 QApplication。AA_ShareOpenGLContexts 仅在非 offscreen 平台
     设置：offscreen 插件无 GL 上下文，带该属性构造 QApplication 会直接
-    fail-fast（实测 0xC0000409，P188）；offscreen 下也不会导入 QtWebEngine，
+    fail-fast（实测 0xC0000409）；offscreen 下也不会导入 QtWebEngine，
     不需要该属性。"""
     global _APP_HOLD
     from PyQt5.QtWidgets import QApplication
@@ -87,7 +87,7 @@ def _get(port, path, timeout=8):
 
 
 class DefectgenBackendContractTest(unittest.TestCase):
-    """后端契约：health / 首页 / 静态 MIME（P187 锁）/ 路由清单。"""
+    """后端契约：health / 首页 / 静态 MIME/ 路由清单。"""
 
     def test_health_and_index(self):
         with _serve() as port:
@@ -159,7 +159,7 @@ class DefectgenEntryContractTest(unittest.TestCase):
             self.assertTrue((assets / f).is_file(), f)
 
     def test_window_module_discipline_text(self):
-        """不导入模块，锁定 T6-2 纪律点（动态端口/停服/页面销毁/GL 共享）。"""
+        """不导入模块，锁定 设计纪律点（动态端口/停服/页面销毁/GL 共享）。"""
         src = (ROOT / "xccv" / "defectgen" / "defectgen_window.py"
                ).read_text(encoding="utf-8")
         for token in ("AA_ShareOpenGLContexts", "port=0", "should_exit",
@@ -169,7 +169,7 @@ class DefectgenEntryContractTest(unittest.TestCase):
 
 
 def _shell_ok():
-    """壳测试运行前提（装饰期判断，P190）：
+    """壳测试运行前提（装饰期判断）：
     - 平台非 offscreen6052offscreen 无 GL 上下文）；
     - QApplication 尚未创建6102必须先导入窗口模块再建 app——gate 单进程
       discovery 里 runner/兄弟测试早已建 app 且无 AA 标志，此时导入
@@ -186,7 +186,7 @@ def _shell_ok():
                      "QtWebEngine 壳需独立进程/独立平台（当前进程"
                      "已有 QApplication 或平台为 offscreen，均不能安全导入）")
 class DefectgenWindowShellTest(unittest.TestCase):
-    """T6-4 验收：Qt 壳完整生命周期（真实窗口，windows 平台专项）。"""
+    """Qt 壳完整生命周期（真实窗口，windows 平台专项）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -274,3 +274,5 @@ class DefectgenWindowShellTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

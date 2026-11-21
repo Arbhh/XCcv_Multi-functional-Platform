@@ -205,3 +205,4 @@ class MeasureAngle(VisionNode):
         if img is not None:
             out["image"] = img
         return out
+

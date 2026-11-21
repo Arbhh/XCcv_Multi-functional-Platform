@@ -43,3 +43,4 @@ class UniqueLabelQListWidget(EscapableQListWidget):
         item.setSizeHint(qlabel.sizeHint())
 
         self.setItemWidget(item, qlabel)
+

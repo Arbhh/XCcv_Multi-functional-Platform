@@ -39,7 +39,7 @@ def class_color(index: int) -> tuple:
 
 
 def _align_mask(mask, image_hw):
-    """把掩码对齐到图像尺寸；无法对齐时返回 None（防御，T1-1 双保险）。
+    """把掩码对齐到图像尺寸；无法对齐时返回 None（防御，双保险）。
 
     推理侧应已把掩码还原到原图尺寸；这里兜底防止任何来源的分辨率不一致
     再把 IndexError 漏成未捕获异常：形状不符先尝试最近邻缩放，仍失败跳过。
@@ -74,7 +74,7 @@ def draw_predictions(image_bgr: np.ndarray, prediction, classes: list[str],
             out = _draw_text(out, f"{label}  {score:.2f}", (8, 8), class_color(0))
         return out
 
-    # 判空不用真值（防御：上游若给 3 维 ndarray，`if masks:` 真值歧义抛错，P150）
+    # 判空不用真值（防御：上游若给 3 维 ndarray，`if masks:` 真值歧义抛错）
     if show_masks and prediction.masks is not None and len(prediction.masks) > 0:
         h, w = out.shape[:2]
         for raw_mask, idx in zip(prediction.masks, prediction.labels):
@@ -114,3 +114,4 @@ def _draw_text(image_bgr: np.ndarray, text: str, origin_xy, color_bgr) -> np.nda
     draw.text((x, y), text, font=font, fill=(255, 255, 255), stroke_width=1,
               stroke_fill=(0, 0, 0))
     return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+

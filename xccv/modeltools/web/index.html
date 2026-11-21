@@ -357,7 +357,7 @@ for(const k of Object.keys(LiteGraph.registered_node_types))
 const SCHEMA = {};          // type -> {name, category, desc, inputs, outputs, params}
 const PORT_COLORS = {};     // 端口类型 -> 颜色（PORT_TYPES 下发，不重复维护）
 const PORT_DESC = {};       // 端口类型 -> 中文描述（连线拒绝提示用）
-const CAT_GROUP = {         // 节点库分组（Q3：AI 算子 / 传统算子 / 通用算子）
+const CAT_GROUP = {         // 节点库分组（AI 算子 / 传统算子 / 通用算子）
   "图像源": "输入", "AI": "AI 算子", "预处理": "传统算子", "定位": "传统算子",
   "逻辑": "传统算子", "检出过滤": "传统算子", "测量": "传统算子", "自定义": "传统算子",
   "通用": "通用算子",
@@ -824,7 +824,7 @@ function loadFlow(flow){
   for(const n of graph._nodes) if(n.onConfigure) n.onConfigure();
   // 节点尺寸归一化：
   // 过窄/未计算的 size 用 computeSize 重算；新算子节点最小宽度 190，
-  // 中文标签与路径文本才显示得全（坑 34 同族）
+  // 中文标签与路径文本才显示得全
   for(const n of graph._nodes){
     if(!n.size || n.size[0] < 60 || n.size[1] < 20) n.size = n.computeSize();
     if(String(n.type).startsWith("xccv2/") && n.size[0] < 190)
@@ -1597,3 +1597,4 @@ __applyI18N();
 </script>
 </body>
 </html>
+

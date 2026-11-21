@@ -185,7 +185,7 @@ class TrainingWindowTest(unittest.TestCase):
         self.assertEqual(self.win._cards[0].project_name, "ui")
 
     def _wait_stats(self, pw, timeout_s: float = 30.0):
-        """T2-5：统计已后台化——泵事件直到统计线程收尾。"""
+        """统计已后台化——泵事件直到统计线程收尾。"""
         from PyQt5.QtCore import QEventLoop, QTimer
 
         deadline = time.monotonic() + timeout_s
@@ -205,7 +205,7 @@ class TrainingWindowTest(unittest.TestCase):
         self.assertEqual(pw.info_name.text(), "ui")
         self.assertEqual(pw.par_model.currentData(), "yolo11n")
         QApplication.processEvents()  # 数据集统计已延迟（窗口先显示，统计随后补齐）
-        self._wait_stats(pw)  # T2-5：统计后台线程收尾后断言
+        self._wait_stats(pw)  # 统计后台线程收尾后断言
         self.assertTrue(pw.stats_hint.text().startswith("共 4 张"))
 
     def test_multi_open_and_singleton(self):
@@ -258,3 +258,5 @@ class TrainingWindowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

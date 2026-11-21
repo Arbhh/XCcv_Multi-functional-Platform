@@ -150,7 +150,7 @@ class WorkerThread(QThread):
             self.failed.emit(f"{type(e).__name__}: {e}")
 
 
-# ---- 剪枝进程隔离参数（P7/T7-1 强制防死机项）----
+# ---- 剪枝进程隔离参数（强制防死机项）----
 PRUNE_RAM_LIMIT_PCT = 80     # 系统 RAM 占比 ≥ 此值 → 自动终止剪枝子进程+告警
 PRUNE_HARD_TIMEOUT_S = 600   # 硬超时（秒），超时同样自动终止
 PRUNE_POLL_MS = 500          # 水位轮询周期
@@ -1178,3 +1178,4 @@ if __name__ == "__main__":
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+

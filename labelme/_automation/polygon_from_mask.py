@@ -38,3 +38,4 @@ def compute_polygon_from_mask(mask: npt.NDArray[np.bool_]) -> npt.NDArray[np.flo
         imgviz.io.imsave("contour.jpg", np.asarray(image_pil))
 
     return polygon[:, ::-1]  # yx -> xy
+

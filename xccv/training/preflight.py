@@ -45,7 +45,7 @@ class DatasetFacts:
     class_counts: dict = field(default_factory=dict)
     n_images: int = 0
     aspect_ratio: float = 1.0   # max(w/h) / min(w/h)；样本不足时为 1.0
-    max_dim_p90: float = 0.0    # P90 图像最长边（T9-3 大图判据；0=未知）
+    max_dim_p90: float = 0.0    # P90 图像最长边（大图判据；0=未知）
 
 
 def dataset_facts(samples) -> DatasetFacts:
@@ -200,7 +200,7 @@ def recommend_settings(project, facts: DatasetFacts | None,
     # 轮次智能推荐——**保守口径**：只在小数据且当前轮次明显
     # 不足（<20）时升级到 60（早停耐心兜底）。不做"大档推荐"：预设
     # （如 quality=300 轮）是用户的显式选择，推荐不与之打架
-    # （f7e 实锤：无条件 epochs 推荐会覆盖预设/污染保守断言）。
+    # （无条件 epochs 推荐会覆盖预设/污染保守断言）。
     if task in ("detection", "segmentation") and 0 < max_count < 300 \
             and 0 < int(getattr(project, "epochs", 0)) < 20:
         recs.append(("epochs", 60, tr(
@@ -217,3 +217,4 @@ def recommend_settings(project, facts: DatasetFacts | None,
         recs.append(("use_amp", False, tr(
             "无 GPU：关闭 AMP 混合精度（CPU 下本不生效）")))
     return recs
+

@@ -363,7 +363,7 @@ class ProjectReviewPage(QWidget):
         self._refresh_projects()
 
     def _set_scope(self, scope: str, initial: bool = False):
-        """已评估/未评估解耦切换（V0.7.2 任务③）：分组与曲线同步换口径。"""
+        """已评估/未评估解耦切换：分组与曲线同步换口径。"""
         scope = "unjudged" if scope == "unjudged" else "evaluated"
         self._scope = scope
         self.btn_scope_eval.setChecked(scope == "evaluated")
@@ -530,7 +530,7 @@ class ProjectReviewPage(QWidget):
         th.start()
 
     def _show_banner(self, text: str):
-        """顶部悬浮胶囊（U1 同款样式）：批量加载中提示。"""
+        """顶部悬浮胶囊：批量加载中提示。"""
         self._hide_banner()
         banner = QLabel(text, self)
         banner.setStyleSheet(
@@ -611,7 +611,7 @@ class ProjectReviewPage(QWidget):
         groups = classify_images(self._stats, thresholds)
         self._items_by_path.clear()
         if self._scope == "unjudged":
-            # V0.7.2 任务③：未评估按有无过阈检出分 NG/OK
+            # 未评估按有无过阈检出分 NG/OK
             ok_entries, ng_entries = [], []
             for e in groups["unjudged_list"]:
                 (ng_entries if e.get("fp") else ok_entries).append(e)
@@ -719,7 +719,7 @@ class ProjectReviewPage(QWidget):
 
 
 class _ThumbWorker(QThread):
-    """缩略图工作线程（data_grid 同款纪律：子线程解码 QImage，主线程建 QPixmap）。"""
+    """缩略图工作线程（data_grid 相同纪律：子线程解码 QImage，主线程建 QPixmap）。"""
 
     ready = pyqtSignal(list)
 
@@ -751,3 +751,6 @@ class _ThumbWorker(QThread):
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+
+
+

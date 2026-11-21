@@ -126,3 +126,4 @@ def unload_flow(req: UnloadFlowBody, request: Request):
 @router.get("/status")
 def flow_status(request: Request):
     return {"flows": get_flow_manager(request).list()}
+

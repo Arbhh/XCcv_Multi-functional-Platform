@@ -1,4 +1,4 @@
-"""V0.6 T2-2~T2-7 回归：全局流畅度治理（后台化/分桶/防抖/缓存）。"""
+"""全局流畅度治理（后台化/分桶/防抖/缓存）。"""
 
 import os
 import tempfile
@@ -48,7 +48,7 @@ def _flush_deferred():
 
 
 class DataHealthBucketTest(unittest.TestCase):
-    """T2-4：分桶聚类与全量两两比对结果等价（同一判定谓词）。"""
+    """分桶聚类与全量两两比对结果等价（同一判定谓词）。"""
 
     @staticmethod
     def _make_hashes(n_unique: int = 60, dup_clusters: int = 4) -> dict:
@@ -114,7 +114,7 @@ class DataHealthBucketTest(unittest.TestCase):
 
 
 class WorkbenchAsyncTest(unittest.TestCase):
-    """T2-2：试跑后台化——提交后主线程立即可继续（线程在跑），完成后结果回填。"""
+    """试跑后台化——提交后主线程立即可继续（线程在跑），完成后结果回填。"""
 
     def test_run_single_async_with_wait(self):
         _app()
@@ -144,7 +144,7 @@ class WorkbenchAsyncTest(unittest.TestCase):
 
 
 class SearchDebounceTest(unittest.TestCase):
-    """T2-7：textChanged 走 300ms 防抖（一次输入风暴只触发一次过滤）。"""
+    """textChanged 走 300ms 防抖（一次输入风暴只触发一次过滤）。"""
 
     def test_debounce_batches_typing(self):
         from unittest import mock
@@ -167,7 +167,7 @@ class SearchDebounceTest(unittest.TestCase):
 
 
 class FlowTreeAsyncTest(unittest.TestCase):
-    """T2-3：目录扫描后台化 + 预览缓存命中。"""
+    """目录扫描后台化 + 预览缓存命中。"""
 
     def _make_page(self, images: int = 120):
         _app()
@@ -229,3 +229,4 @@ class FlowTreeAsyncTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

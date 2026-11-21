@@ -3,7 +3,7 @@
 设计 Token 见 ui_style.C/R/SP；本模块只依赖 ui_style 与轻量路径工具，
 禁 torch / QtWebEngine 依赖（可复用逻辑不进重模块）。
 
-Cython 约束：信号一律连 self 具名方法（禁无参 lambda——P06/P48）；
+Cython 约束：信号一律连 self 具名方法（禁无参 lambda）；
 本模块末尾 apply_auto_slot_module(globals())。
 """
 
@@ -522,3 +522,4 @@ def save_prefs(prefs: dict) -> None:
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 
 apply_auto_slot_module(globals())
+

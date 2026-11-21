@@ -793,3 +793,4 @@ class YoloModel(BaseModel):
         trt = meta.get("trt_build")
         if trt:
             self._meta_trt_build = str(trt)
+

@@ -498,7 +498,7 @@ def _val_data():
 
 class YoloLooseMetricTest(unittest.TestCase):
     """宽松口径：YOLO 路径此前不产出 map_loose（训练表恒 0）；逐轮评估复用
-    验证期已 NMS 的检出（on_val_start 挂不上 trainer 回调，P203）。"""
+    验证期已 NMS 的检出（on_val_start 挂不上 trainer 回调）。"""
 
     def test_validator_wrap_collects_scaled_dets(self):
         from xccv.engine.models.yolo import YoloModel
@@ -567,3 +567,4 @@ class YoloLooseMetricTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

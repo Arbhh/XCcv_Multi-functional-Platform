@@ -120,6 +120,10 @@ export async function composite(payload, signal) {
   return { blob, name, notes };
 }
 
+export async function allowDir(dir) { return jsonOrThrow(await fetch('/api/allow_dir', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir }),
+})); }
+
 export const batch = {
   async start(payload) { return jsonOrThrow(await fetch('/api/batch/start', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -127,3 +131,4 @@ export const batch = {
   async status(jid) { return jsonOrThrow(await fetch('/api/batch/status/' + jid)); },
   async cancel(jid) { return jsonOrThrow(await fetch('/api/batch/cancel/' + jid, { method: 'POST' })); },
 };
+

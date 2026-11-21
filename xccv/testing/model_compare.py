@@ -1,7 +1,7 @@
 """模型 A/B 批量比对（纯逻辑，不依赖 Qt）。
 
 对同一批图片，把「已完成的模型 A 批量结果」与「模型 B 复推结果」逐图
-对比：两模型分别与同名 labelme GT 匹配（batch_match 同款贪心一对一、
+对比：两模型分别与同名 labelme GT 匹配（batch_match 相同的贪心一对一、
 ignore 区域同口径），按图给出判定：
 
 - 有 GT 图：优势分 = 命中数 − 误检数；差值 >0 → A 优 / <0 → B 优 / =0 → 一致；
@@ -104,3 +104,5 @@ def build_compare_payload(model_a_name: str, model_b_name: str, conf: float,
 def save_compare_json(path, payload: dict) -> None:
     Path(path).write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+

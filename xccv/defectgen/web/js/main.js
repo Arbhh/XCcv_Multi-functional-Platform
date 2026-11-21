@@ -35,7 +35,7 @@ export async function openTarget(fileOrBlob, name) {
     id: uid(), name: name || 'target',
     w, h, bitmap,
     proxyScale: fullW > 0 ? w / fullW : 1,   // 代理/原图比例（全分辨率烘焙与 1:1 导出用）
-    originalBlob: blob,      // 全分辨率导出用（规格 §7.2）
+    originalBlob: blob,      // 全分辨率导出用
     fullW, fullH,
   };
   invalidateTargetB64();
@@ -288,3 +288,5 @@ boot().catch((e) => {
       + '\n（若提示 MIME 类型错误，多为系统把 .js 关联成了 text/plain，详见 README 常见问题）\n';
   }
 });
+
+

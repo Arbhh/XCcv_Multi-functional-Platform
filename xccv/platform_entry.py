@@ -74,7 +74,7 @@ def _forward_args() -> list:
 
 
 def early_splash(key: str, display_name: str, heavy: bool = False) -> None:
-    """入口模块最顶部调用：先于模块级重型导入显示加载中界面（V0.6 T1-3）。
+    """入口模块最顶部调用：先于模块级重型导入显示加载中界面。
 
     `pythonw -m <平台模块>` 直启时，模块级导入（pyqtgraph/matplotlib/cv2…）
     全部发生在 main()→run_platform 之前——实测训练平台首窗 765ms，超出
@@ -160,7 +160,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     # 等各平台共用此入口，一次设置全覆盖）
     app.setDoubleClickInterval(250)
     install_excepthook(display_name)
-    install_freeze_watchdog()  # T2-1：主线程卡顿留痕（50ms 级心跳，无常驻负载）
+    install_freeze_watchdog()  # 主线程卡顿留痕（50ms 级心跳，无常驻负载）
     from .ui_style import install_theme_watcher
 
     install_theme_watcher()  # F2-5：主界面切主题 → 本平台进程同步（文件通知，非轮询）
@@ -170,7 +170,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     if already_running(key, _forward_args()):
         return  # 已有实例：激活旧窗口（并转发业务参数）后本进程退出
 
-    heavy = bool(heavy)  # 静态声明，不做运行时探测（修 P94，见 docstring）
+    heavy = bool(heavy)  # 静态声明，不做运行时探测（见 docstring）
     from .splash import LoadingSplash
 
     splash = LoadingSplash.show_splash(
@@ -181,7 +181,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
         log.warning("平台窗口构建失败（闪屏已收尾，原样上抛）", exc_info=True)
         splash.finish()
         raise
-    from .i18n import localize_widget_tree  # V0.7.2 平台总体①：英文模式替换层
+    from .i18n import localize_widget_tree  # 英文模式替换层
 
     localize_widget_tree(window)
     window.show()
@@ -296,3 +296,5 @@ def _selftest(display_name: str, build) -> None:
     app.processEvents()
     print(f"SELFTEST OK {display_name}")
     window.close()
+
+

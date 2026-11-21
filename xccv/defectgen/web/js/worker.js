@@ -1,4 +1,4 @@
-/* Defect Augment Studio — 渲染 Worker（规格 §7.1 非协商规则）
+/* Defect Augment Studio — 渲染 Worker（非协商规则）
  *
  * 画布绘制全部在本 Worker 的 OffscreenCanvas 上进行，主线程只发送命令与帧状态，
  * Worker 不持有业务状态。分层：
@@ -422,7 +422,7 @@ function drawInstance(inst) {
     applyLut(tctx, temp, app.brightness || 0, app.contrast || 1);
   }
 
-  // 模糊：颜色模糊但保持轮廓 alpha（外观仅作用于 mask 内，规格 §6.3）
+  // 模糊：颜色模糊但保持轮廓 alpha（外观仅作用于 mask 内）
   let result = temp;
   if (app.blur > 0) {
     const work = sized(pool, 'work', bw, bh);
@@ -1021,3 +1021,6 @@ function renderLayerRequest(m) {
     self.postMessage({ t: 'layer', reqId: m.reqId, bitmap: bmp, x: x0, y: y0, w: bw, h: bh }, [bmp]);
   }).catch((err) => self.postMessage({ t: 'layer', reqId: m.reqId, error: String(err) }));
 }
+
+
+

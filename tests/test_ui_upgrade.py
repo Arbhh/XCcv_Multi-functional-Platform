@@ -1,4 +1,4 @@
-"""UI 升级批次测试：Token 化主题（期0）+ 公共组件 + 各期回归锁。
+"""UI 升级测试：Token 化主题 + 公共组件 + 回归锁。
 
 约束：（字号≥15px、模板占位
 全部替换、Cython 槽包装）；组件行为与 ui_widgets/ui_style 对应。
@@ -48,7 +48,7 @@ class ThemeTokenTest(unittest.TestCase):
     def test_version_bumped(self):
         import xccv
 
-        self.assertEqual(xccv.__version__, "0.8.0")
+        self.assertEqual(xccv.__version__, "0.8.1")
 
     def test_launcher_has_deploy_family(self):
         from xccv.launcher import PLATFORMS
@@ -299,7 +299,7 @@ class HomeWindowShellTest(unittest.TestCase):
         self.assertEqual(len(visible), 4)
 
     def test_recent_projects_refresh(self):
-        """v0.5.5追加-①：最近项目随主界面显示/回 AI 页/窗口激活实时重建。"""
+        """最近项目随主界面显示/回 AI 页/窗口激活实时重建。"""
         from unittest import mock
 
         from xccv import app as app_mod
@@ -697,7 +697,7 @@ class Phase4PolishTest(_TrainEnv):
 
 
 class ChromeHitTestTest(unittest.TestCase):
-    """v0.5.5 回归：无边框命中测试（P128——QPoint 漏导入导致鼠标移动
+    """无边框命中测试（QPoint 漏导入导致鼠标移动
     即 NameError；此处直接构造 WM_NCHITTEST 消息走 nativeEvent）。"""
 
     @classmethod
@@ -934,3 +934,6 @@ class StoppingStateMachineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

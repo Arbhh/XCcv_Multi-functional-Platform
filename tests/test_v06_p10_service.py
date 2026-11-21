@@ -1,4 +1,4 @@
-"""P10 部署性能阶段回归（T10-1/3/4/8/9/10）：计时头/尺寸策略/双模式 Key/预载/WS。
+"""部署性能阶段回归：计时头/尺寸策略/双模式 Key/预载/WS。
 
 全部离线 CPU 跑（假模型直插 manager 池），不依赖真实权重与 GPU。
 """
@@ -59,7 +59,7 @@ def _register(app, model=None, model_id="t-1"):
 
 
 class TimingHeaderTest(unittest.TestCase):
-    """T10-1：X-XCcv-Timing 计时头三态。"""
+    """X-XCcv-Timing 计时头三态。"""
 
     def _client(self, cfg):
         app = create_app(cfg)
@@ -88,7 +88,7 @@ class TimingHeaderTest(unittest.TestCase):
 
 
 class QueryKeyTest(unittest.TestCase):
-    """T10-8：?api_key= 查询串仅回环放行。"""
+    """?api_key= 查询串仅回环放行。"""
 
     def setUp(self):
         self.app = create_app(ServiceConfig(api_key=_KEY))
@@ -114,14 +114,14 @@ class QueryKeyTest(unittest.TestCase):
 
 
 class FlowRunSyncTest(unittest.TestCase):
-    """T10-4：/v1/flow/run 必须是同步 def（推理在线程池，不阻事件循环）。"""
+    """/v1/flow/run 必须是同步 def（推理在线程池，不阻事件循环）。"""
 
     def test_flow_run_not_coroutine(self):
         self.assertFalse(inspect.iscoroutinefunction(flow_run))
 
 
 class MaxSideTest(unittest.TestCase):
-    """T10-3：降采样推理+坐标还原。"""
+    """降采样推理+坐标还原。"""
 
     def test_downscale_and_restore(self):
         app = create_app(ServiceConfig(api_key=_KEY))
@@ -150,7 +150,7 @@ class MaxSideTest(unittest.TestCase):
 
 
 class PreloadTest(unittest.TestCase):
-    """T10-9：min_loaded_models 预载（失败不阻断服务）。"""
+    """min_loaded_models 预载（失败不阻断服务）。"""
 
     def test_preload_failure_tolerated(self):
         cfg = ServiceConfig(api_key=_KEY,
@@ -170,7 +170,7 @@ class PreloadTest(unittest.TestCase):
 
 
 class WsInferTest(unittest.TestCase):
-    """T10-10：WebSocket 二进制通道往返与 HTTP 同结果。"""
+    """WebSocket 二进制通道往返与 HTTP 同结果。"""
 
     def test_ws_roundtrip_matches_http(self):
         app = create_app(ServiceConfig(api_key=_KEY))
@@ -204,3 +204,4 @@ class WsInferTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

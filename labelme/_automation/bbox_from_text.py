@@ -92,3 +92,4 @@ def get_shapes_from_bboxes(
         }
         shapes.append(shape)
     return shapes
+

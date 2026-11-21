@@ -567,3 +567,4 @@ export function invalidateTargetB64() { _targetB64Id = null; }
 export function invalidateInstancePreview(inst) {
   if (inst.previewPatch) { inst.previewPatch = null; bumpScene(); emit('render'); }
 }
+

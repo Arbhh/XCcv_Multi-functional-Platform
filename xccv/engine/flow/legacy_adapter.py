@@ -87,7 +87,7 @@ def _image_size(pred, img) -> tuple:
     if img is not None and getattr(img.mat, "ndim", 0) >= 2:
         h, w = img.mat.shape[:2]
         return int(w), int(h)
-    if pred.masks is not None and len(pred.masks) > 0:  # 不用真值（ndarray 歧义，P150）
+    if pred.masks is not None and len(pred.masks) > 0:  # 不用真值（ndarray 歧义）
         h, w = pred.masks[0].shape[:2]
         return int(w), int(h)
     if len(pred.boxes):
@@ -296,7 +296,7 @@ class FilterRegionBlock(_RegionFilterBase):
     """屏蔽区域（旧链 region_block 的薄委托）：区域内目标被过滤。
 
     区域多区并集；坐标支持归一化列表或像素串（口径与旧链一致）。
-    V0.6 T3-1：支持 rect:/circle:/polygon: 前缀（无前缀=矩形，旧串零改动）。
+    支持 rect:/circle:/polygon: 前缀（无前缀=矩形，旧串零改动）。
     image 端口（可选）提供像素坐标归一化所需的图幅。
     """
 
@@ -374,7 +374,7 @@ class DetectionSource(VisionNode):
 
 
 def apply_flow_safe(pred, image_size, flow, classes=None):
-    """apply_flow 的分类安全包装（Q2 修复）。
+    """apply_flow 的分类安全包装。
 
     分类 Prediction（无框 + 有 probs）原样直通（零拷贝），info 标记
     classification=True；检测/分割照常委托 df.apply_flow。
@@ -385,3 +385,5 @@ def apply_flow_safe(pred, image_size, flow, classes=None):
     from ..detection_flow import apply_flow  # 惰性：牵引 torch 的链路
 
     return apply_flow(pred, image_size, flow, classes=classes)
+
+

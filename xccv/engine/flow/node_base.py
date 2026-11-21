@@ -105,7 +105,7 @@ class RunContext:
             parent = getattr(parent, "_parent", None)
 
     def child(self) -> "RunContext":
-        """子流程上下文（自定义复合算子，V0.6 T4-4）：共享键（模型会话缓存、
+        """子流程上下文（自定义复合算子）：共享键（模型会话缓存、
         flow_dir/source_name 等）与警告列表共用；计算缓存与节点日志独立——
         子图节点 id 与主图互不冲突。"""
         c = RunContext(snapshot_store=None)
@@ -170,3 +170,4 @@ class VisionNode(ABC):
             if key not in self.PARAMS:
                 errors.append(f"未知参数 {key!r}")
         return errors
+

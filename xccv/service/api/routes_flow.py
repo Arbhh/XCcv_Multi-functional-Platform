@@ -243,7 +243,7 @@ def flow_run(request: Request,
              render: bool = Form(default=False)):
     """流程包推理：multipart（flow+image 字节）或 path 形式 → 统一流程 JSON。
 
-    同步 def：真推理在线程池执行，不占用事件循环（T10-4；此前 async 把
+    同步 def：真推理在线程池执行，不占用事件循环（此前 async 把
     并发请求的推理段串行化在事件循环上）。
     """
     flow_bytes = flow.file.read() if flow is not None else b""
@@ -258,3 +258,4 @@ def flow_run_file(request: Request, flow_path: str = Form(...),
                   image_path: str = Form(...), render: bool = Form(default=False)):
     """同机部署便捷形态：传服务端本地路径（白名单校验）。"""
     return _flow_response(request, b"", "", b"", "", flow_path, image_path, render)
+

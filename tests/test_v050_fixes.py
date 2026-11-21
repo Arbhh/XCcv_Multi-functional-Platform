@@ -1,4 +1,4 @@
-"""v0.5.0 修复测试（P86~P93，本轮全量代码审查发现）：
+"""v0.5.0 修复测试（本轮全量代码审查发现）：
 
 - P86 测试平台 _peek_xcv_flow 读取传统流程 .json 不再 NameError（json 未导入
   被 except 吞掉，流程被误当权重加载）；
@@ -116,7 +116,7 @@ class XvapModelRefTest(unittest.TestCase):
                              str(out_dir / "best.pt"))
 
     def test_ai_flow_pack_validate_and_collect_agree(self):
-        """打包校验通过的 AI 流程必须同时收集到权重（P87 口径配对）。"""
+        """打包校验通过的 AI 流程必须同时收集到权重（口径配对）。"""
         from xccv.engine import flow_package as fp
         from xccv.modeltools.flow_shared import validate_flow_for_pack
 
@@ -163,7 +163,7 @@ class WorkbenchChainPortTest(unittest.TestCase):
             last = graph["links"][-1]
             self.assertEqual((last[1], last[2], last[3]), (3, 2, 4))
             w._run_chain()
-            # T2-2：组合链已后台化——泵事件直到线程收尾再断言
+            # 组合链已后台化——泵事件直到线程收尾再断言
             from PyQt5.QtCore import QEventLoop, QTimer
 
             from PyQt5.QtWidgets import QApplication
@@ -353,3 +353,5 @@ class ProjectDeleteGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

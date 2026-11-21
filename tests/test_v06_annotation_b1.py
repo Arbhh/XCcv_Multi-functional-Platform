@@ -182,3 +182,4 @@ class BrushEraseTest(unittest.TestCase):
         cv.finalise()
         self.assertEqual(len(cv.shapes), 0, "全部擦除 → 无形状")
         self.assertIsNone(cv.current)
+

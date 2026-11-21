@@ -78,3 +78,4 @@ def collect_stats(task: TaskType | str, dataset_dir: Path) -> DatasetStats:
     # OK 负样本数量与训练侧同源口径（NEGATIVE_DIR_NAMES）
     stats.n_ok = len(scan_negative_images(dataset_dir))
     return stats
+

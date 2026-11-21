@@ -586,7 +586,7 @@ class TemplateMatch(VisionNode):
         return wx + loc[0] + tww / 2.0, wy + loc[1] + thh / 2.0, float(smax)
 
 
-# ---------------------------------------------------------------- V0.6 T4-2
+# ---------------------------------------------------------------- 定位与测量算子
 
 
 @register_node
@@ -712,3 +712,5 @@ class FindLinePair(VisionNode):
         return {"result": MeasureResult(value=round(dist, 4), unit="px"),
                 "distance": NumberVal(value=round(dist, 4), unit="px"),
                 "image": inputs["image"]}
+
+

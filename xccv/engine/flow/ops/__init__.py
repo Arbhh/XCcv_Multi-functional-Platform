@@ -36,10 +36,10 @@ def load_all() -> None:
     """导入全部算子子模块完成注册（幂等，import 天然幂等）。
 
     画布节点库 / 算子工作台初始化时调用；五平台主流程**不**调用——
-    保持主界面冷启动不引入 flow/ops 的导入开销（Q6 性能纪律）。
+    保持主界面冷启动不引入 flow/ops 的导入开销。
     旧过滤链的 8 个薄委托节点在 engine/flow/legacy_adapter.py，
     import 该模块即完成注册（不归本函数管）。
-    自定义算子（platform_data/operators/*.op.json，V0.6 T4-4）在此首次读盘
+    自定义算子（platform_data/operators/*.op.json）在此首次读盘
     注册（懒加载同一时机）；之后由工作台「刷新」显式热重载。
     """
     from . import (  # noqa: F401
@@ -54,3 +54,5 @@ def load_all() -> None:
         import logging
 
         logging.getLogger(__name__).warning("自定义算子加载失败", exc_info=True)
+
+

@@ -1,4 +1,4 @@
-"""V0.6 T1-1 回归：YOLO-seg 预测掩码必须还原原图尺寸 + 可视化防御双保险。
+"""YOLO-seg 预测掩码必须还原原图尺寸 + 可视化防御双保险。
 
 背景：ultralytics YOLO-seg 返回的 masks
 停在网络输入分辨率（letterbox 后 imgsz，如 1216），未还原原图（如 2144），
@@ -95,7 +95,7 @@ class AlignMaskDefenseTest(unittest.TestCase):
 
 
 class DrawPredictionsDefenseTest(unittest.TestCase):
-    """draw_predictions 对任何形状不符的掩码不得抛未捕获异常（T1-1 双保险）。"""
+    """draw_predictions 对任何形状不符的掩码不得抛未捕获异常（双保险）。"""
 
     def test_wrong_size_mask_no_crash(self):
         img = np.zeros((64, 64, 3), np.uint8)
@@ -216,7 +216,7 @@ class RealTrainedYoloSegTest(unittest.TestCase):
 
 
 class ShowResultNarrowingTest(unittest.TestCase):
-    """_show_result 渲染异常降级：状态栏提示+不抛未捕获（T1-1 crash 面收窄）。"""
+    """_show_result 渲染异常降级：状态栏提示+不抛未捕获（crash 面收窄）。"""
 
     def test_render_failure_degrades(self):
         from PyQt5.QtWidgets import QApplication
@@ -239,3 +239,4 @@ class ShowResultNarrowingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

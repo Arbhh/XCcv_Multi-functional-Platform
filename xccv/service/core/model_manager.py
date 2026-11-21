@@ -42,11 +42,27 @@ class ModelEntry:
 
 
 def _estimate_params_mb(model) -> float:
+    """参数量估算（fp32 口径 MB）：包装类沿 model/net 逐层解包取真实参数量，
+    全部失败时回退 state_dict 计数（有些包装仅暴露 state_dict）。"""
+    cur = model
+    seen = {id(cur)}
+    for _ in range(4):                       # 包装层级上限（防循环引用）
+        try:
+            n = sum(p.numel() for p in cur.parameters())
+            if n:
+                return round(n * 4 / 1e6, 1)
+        except Exception:
+            pass
+        nxt = getattr(cur, "model", None) or getattr(cur, "net", None)
+        if nxt is None or id(nxt) in seen:
+            break
+        seen.add(id(nxt))
+        cur = nxt
     try:
-        n = sum(p.numel() for p in model.parameters())
-        return round(n * 4 / 1e6, 1)
+        sd = cur.state_dict()
+        return round(sum(v.numel() for v in sd.values()) * 4 / 1e6, 1)
     except Exception:
-        log.debug("显存查询失败（按 0.0 上报）")
+        log.debug("参数量查询失败（按 0.0 上报）")
         return 0.0
 
 
@@ -90,7 +106,8 @@ def _restore_prediction(pred, orig, scaled):
 
     return Prediction(labels=list(pred.labels), scores=list(pred.scores),
                       boxes=boxes or [], masks=masks,
-                      probs=getattr(pred, "probs", None))
+                      probs=getattr(pred, "probs", None),
+                      texts=getattr(pred, "texts", None))
 
 
 class ModelManager:
@@ -99,6 +116,7 @@ class ModelManager:
         self._lock = threading.RLock()
         self._entries: dict[str, ModelEntry] = {}
         self._seq = itertools.count(1)
+        self._loading: dict[str, threading.Lock] = {}  # per-path 单飞锁（防同路径并发双载）
 
     # ---- 查询 ----
     def list(self) -> list[dict]:
@@ -123,7 +141,11 @@ class ModelManager:
     # ---- 生命周期 ----
     def load(self, path: Path, device: str = "auto", alias: str = "",
              warmup: bool = False) -> ModelEntry:
-        """加载（阻塞）；同一路径重复加载返回既有句柄（幂等）。"""
+        """加载（阻塞）；同一路径重复加载返回既有句柄（幂等）。
+
+        并发语义：同路径并发加载经 per-path 单飞锁只执行一次真实加载
+        （其余调用等待后复用既有句柄，防止显存翻倍）。
+        """
         from ...engine.models import registry  # 惰性：torch 重导入
 
         path = Path(path)
@@ -133,43 +155,51 @@ class ModelManager:
                 if e.path == key:
                     e.last_used = time.time()
                     return e
-        t0 = time.perf_counter()
-        model = registry.load_model(path, device=device)
-        task = getattr(getattr(model, "task", None), "value", "") or "unknown"
-        classes = list(getattr(model, "classes", None) or [])
-        try:
-            train_input = int(getattr(model, "train_input", 0) or 0)
-        except (TypeError, ValueError):
-            train_input = 0
-        if not train_input:
-            meta = getattr(model, "meta", None) or {}
+            path_gate = self._loading.setdefault(key, threading.Lock())
+        with path_gate:
+            with self._lock:
+                # 等锁期间他人可能已完成加载——单飞复用出口
+                for e in self._entries.values():
+                    if e.path == key:
+                        e.last_used = time.time()
+                        return e
+            t0 = time.perf_counter()
+            model = registry.load_model(path, device=device)
+            task = getattr(getattr(model, "task", None), "value", "") or "unknown"
+            classes = list(getattr(model, "classes", None) or [])
             try:
-                train_input = int(meta.get("train_input", 0) or 0)
-            except (TypeError, ValueError, AttributeError):
+                train_input = int(getattr(model, "train_input", 0) or 0)
+            except (TypeError, ValueError):
                 train_input = 0
-        safe = re.sub(r"[\\/:*?\"<>|\s]+", "_",
-                      (alias or path.stem)).strip("_")[:32] or "model"
-        with self._lock:
-            entry = ModelEntry(
-                model_id=f"{safe}-{next(self._seq)}", alias=alias or path.stem,
-                path=key, model=model, task=task, classes=classes,
-                device=str(getattr(model, "device", device)),
-                loaded_at=time.time(),
-                params_mb=_estimate_params_mb(model),
-                train_input=train_input)
-            # LRU：超上限先卸最久未用（坑 57：淘汰留痕）
-            while len(self._entries) >= self._max:
-                oldest = min(self._entries.values(), key=lambda e: e.last_used)
-                log.info("LRU 卸载模型 %s（%s）：超过驻留上限 %d",
-                         oldest.model_id, oldest.alias, self._max)
-                self._drop(oldest.model_id)
-            self._entries[entry.model_id] = entry
-        log.info("模型已加载: %s（%s，task=%s，%.1fs，约 %.1f MB 参数）%s",
-                 entry.model_id, path.name, task, time.perf_counter() - t0,
-                 entry.params_mb, _vram_line())
-        if warmup:
-            self._warmup(entry)
-        return entry
+            if not train_input:
+                meta = getattr(model, "meta", None) or {}
+                try:
+                    train_input = int(meta.get("train_input", 0) or 0)
+                except (TypeError, ValueError, AttributeError):
+                    train_input = 0
+            safe = re.sub(r"[\\/:*?\"<>|\s]+", "_",
+                          (alias or path.stem)).strip("_")[:32] or "model"
+            with self._lock:
+                entry = ModelEntry(
+                    model_id=f"{safe}-{next(self._seq)}", alias=alias or path.stem,
+                    path=key, model=model, task=task, classes=classes,
+                    device=str(getattr(model, "device", device)),
+                    loaded_at=time.time(),
+                    params_mb=_estimate_params_mb(model),
+                    train_input=train_input)
+                # LRU：超上限先卸最久未用（淘汰留痕）
+                while len(self._entries) >= self._max:
+                    oldest = min(self._entries.values(), key=lambda e: e.last_used)
+                    log.info("LRU 卸载模型 %s（%s）：超过驻留上限 %d",
+                             oldest.model_id, oldest.alias, self._max)
+                    self._drop(oldest.model_id)
+                self._entries[entry.model_id] = entry
+            log.info("模型已加载: %s（%s，task=%s，%.1fs，约 %.1f MB 参数）%s",
+                     entry.model_id, path.name, task, time.perf_counter() - t0,
+                     entry.params_mb, _vram_line())
+            if warmup:
+                self._warmup(entry)
+            return entry
 
     def _warmup(self, entry: ModelEntry) -> None:
         import numpy as np
@@ -189,7 +219,7 @@ class ModelManager:
         """单帧推理（逐模型串行；返回 (Prediction, entry)）。
 
         max_side>0（或模型 meta.train_input 自适应）且图更大时先降采样
-        推理，坐标/掩码按原图尺寸还原（T10-3：大图速度/显存护栏）。
+        推理，坐标/掩码按原图尺寸还原（大图速度/显存护栏）。
         """
         entry = self.get(model_id)
         side = int(max_side or 0) or int(entry.train_input or 0)
@@ -208,7 +238,7 @@ class ModelManager:
                 image_bgr if scaled is None else scaled, conf=conf, iou=iou)
             if scaled is not None:
                 pred = _restore_prediction(pred, image_bgr, scaled)
-        entry.last_used = time.time()
+            entry.last_used = time.time()   # 锁内更新（与 LRU 淘汰互斥）
         return pred, entry
 
     def unload(self, model_id: str) -> bool:
@@ -230,16 +260,20 @@ class ModelManager:
         entry = self._entries.pop(model_id, None)
         if entry is None:
             return
-        try:
-            del entry.model
-        except Exception:
-            log.warning("模型对象释放失败", exc_info=True)
-        gc.collect()
-        try:
-            import torch
+        # 与推理互斥：entry.lock 被 in-flight 推理持有时延迟到其结束再释放，
+        # 卸载/LRU 淘汰不再能删掉"推理中"的模型
+        with entry.lock:
+            try:
+                del entry.model
+            except Exception:
+                log.warning("模型对象释放失败", exc_info=True)
+            gc.collect()
+            try:
+                import torch
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            log.warning("CUDA 缓存清理失败", exc_info=True)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                log.warning("CUDA 缓存清理失败", exc_info=True)
         log.info("模型已卸载: %s %s", model_id, _vram_line())
+

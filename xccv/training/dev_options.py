@@ -59,3 +59,4 @@ def load_options() -> DevOptions:
 
 def save_options(options: DevOptions) -> None:
     save_json(options_path(), asdict(options))
+

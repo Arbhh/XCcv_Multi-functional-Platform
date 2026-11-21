@@ -1,4 +1,4 @@
-"""V0.6 T1-4 回归：主界面/标注/部署/训练/测试/模型工具窗口模块导入不拉 torch。
+"""主界面/标注/部署/训练/测试/模型工具窗口模块导入不拉 torch。
 
 平台窗口模块在启动闪屏显示之前导入——模块级 torch/引擎链会把加载中界面
 推迟数秒。修复后窗口模块必须 torch-free，引擎 API 经
@@ -78,3 +78,4 @@ class LazyTorchImportTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

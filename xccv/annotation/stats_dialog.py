@@ -122,3 +122,4 @@ class StatsDialog(QDialog):
         total = sum(img_counts.values())
         self._lb_img.setText(
             f"当前图：{len(img_counts)} 类 / {total} 个目标")
+

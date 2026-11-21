@@ -135,3 +135,4 @@ def format_duration(seconds: int | float | None) -> str:
     h, rest = divmod(total, 3600)
     m, s = divmod(rest, 60)
     return f"{h}时{m:02d}分{s:02d}秒" if h else f"{m}分{s:02d}秒"
+

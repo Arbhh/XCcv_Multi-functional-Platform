@@ -211,7 +211,7 @@ class NegativeSampleTest(unittest.TestCase):
 
 
 class P2HeadTest(unittest.TestCase):
-    """P2 小目标头＝训练参数（与 slim 头/小目标锚框同款，仅 YOLO 家族）：
+    """P2 小目标头＝训练参数（与 slim 头/小目标锚框同一机制，仅 YOLO 家族）：
     enable_p2 切换/模板/预训练迁移/训练线程接线/预检提示。"""
 
     def test_registry_has_no_p2_names(self):
@@ -365,3 +365,5 @@ class LegacyWordingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

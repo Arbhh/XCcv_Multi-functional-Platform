@@ -15,3 +15,4 @@ __version__ = "5.8.1"
 from labelme.label_file import LabelFile
 from labelme import testing
 from labelme import utils
+

@@ -38,3 +38,4 @@ def ensure_path_allowed(path: str | Path, cfg) -> Path:
             continue
     raise PathNotAllowed(
         f"路径不在白名单内：{p}（允许目录：{cfg.model_dirs or '（未配置）'}）")
+

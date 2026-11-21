@@ -74,7 +74,7 @@ def _events(out: str) -> list:
 
 
 class WorkerProtocolTest(unittest.TestCase):
-    """T7-1：JSON 行协议契约与退出码（真实子进程）。"""
+    """JSON 行协议契约与退出码（真实子进程）。"""
 
     def test_selftest(self):
         r = _run_worker(["--selftest"], timeout=60)
@@ -145,7 +145,7 @@ class _ManagerTestBase(unittest.TestCase):
 
 
 class WorkerKillTest(_ManagerTestBase):
-    """T7-1：手动终止 / 水位自动终止 / 硬超时 + 终止不留半截输出。"""
+    """手动终止 / 水位自动终止 / 硬超时 + 终止不留半截输出。"""
 
     def _start_sleeping(self, mgr, timeout_s=120.0):
         state = {"finished": False, "outcome": None, "phases": []}
@@ -184,7 +184,7 @@ class WorkerKillTest(_ManagerTestBase):
 
 
 class PruneWindowUiSmokeTest(_ManagerTestBase):
-    """T7-1：终止按钮随任务显隐；无任务时窗口可正常构建（offscreen）。"""
+    """终止按钮随任务显隐；无任务时窗口可正常构建（offscreen）。"""
 
     def test_kill_button_visibility(self):
         from xccv.modeltools.modeltools_window import PruneToolWindow
@@ -227,3 +227,4 @@ class Yolo11nCpuPruneTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -242,8 +242,8 @@ class SubspaceAdModel(BaseModel):
     def _extract(self, imgs_rgb: list[np.ndarray]) -> tuple[torch.Tensor, tuple]:
         """RGB ndarray 批 → (tokens (B,C,h*w) fp32 CPU, (h, w) 网格)。
 
-        末段层 mean 聚合（_layer_indices）；不请求 attentions（复现报告
-        §5.2 方案 A：省 13.6GB 显存，主流程不用注意力图）。"""
+        末段层 mean 聚合（_layer_indices）；不请求 attentions
+        （省约 13.6GB 显存，主流程不使用注意力图）。"""
         from PIL import Image
 
         self._ensure_backbone()
@@ -565,3 +565,5 @@ class SubspaceAdModel(BaseModel):
             log.warning("DINOv2 权重指纹与训练时不一致（%s ≠ 当前 %s），"
                         "特征空间可能漂移，建议用同骨干复训",
                         sha[:16], self._bb_sha[:16])
+
+

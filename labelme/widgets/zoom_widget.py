@@ -19,3 +19,4 @@ class ZoomWidget(QtWidgets.QSpinBox):
         fm = QtGui.QFontMetrics(self.font())
         width = fm.width(str(self.maximum()))
         return QtCore.QSize(width, height)
+

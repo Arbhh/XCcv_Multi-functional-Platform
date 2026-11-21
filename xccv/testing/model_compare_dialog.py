@@ -4,7 +4,7 @@
 （.pt/.engine）→ 后台逐图复推（与 A 同 conf/iou、同检出流程）→ 逐图
 对比表 + 判定统计；产物落 `检出结果/比对.json`。
 
-V0.7.2 任务④：比对结果按 (模型A, 参数, B 权重, 批量指纹) 缓存——误触
+比对结果按 (模型A, 参数, B 权重, 批量指纹) 缓存——误触
 关闭窗口后重开直接复用，不重新推理；判定统计附总体优劣比例条
 （A优/B优/一致/未评估 四段堆叠条）。
 
@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (QDialog, QFileDialog, QFormLayout, QHBoxLayout,
                              QPushButton, QTableWidget, QTableWidgetItem,
                              QVBoxLayout, QWidget)
 
-from ..i18n import tr  # 模块级：动态文案站点直接用（P246 教训：漏导即 NameError）
+from ..i18n import tr  # 模块级：动态文案站点直接用（漏导即 NameError）
 
 log = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class CompareThread(QThread):
 class ModelCompareDialog(QDialog):
     """A/B 比对窗：选 B 模型 → 复推 → 逐图判定表 + 统计 + 比对.json 落盘。
 
-    V0.7.2 任务④：宿主传入共享 cache dict；同 (模型A/参数/B权重/批量指纹)
+    宿主传入共享 cache dict；同 (模型A/参数/B权重/批量指纹)
     的比对结果重开窗口直接复用，不重新推理。
     """
 
@@ -198,11 +198,11 @@ class ModelCompareDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
         lay.addWidget(self.table, stretch=1)
-        from ..i18n import localize_widget_tree  # V0.7.2 平台总体①
+        from ..i18n import localize_widget_tree
 
         localize_widget_tree(self)
 
-    # ---- 缓存（V0.7.2 任务④：误关窗口重开免重推） ----
+    # ---- 缓存（误关窗口重开免重推） ----
     def _cache_key(self, b_name: str) -> tuple:
         return self._cache_base + (b_name,)
 
@@ -335,3 +335,5 @@ class ModelCompareDialog(QDialog):
 
     def payload(self):
         return self._payload
+
+

@@ -9,7 +9,7 @@ from PyQt5 import QtCore
 from PyQt5 import QtGui
 from PyQt5 import QtWidgets
 
-# XCcv V0.6 T5-2：AI 标注经 xccv.annotation.ai_assist（ultralytics SAM 预测器，
+# AI 标注经 xccv.annotation.ai_assist（ultralytics SAM 预测器，
 # 编码按图缓存）。保持 osam 形状契约——历史 AI 分支（finalise 精化等）继续可用；
 # 权重缺失时 initializeAiModel 调用点给中文提示。
 import types as _types
@@ -163,13 +163,13 @@ class Canvas(QtWidgets.QWidget):
         self._sam_embedding: collections.OrderedDict[
             bytes, osam.types.ImageEmbedding
         ] = collections.OrderedDict()
-        # XCcv V0.6 T5-3/T5-5：智能多边形提示点与预览、画笔状态
+        # 智能多边形提示点与预览、画笔状态
         self._ai_prompts: list = []        # [(QPointF, label)]，label 1=并入 0=挖除
         self._ai_preview_shape = None      # 悬停预览（半透明多边形）
         self._ai_last_hover_t = 0.0
         self._ai_last_mask = None
         self._brush_width = 24             # 画笔直径（像素，[ ] 或滚轮调节）
-        self._show_labels = True           # T5-6：类别文字显隐（C）
+        self._show_labels = True           # 类别文字显隐（C）
         self._brush_pts: list = []         # 当前笔画轨迹（图像坐标）
         # 右键擦除轨迹：右键拖动=挖除
         self._brush_erase_pts: list = []
@@ -1135,9 +1135,9 @@ class Canvas(QtWidgets.QWidget):
         w, h = self.pixmap.width(), self.pixmap.height()
         return not (0 <= p.x() <= w - 1 and 0 <= p.y() <= h - 1)
 
-    # ================= XCcv V0.6 T5-3/T5-5 =================
+# ================= AI 标注：智能多边形与画笔 =================
     def setLabelsVisible(self, value: bool):
-        """T5-6：类别文字显隐开关（C）。"""
+        """类别文字显隐开关（C）。"""
         self._show_labels = bool(value)
         self.update()
 
@@ -1901,7 +1901,7 @@ class Canvas(QtWidgets.QWidget):
             self.movingShape = True
 
     def keyPressEvent(self, ev):
-        # XCcv V0.6 T5-5：画笔模式下 [ ] 调节笔刷粗细
+        # 画笔模式下 [ ] 调节笔刷粗细
         if self.drawing() and self.createMode == "brush":
             if ev.key() == QtCore.Qt.Key_BracketLeft:
                 self.setBrushWidth(self._brush_width - 4)
@@ -2140,3 +2140,5 @@ def _update_shape_with_sam(
             points=[QtCore.QPointF(point[0], point[1]) for point in points],
             point_labels=[1] * len(points),
         )
+
+

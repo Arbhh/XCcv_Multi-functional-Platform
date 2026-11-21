@@ -298,3 +298,4 @@ class QuickPanelMixin:
 from xccv.qt_slots import apply_auto_slot_class  # noqa: E402
 
 apply_auto_slot_class(QuickPanelMixin)
+

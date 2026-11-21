@@ -30,7 +30,7 @@ from ..registry import register_node
 
 
 def _seq(x) -> list:
-    """可能为 None / list / ndarray 的序列 → list（不用真值判空，P150）。"""
+    """可能为 None / list / ndarray 的序列 → list（不用真值判空）。"""
     return [] if x is None else list(x)
 
 
@@ -60,7 +60,7 @@ def _write(path: Path, mat) -> bool:
     return imwrite_unicode(path, mat)
 
 
-# 外扩像素参数（F2-2 设计建议：外扩可按百分比或像素，两种叠加）
+# 外扩像素参数（外扩可按百分比或像素，两种叠加）
 _MARGIN_PX = ParamSpec("margin_px", "外扩像素", "int", 0, range=(0, 4096),
                        tooltip="每侧额外外扩的像素（与外扩百分比叠加）")
 
@@ -249,3 +249,5 @@ class GridTile(VisionNode):
         meta = dict(img.meta)
         meta.update({"roi_rect": [x1, y1, x2, y2], "tiles": tiles, "tile_index": idx})
         return {"image": ImageData(mat=img.mat[y1:y2, x1:x2].copy(), meta=meta)}
+
+

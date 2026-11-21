@@ -119,7 +119,7 @@ def _apply_theme(widget):
     from ...ui_style import apply_app_theme
 
     apply_app_theme(widget)
-# 预设档位（D4②）：一键套用 + 联动 recommend_settings；
+# 预设档位：一键套用 + 联动 recommend_settings；
 # 参数键映射见 ProjectWindow._apply_param_kv
 _PRESET_DEFS = [
     ("fast", "快速验证", "30 轮 · 冻结骨干\n小样本快速出结果",
@@ -444,3 +444,5 @@ class _PreflightWorker(QThread):
 # ---- Cython 编译态槽包装（拆分前 training_window 模块级调用，随迁到此）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+

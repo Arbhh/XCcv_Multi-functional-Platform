@@ -156,3 +156,4 @@ class ResultViewDialog(QDialog):
         from PyQt5.QtCore import QUrl
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+

@@ -87,7 +87,7 @@ class HealthCheckTest(_TempHome):
     def test_imbalance_and_few_samples_detection(self):
         det, _ = make_labelme_dataset(self.root / "det", n_images=30,
                                       classes=("cat", "dog"))
-        # 占比口径（Q3 回执）：最小类 1/30 = 3.3% < 5% 才触发
+        # 占比口径：最小类 1/30 = 3.3% < 5% 才触发
         self._relabel(det, lambda i: "cat" if i < 29 else "dog")
         report = run_health_check(TaskType.DETECTION, det, val_ratio=0.25)
         codes = {i.code for i in report.issues}
@@ -256,3 +256,4 @@ class PreflightTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

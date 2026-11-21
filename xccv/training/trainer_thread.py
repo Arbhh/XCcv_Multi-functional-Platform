@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def _make_reporter(thread: "TrainThread"):
-    """创建把引擎回调转成线程信号的 reporter（torch 延迟导入，T1-4：
+    """创建把引擎回调转成线程信号的 reporter（torch 延迟导入：
     基类 TrainReporter 来自 engine.models，类定义必须后置到训练启动时）。"""
     from ..engine.models import TrainReporter
 
@@ -190,3 +190,4 @@ class TrainThread(QThread):
         except Exception as e:  # 任何失败都要把原因带回界面
             log.error("训练失败: %s: %s", type(e).__name__, e, exc_info=True)
             self.train_finished.emit(False, f"{type(e).__name__}: {e}", {})
+

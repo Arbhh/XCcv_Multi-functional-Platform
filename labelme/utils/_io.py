@@ -24,3 +24,4 @@ def lblsave(filename, lbl):
             "[%s] Cannot save the pixel-wise class label as PNG. "
             "Please consider using the .npy format." % filename
         )
+

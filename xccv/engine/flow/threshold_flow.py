@@ -1,7 +1,7 @@
 """阈值调优 → 流程图模板一键生成（纯逻辑）。
 
 用户在阈值拖线面板各维度拖定阈值后，本模块把所选维度编排成新 IR 流程图
-（schema:3，与模板库同款格式）：
+（schema:3，与模板库同一格式）：
 
     image_loader → model_detection(conf) → [面积] → [短长边]
                  → [前景占比] → [灰度差] → result_output
@@ -142,3 +142,5 @@ def save_threshold_flow(model_dir, model_name: str, dims: dict,
     path.write_text(json.dumps(graph, ensure_ascii=False, indent=1),
                     encoding="utf-8")
     return path
+
+

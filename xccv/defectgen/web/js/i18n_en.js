@@ -519,3 +519,4 @@ window.__DG_I18N = {
   "记录": "Record",
   "停止": "Stop"
 };
+

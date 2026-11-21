@@ -27,6 +27,7 @@ import threading
 import time
 import traceback
 import uuid
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -69,6 +70,9 @@ async def no_cache_ui(request, call_next):
 
 _JOBS: dict[str, dict] = {}
 _JOBS_LOCK = threading.Lock()
+JOB_TTL_S = 2 * 3600        # 已完成作业保留时长（过期在下次启动作业时清理）
+JOB_TABLE_CAP = 100         # 作业表条目上限（超出先丢最旧的已完成作业）
+MAX_RUNNING_JOBS = 2        # 并发批量作业上限（超出 429）
 
 
 # ---------------------------------------------------------------- SAM 三档引擎
@@ -614,6 +618,121 @@ async def api_composite(req: CompositeReq):
                              "X-Composite-Notes": json.dumps(notes, ensure_ascii=False)})
 
 
+# ---------------------------------------------------------------- 目录白名单
+# 批量作业的 background.dir / output_dir 是服务器侧的目录读写入口，只放行
+# platform_data（默认根）与显式登记的授权目录；越界请求一律 400。
+# 授权登记持久化于 platform_data/defectgen/allowed_dirs.json（界面在用户
+# 确认后调用 POST /api/allow_dir 登记）。
+
+_REG_OVERRIDE: str | None = None   # 测试重定向注册表路径（生产恒为 None）
+
+
+class AllowDirReq(BaseModel):
+    dir: str
+
+
+def _platform_data_dir() -> Path:
+    from ...app_paths import app_root
+
+    return app_root() / "platform_data"
+
+
+def _registry_path() -> Path:
+    if _REG_OVERRIDE:
+        return Path(_REG_OVERRIDE)
+    return _platform_data_dir() / "defectgen" / "allowed_dirs.json"
+
+
+def _load_allowed_extras() -> list[Path]:
+    try:
+        data = json.loads(_registry_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out: list[Path] = []
+    if isinstance(data, list):
+        for d in data:
+            try:
+                p = Path(str(d)).resolve()
+            except OSError:
+                continue
+            if p.is_dir() and p not in out:
+                out.append(p)
+    return out
+
+
+def _save_allowed_extras(extras: list[Path]) -> None:
+    p = _registry_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps([str(r) for r in extras], ensure_ascii=False,
+                            indent=1), encoding="utf-8")
+
+
+def _allowed_roots() -> list[Path]:
+    roots = [_platform_data_dir().resolve()]
+    roots.extend(r for r in _load_allowed_extras() if r not in roots)
+    return roots
+
+
+def _is_under(child: Path, root: Path) -> bool:
+    try:
+        child.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _resolve_user_dir(d: str) -> Path:
+    """相对路径按 platform_data 解析（界面默认落点语义不变）。"""
+    p = Path(d)
+    return p if p.is_absolute() else _platform_data_dir() / p
+
+
+def _dir_in_whitelist(rp: Path) -> bool:
+    return any(_is_under(rp, r) for r in _allowed_roots())
+
+
+def _ensure_dir_allowed(d: str) -> Path:
+    """背景目录：必须存在且在白名单内（白名单前置于存在性检查，
+    未授权方无法借响应差异探测目录是否存在）。"""
+    rp = _resolve_user_dir(d).resolve()
+    if not _dir_in_whitelist(rp):
+        raise HTTPException(
+            400, "目录不在授权白名单内（platform_data 或已登记的授权目录）: %s；"
+                 "请先通过 POST /api/allow_dir 登记后再发起批量作业" % d)
+    if not rp.is_dir():
+        raise HTTPException(400, "目录不存在: %s" % d)
+    return rp
+
+
+def _ensure_out_dir_allowed(d: str) -> Path:
+    """输出目录：允许尚不存在（作业期创建），但必须在白名单内。"""
+    rp = _resolve_user_dir(d).resolve()
+    if not _dir_in_whitelist(rp):
+        raise HTTPException(
+            400, "输出目录不在授权白名单内（platform_data 或已登记的授权目录）: %s；"
+                 "请先通过 POST /api/allow_dir 登记后再发起批量作业" % d)
+    return rp
+
+
+@app.get("/api/allowed_dirs")
+async def api_allowed_dirs():
+    return {"platform_data": str(_platform_data_dir().resolve()),
+            "allowed": [str(r) for r in _allowed_roots()]}
+
+
+@app.post("/api/allow_dir")
+async def api_allow_dir(req: AllowDirReq):
+    rp = _resolve_user_dir(req.dir).resolve()
+    if not rp.is_dir():
+        raise HTTPException(400, "目录不存在: %s" % req.dir)
+    if not _dir_in_whitelist(rp):
+        extras = _load_allowed_extras()
+        if rp not in extras:
+            extras.append(rp)
+            _save_allowed_extras(extras)
+    return {"ok": True, "allowed": [str(r) for r in _allowed_roots()]}
+
+
 # ---------------------------------------------------------------- 批量作业
 
 class BatchReq(BaseModel):
@@ -625,6 +744,21 @@ class BatchReq(BaseModel):
     quality: int = 95
     jitter: dict | None = None            # {pos_pct, rot_deg, brightness}
     seed: int = 42
+
+
+def _purge_jobs_locked() -> None:
+    """作业表治理：TTL 清理已完成作业 + 表容量兜底（调用方须持 _JOBS_LOCK）。"""
+    now = time.time()
+    stale = [k for k, v in _JOBS.items()
+             if v.get("done") and now - v.get("t0", now) > JOB_TTL_S]
+    for k in stale:
+        _JOBS.pop(k, None)
+    while len(_JOBS) >= JOB_TABLE_CAP:
+        done_keys = [k for k, v in _JOBS.items() if v.get("done")]
+        if not done_keys:
+            break
+        oldest = min(done_keys, key=lambda k: _JOBS[k].get("t0", 0))
+        _JOBS.pop(oldest, None)
 
 
 def _run_batch(job_id: str, req: BatchReq):
@@ -704,16 +838,20 @@ def _run_batch(job_id: str, req: BatchReq):
 async def api_batch_start(req: BatchReq):
     bg = req.background or {}
     if bg.get("mode") == "dir":
-        if not os.path.isdir(bg.get("dir", "")):
-            raise HTTPException(400, "背景目录不存在: %s" % bg.get("dir"))
+        # 目录白名单校验（越界 400）；相对路径归一化为 platform_data 绝对路径
+        bg["dir"] = str(_ensure_dir_allowed(str(bg.get("dir", ""))))
     elif bg.get("mode") != "files" or not bg.get("files"):
         raise HTTPException(400, "background 需为 {mode:'dir',dir} 或 {mode:'files',files:[...]}")
-    if not os.path.isdir(os.path.dirname(os.path.abspath(req.output_dir))):
-        raise HTTPException(400, "输出目录的父目录不存在: %s" % req.output_dir)
+    req.output_dir = str(_ensure_out_dir_allowed(req.output_dir))
     jid = uuid.uuid4().hex[:12]
-    _JOBS[jid] = {"total": 0, "done_count": 0, "results": [], "done": False,
-                  "cancel": False, "cancelled": False, "error": None,
-                  "summary": None, "t0": time.time()}
+    with _JOBS_LOCK:
+        _purge_jobs_locked()
+        if sum(1 for v in _JOBS.values() if not v.get("done")) >= MAX_RUNNING_JOBS:
+            raise HTTPException(429, "并发批量作业已达上限 %d，请等待完成或取消现有作业"
+                                % MAX_RUNNING_JOBS)
+        _JOBS[jid] = {"total": 0, "done_count": 0, "results": [], "done": False,
+                      "cancel": False, "cancelled": False, "error": None,
+                      "summary": None, "t0": time.time()}
     th = threading.Thread(target=_run_batch, args=(jid, req), daemon=True)
     th.start()
     return {"job_id": jid}
@@ -752,3 +890,4 @@ def create_app() -> "FastAPI":
     """应用工厂：供 Qt 壳窗口在子线程 uvicorn 中托管；路由/挂载在 import 期
     构建，工厂返回同一实例，端口由调用方以 port=0 动态分配。"""
     return app
+

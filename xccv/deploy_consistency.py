@@ -148,3 +148,4 @@ class ConsistencyThread(QThread):
         except Exception as e:  # noqa: BLE001
             log.error("一致性自检失败", exc_info=True)
             self.failed.emit(f"{type(e).__name__}: {e}")
+

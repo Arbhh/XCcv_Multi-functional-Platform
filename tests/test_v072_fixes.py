@@ -26,7 +26,7 @@ def _review_stats():
 
 
 class TickRenderTest(unittest.TestCase):
-    """任务①：底部轴刻度文字必须随轴宽摊开（渲染级，插桩 drawPicture）。"""
+    """底部轴刻度文字必须随轴宽摊开（渲染级，插桩 drawPicture）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -81,7 +81,7 @@ class TickRenderTest(unittest.TestCase):
 
 
 class SweepTest(unittest.TestCase):
-    """任务②：扫描曲线数据层（已评估三类 + 未评估 OK/NG）。"""
+    """扫描曲线数据层（已评估三类 + 未评估 OK/NG）。"""
 
     def test_unjudged_ok_ng_semantics(self):
         from xccv.engine.metrics.batch_match import collect_match_stats, \
@@ -115,7 +115,7 @@ class SweepTest(unittest.TestCase):
 
 
 class ScopePanelTest(unittest.TestCase):
-    """任务③：面板随评估范围切换曲线口径与数字行。"""
+    """面板随评估范围切换曲线口径与数字行。"""
 
     @classmethod
     def setUpClass(cls):
@@ -162,7 +162,7 @@ class ScopePanelTest(unittest.TestCase):
 
 
 class CompareCacheTest(unittest.TestCase):
-    """任务④：A/B 比对缓存复用 + 总体优劣比例条。"""
+    """A/B 比对缓存复用 + 总体优劣比例条。"""
 
     @classmethod
     def setUpClass(cls):
@@ -220,7 +220,7 @@ class CompareCacheTest(unittest.TestCase):
 
 
 class I18nTest(unittest.TestCase):
-    """平台总体①：tr 替换层 + 树遍历 + 语言持久化（测试后还原偏好）。"""
+    """tr 替换层 + 树遍历 + 语言持久化（测试后还原偏好）。"""
 
     @classmethod
     def setUpClass(cls):
@@ -375,7 +375,7 @@ class I18nTest(unittest.TestCase):
 
 
 class TextTrimLockTest(unittest.TestCase):
-    """平台总体②：啰嗦文案精简源码锁（详细说明归操作手册）。"""
+    """啰嗦文案精简源码锁（详细说明归操作手册）。"""
 
     def test_deploy_page_sub_and_hint_trimmed(self):
         src = Path("xccv/deploy_platform.py").read_text(encoding="utf-8")
@@ -466,3 +466,5 @@ class TrImportLockTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

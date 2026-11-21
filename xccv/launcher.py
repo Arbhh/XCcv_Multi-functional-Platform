@@ -63,3 +63,4 @@ def launch_platform(key: str, arg: str | None = None) -> subprocess.Popen:
     if arg:
         cmd.append(arg)
     return subprocess.Popen(cmd, cwd=str(app_root()), close_fds=True)
+

@@ -659,7 +659,7 @@ def render_scene(target_bgr: np.ndarray, assets: dict, instances: list,
     """assets: {asset_id: BGRA}; instances 按 z 序（列表顺序即叠放顺序，末位在最上）。
 
     外观增强在资产坐标系完成后（render_instance_layer 的 layer 上）再送入融合，
-    避免"先融合后增强"导致的背景色偏（规格 §11 风险项）。
+    避免"先融合后增强"导致的背景色偏（风险项）。
     """
     notes = notes if notes is not None else []
     canvas = target_bgr.astype(np.float32)
@@ -680,7 +680,7 @@ def render_scene(target_bgr: np.ndarray, assets: dict, instances: list,
         seed = int(inst.get("noise_seed", 0)) & 0x7FFFFFFF
         apply_appearance(layer, inst, np.random.default_rng(seed))
         apply_edge_blur(layer, inst)
-        harmonize_layer(canvas, layer, inst)   # 协调在增强后、融合前（规格 §11 顺序约束）
+        harmonize_layer(canvas, layer, inst)   # 协调在增强后、融合前（顺序约束）
         mode = inst.get("blend", "direct")
         if mode == "poisson":
             canvas_u8 = np.clip(canvas, 0, 255).astype(np.uint8)
@@ -767,3 +767,5 @@ def jitter_instances(instances: list, img_w: int, img_h: int,
             j["appearance"] = app
         out.append(j)
     return out
+
+

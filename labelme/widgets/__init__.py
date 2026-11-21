@@ -21,3 +21,4 @@ from .tool_bar import ToolBar
 from .unique_label_qlist_widget import UniqueLabelQListWidget
 
 from .zoom_widget import ZoomWidget
+

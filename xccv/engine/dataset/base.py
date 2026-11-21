@@ -73,3 +73,4 @@ def image_size(path: Path) -> tuple[int, int]:
     with Image.open(path) as im:
         w, h = im.size
     return w, h
+

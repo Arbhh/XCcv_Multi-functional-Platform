@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-if TYPE_CHECKING:  # torch 延迟导入（V0.6 T1-4）：models.base 模块级 import torch，
+if TYPE_CHECKING:  # torch 延迟导入：models.base 模块级 import torch，
     from .models.base import Prediction  # 运行期仅 apply_flow 构造结果时局部导入
 
 FLOW_VERSION = 1
@@ -103,7 +103,7 @@ def _mask_of(pred: "Prediction", i: int, w: int, h: int) -> np.ndarray | None:
 def _parse_regions(value, w: int, h: int) -> list:
     """【旧接口，仅矩形】把 region 参数解析成归一化 [x1,y1,x2,y2] 列表。
 
-    V0.6 T3-1 起运行期判定改用 ``flow.regions``（矩形/圆/多边形三形状，
+    运行期判定改用 ``flow.regions``（矩形/圆/多边形三形状，
     旧串逐位兼容）；本函数保留供外部旧调用方，带形状前缀的条目在此跳过。
 
     接受两种形态：
@@ -143,7 +143,7 @@ def _parse_regions(value, w: int, h: int) -> list:
 
 
 def _in_any_region(cx: float, cy: float, regions, w: int, h: int) -> bool:
-    """检出中心点是否落在任一区域（矩形/圆/多边形，见 flow.regions；T3-1）。"""
+    """检出中心点是否落在任一区域（矩形/圆/多边形，见 flow.regions）。"""
     from .flow.regions import any_contains
 
     return any_contains(regions, cx, cy, w, h)
@@ -155,7 +155,7 @@ def apply_flow(pred: "Prediction", image_size: tuple[int, int], flow: dict,
 
     classes 为模型的类别名表（class_filter 节点按名称匹配时需要）。
     统计信息: {"steps": [{op, before, after}...], "count_check": "OK"/"NG"/None,
-    "removed": 移除数, "removed_prediction": 被滤掉的检出 Prediction（V0.6 T3-2）}
+    "removed": 移除数, "removed_prediction": 被滤掉的检出 Prediction}
     """
     w, h = int(image_size[0]), int(image_size[1])
     n = len(pred.boxes)
@@ -246,7 +246,7 @@ def apply_flow(pred: "Prediction", image_size: tuple[int, int], flow: dict,
 
     from .models.base import Prediction  # 局部导入：见模块头 TYPE_CHECKING 注释
 
-    # V0.6 T3-2：被滤掉的检出（removed 端口；additive，原 info 键与返回值不变）
+    # 被滤掉的检出（removed 端口；additive，原 info 键与返回值不变）
     removed_idx = np.where(~keep)[0]
     r_masks = None
     if pred.masks is not None:
@@ -286,7 +286,7 @@ def region_param_problems(value, context: str = "") -> list[str]:
 
     与运行期的宽容解析不同，本函数用于打包把关：每条区域必须形状合法
     （矩形 4 数字且宽高>0 / 圆半径>0 / 多边形≥3 顶点且面积>0），否则该
-    过滤规则在产线上不会按预期生效。V0.6 T3-1 起委托 ``flow.regions``
+    过滤规则在产线上不会按预期生效。委托 ``flow.regions``
     （矩形条目文案与旧版逐字一致）。
     """
     from .flow.regions import region_problems
@@ -372,3 +372,5 @@ def graph_to_chain(flow_graph: dict) -> dict:
             chain.append({"op": t.split("xccv/post_", 1)[1], "params": dict(params)})
         queue.extend(outgoing.get(nid, []))
     return {"nodes": chain}
+
+

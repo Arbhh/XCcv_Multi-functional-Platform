@@ -202,7 +202,7 @@ class ComboFirstItemTest(unittest.TestCase):
 
 
 class TestingPlatformFlowModeTest(unittest.TestCase):
-    """Q3：测试平台传统流程模式（子进程：testing_window 为重模块，坑 44）。"""
+    """Q3：测试平台传统流程模式（子进程：testing_window 为重模块）。"""
 
     def test_load_and_infer_flow(self):
         from xccv.engine import flow_package as fp
@@ -265,3 +265,4 @@ class TestingPlatformFlowModeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

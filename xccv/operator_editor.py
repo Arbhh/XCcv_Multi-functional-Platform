@@ -1,4 +1,4 @@
-"""自定义算子编辑器（V0.6 T4-5）：信息 / 参数 / 端口 / 实现 四个页签。
+"""自定义算子编辑器：信息 / 参数 / 端口 / 实现 四个页签。
 
 **Ctrl+S 保存**：校验 → 写 platform_data/operators/<id>.op.json → 热重载注册
 （custom/<id>）→ toast 提示 → saved 信号通知工作台刷新列表并选中，可立即试跑。
@@ -280,3 +280,4 @@ class OperatorEditorDialog(QDialog):
 # ---- Cython 编译态槽包装（见 xccv/qt_slots.py；新增 UI 模块必须加） ----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+

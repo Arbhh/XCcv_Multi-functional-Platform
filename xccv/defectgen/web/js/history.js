@@ -1,4 +1,4 @@
-/* Defect Augment Studio — 增量快照历史栈（Ledgex 思路，规格 §7.3）
+/* Defect Augment Studio — 增量快照历史栈
  *
  * 历史条目只记录**发生变更的字段**（position/affine/appearance/blend 等），
  * 未变更字段不复制；图像像素数据不进入历史栈。连续拖动/滑条调整在
@@ -240,3 +240,5 @@ function redoSilent() {
   index++;
   return true;
 }
+
+

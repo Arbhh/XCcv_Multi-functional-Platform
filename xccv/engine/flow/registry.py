@@ -38,7 +38,7 @@ def get_node_class(name: str):
 
 
 def unregister_node(name: str) -> bool:
-    """注销节点（自定义算子热重载用，V0.6 T4-4）；内置算子不应调用。"""
+    """注销节点（自定义算子热重载用）；内置算子不应调用。"""
     return _REGISTRY.pop(name, None) is not None
 
 
@@ -100,3 +100,4 @@ def list_nodes(category=None) -> list:
 def all_categories() -> list:
     """已注册节点的分类清单（节点库分组用，排序去重）。"""
     return sorted({cls.CATEGORY for cls in _REGISTRY.values()})
+

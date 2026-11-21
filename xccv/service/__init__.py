@@ -9,3 +9,4 @@
 - 所有业务端点要求 API Key（X-XCcv-Key 头），/v1/health 除外（监控用）；
 - 响应体 = result_json 统一 JSON（schema_version=1），与平台批量落盘文件同构。
 """
+

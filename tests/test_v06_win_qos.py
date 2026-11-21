@@ -84,7 +84,7 @@ class InferLogTest(unittest.TestCase):
             task = "detection"
 
             def predict(self, image, conf=0.25, iou=0.45):
-                # boxes 用 ndarray：日志计数不得用真值判空（P150 同类）
+                # boxes 用 ndarray：日志计数不得用真值判空
                 return Prediction(labels=[0, 0], scores=[0.9, 0.8],
                                   boxes=np.array([[1, 1, 5, 5], [6, 6, 9, 9]],
                                                  dtype=float))
@@ -107,3 +107,4 @@ class InferLogTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

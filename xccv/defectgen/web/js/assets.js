@@ -1,4 +1,4 @@
-/* Defect Augment Studio — 缺陷资产库（规格 §5.1 / §7.4）
+/* Defect Augment Studio — 缺陷资产库
  * RGBA 与掩码存 IndexedDB；面板用 256px 压缩预览；全分辨率位图按需解码。
  * 变体（AssetVariant）仅存外观参数与形态种子，共享原始 RGBA。
  */
@@ -59,7 +59,7 @@ async function hydrateAsset(rec) {
 }
 
 function registerHit(asset) {
-  // 主线程保留 alpha 数据用于精确拾取（规格 §8 交互）
+  // 主线程保留 alpha 数据用于精确拾取（交互）
   const cnv = new OffscreenCanvas(asset.w, asset.h);
   const c = cnv.getContext('2d');
   c.drawImage(asset.rgbaBitmap, 0, 0);
@@ -163,7 +163,7 @@ export async function deleteAsset(id, force = false) {
   return true;
 }
 
-/* 变体管理（规格 §5.1 AssetVariant） */
+/* 变体管理（AssetVariant） */
 export function addVariant(assetId, { appearance = null, form_seed = null }) {
   const a = state.assets.get(assetId);
   if (!a) return null;
@@ -226,3 +226,5 @@ export async function assetFromExtract(name, tags) {
     source: { image: src.name, bbox: [x0, y0, cw, ch] },
   });
 }
+
+

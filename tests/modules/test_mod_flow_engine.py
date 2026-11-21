@@ -15,7 +15,7 @@ from xccv.engine.flow.registry import register_node, registered_names
 
 from xccv.engine.flow.ops import load_all
 
-load_all()   # 导入即注册（幂等）；画布节点库/工作台同款入口
+load_all()   # 导入即注册（幂等）；画布节点库/工作台同一入口
 
 
 def _node(nid, ntype, **props):
@@ -110,3 +110,5 @@ class IrRoundtripTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

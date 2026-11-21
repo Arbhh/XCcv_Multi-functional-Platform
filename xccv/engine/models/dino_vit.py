@@ -1,12 +1,12 @@
 """DINO ViT-B/8 特征器（CIF 后端特征底座；V0.7.3）。
 
 主路径：timm `vit_base_patch8_224_dino`（与复现工程 `E:\Zcode\Study\CIF`
-逐行同款调用——依赖已对齐；timm 已随复现工作装在平台
+逐行一致的调用——依赖已对齐；timm 已随平台环境安装
 venv，不新增安装）。回退：纯 torch 重建的 DinoViT（键名与 timm
 VisionTransformer 一致：150 键 cls_token/pos_embed/patch_embed.proj/12×
 block/norm，探针 runs/probe_dino_ckpt.py 全部核对；保留零依赖能力）。
 
-权重路径（"用户自备/可选下载"红线，SAM weights/sam 同款惯例）：
+权重路径（用户自备或可选下载，与 SAM weights/sam 惯例一致）：
   1) 环境变量 XCCV_DINO_CKPT 指向权重文件；
   2) <app_root>/weights/dino/dino_vitbase8_pretrain.pth
 不自动下载、不随包分发。
@@ -172,7 +172,7 @@ class _TimmViT(nn.Module):
 def load_dino_vit(device: str = "cpu", depth: int = _DEPTH) -> tuple[nn.Module, str]:
     """构建 ViT 并加载权重；缺失/损坏时抛 FileNotFoundError/RuntimeError。
 
-    主路径 = timm `vit_base_patch8_224_dino`（与复现工程同款调用，依赖已
+    主路径 = timm `vit_base_patch8_224_dino`（与参考实现一致调用，依赖已
     对齐；timm 已随复现装在平台 venv）；timm 缺失时回退本文件
     的纯 torch DinoViT（零依赖能力保留，键映射已探针核对）。
     返回 (模型, 权重指纹 hex16)。
@@ -219,3 +219,6 @@ def fingerprint_matches(digest_hex16: str) -> bool:
         return hashlib.sha256(ckpt.read_bytes()).hexdigest()[:16] == digest_hex16
     except Exception:
         return False
+
+
+

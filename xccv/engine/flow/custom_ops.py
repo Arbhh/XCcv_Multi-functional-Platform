@@ -1,4 +1,4 @@
-"""自定义算子运行时（V0.6 T4-4）：`custom/` 前缀、复合 / 脚本两种实现。
+"""自定义算子运行时：`custom/` 前缀、复合 / 脚本两种实现。
 
 存放：``platform_data/operators/<id>.op.json``（每个算子一个文件，utf-8）。
 注册名 ``custom/<id>``（画布类型 ``xccv2/custom/<id>``，与内置算子隔离），
@@ -488,3 +488,4 @@ def new_op_template(kind: str = "script") -> dict:
             "input_map": {"image": [[1, 0]]},
             "output_map": {"image": [1, "image"]}}
     return base
+

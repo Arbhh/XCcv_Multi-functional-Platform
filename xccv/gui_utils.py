@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 def ensure_console_streams() -> None:
     """兜底重定向 stdout/stderr：None（pythonw 正常态）或**继承自无控制台
     父进程的无效句柄**（GUI 主界面 Popen 不带重定向时，子进程写即异常
-    退出 exit 1——v0.5 推理服务启动失败实锤）都统一指向 devnull。"""
+    退出 exit 1）都统一指向 devnull。"""
     for name in ("stdout", "stderr"):
         stream = getattr(sys, name, None)
         if stream is None:
@@ -102,7 +102,7 @@ def install_excepthook(context: str) -> None:
 
 
 def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
-    """主线程卡顿看门狗（V0.6 T2-1）。
+    """主线程卡顿看门狗。
 
     心跳：主线程 QTimer 每 heartbeat_ms 触发一次喂 threading.Event；
     监视线程：超过 threshold_ms 没等到心跳即判定卡顿——开始时记录一次
@@ -205,7 +205,7 @@ def install_freeze_watchdog(threshold_ms: int = 200, heartbeat_ms: int = 50):
             pass
 
     entry = (timer, thread, state)
-    _WATCHDOG_KEEPALIVE.append(entry)  # 模块级保活（返回值被丢弃时心跳仍在，P153）
+    _WATCHDOG_KEEPALIVE.append(entry)  # 模块级保活（返回值被丢弃时心跳仍在）
     return stop
 
 
@@ -213,7 +213,7 @@ _WATCHDOG_KEEPALIVE: list = []  # [(QTimer, Thread, state)]；state["armed"] 供
 
 
 def auto_cleanup_thread(owner, attr: str, thread):
-    """QThread 卫生收尾（V0.6 T2-6，A-3 模式）。
+    """QThread 卫生收尾（A-3 模式）。
 
     finished→安全置 None（owner 线程队列投递；owner 先亡自动断开）+
     finished→deleteLater 释放 Qt 底层对象。thread 参数须显式传入
@@ -237,4 +237,5 @@ def auto_cleanup_thread(owner, attr: str, thread):
     thread.finished.connect(proxy._on_finished)
     thread.finished.connect(thread.deleteLater)
     return proxy
+
 

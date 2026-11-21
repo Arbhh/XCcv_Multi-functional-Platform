@@ -233,7 +233,7 @@ function applyToSelection(label, fn) {
   emit('render');
 }
 
-/* ================= 外观增强面板（规格 §6.3） ================= */
+/* ================= 外观增强面板 ================= */
 
 function bindAppearancePanel() {
   for (const spec of APPEARANCE_SPEC) {
@@ -276,7 +276,7 @@ function bindAppearancePanel() {
   };
 }
 
-/* ================= 融合面板（规格 §6.4） ================= */
+/* ================= 融合面板 ================= */
 
 function bindBlendPanel() {
   for (const mode of ['direct', 'feather', 'poisson']) {
@@ -385,7 +385,7 @@ function bindViewPanel() {
   $('mgRadius').oninput = (e) => { state.ui.magnifier.r = +e.target.value; $('mgRadiusN').value = e.target.value + 'px'; emit('render'); };
 }
 
-/* ================= 对齐工具条（规格 §8.2） ================= */
+/* ================= 对齐工具条 ================= */
 
 function bindAlignBar() {
   const ops = {
@@ -461,7 +461,7 @@ function updateEditModeBar() {
   }
 }
 
-/* ================= 历史条（可点击跳转，规格 §8.5） ================= */
+/* ================= 历史条（可点击跳转） ================= */
 
 function bindHistoryStrip() {
   on('history', () => {
@@ -486,7 +486,7 @@ function bindHistoryStrip() {
   });
 }
 
-/* ================= 资产面板（规格 §8.4） ================= */
+/* ================= 资产面板 ================= */
 
 function bindAssetPanel() {
   $('assetSearch').oninput = renderAssetList;
@@ -767,3 +767,6 @@ function refreshPanels() {
   }
   updateStatus();
 }
+
+
+

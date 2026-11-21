@@ -134,7 +134,7 @@ class WorkbenchTest(unittest.TestCase):
         return False
 
     def _wait_run_done(self, timeout_s: float = 30.0):
-        """T2-2：试跑已后台化——泵事件直到工作线程收尾（结果区出现汇总）。"""
+        """试跑已后台化——泵事件直到工作线程收尾（结果区出现汇总）。"""
         from PyQt5.QtCore import QEventLoop, QTimer
 
         deadline = time.monotonic() + timeout_s
@@ -218,3 +218,4 @@ class WorkbenchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

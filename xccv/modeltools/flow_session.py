@@ -171,7 +171,7 @@ class FlowSession:
 
     @staticmethod
     def write_run_log(summary: dict, label: str = "") -> None:
-        """每次运行落一份日志到 platform_data/logs/流程运行日志/（Q4 决策）。
+        """每次运行落一份日志到 platform_data/logs/流程运行日志/。
 
         只保留最近 _RUN_LOG_KEEP 份；写日志失败不影响运行（best-effort）。
         """
@@ -213,3 +213,5 @@ class FlowSession:
             return {}
         return {name: to_png_base64(img)
                 for name, img in item["images"].items()}
+
+

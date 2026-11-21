@@ -178,14 +178,14 @@ export function instGrid(inst, w, h) {
   return pts; // 行优先
 }
 
-/* 网格位移限幅：位移不超过网格间距的 50%（防自交，规格 §6.2.3） */
+/* 网格位移限幅：位移不超过网格间距的 50%（防自交） */
 export function clampMesh(mesh, w, h) {
   const cx = w / mesh.cols / 2, cy = h / mesh.rows / 2;
   mesh.grid = mesh.grid.map(([dx, dy]) => [clamp(dx, -cx, cx), clamp(dy, -cy, cy)]);
   return mesh;
 }
 
-/* 弹性扰动：固定边角，内部顶点按种子随机小幅位移（规格 §6.2.4） */
+/* 弹性扰动：固定边角，内部顶点按种子随机小幅位移 */
 export function elasticMesh(seed, cols, rows, w, h, ampPct = 0.28) {
   let s = seed >>> 0 || 1;
   const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0, s / 4294967296);
@@ -343,3 +343,6 @@ export async function saveBlob(blob, name, handle) {
   downloadBlob(blob, name);
   return 'downloaded';
 }
+
+
+

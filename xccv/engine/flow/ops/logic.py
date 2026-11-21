@@ -224,3 +224,4 @@ class BoolOp(VisionNode):
         if op == "or":
             return {"result": a or b}
         return {"result": not (a or b)}   # nor
+

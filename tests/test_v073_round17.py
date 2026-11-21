@@ -26,7 +26,7 @@ _APP = QApplication.instance() or QApplication(sys.argv)
 
 
 def _wait_stats(pw, timeout_s: float = 30.0):
-    """项目窗打开后统计已后台化——泵事件直到统计线程收尾（T2-5 同款）。"""
+    """项目窗打开后统计已后台化——泵事件直到统计线程收尾。"""
     from PyQt5.QtCore import QEventLoop, QTimer
 
     deadline = time.monotonic() + timeout_s
@@ -39,7 +39,7 @@ def _wait_stats(pw, timeout_s: float = 30.0):
 
 
 class ProjectWindowTransferTest(unittest.TestCase):
-    """§三.1：宿主列表窗语言重建 → 项目窗跟随（P261，平台重建路径调用）。"""
+    """§三.1：宿主列表窗语言重建 → 项目窗跟随（平台重建路径调用）。"""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -170,3 +170,5 @@ class TestingWindowBusyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

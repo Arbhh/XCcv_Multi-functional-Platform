@@ -368,7 +368,7 @@ function affineInverse(inst, pt, w, h) {
   return p;
 }
 
-/* ---------------- 吸附对齐（规格 §8.1） ---------------- */
+/* ---------------- 吸附对齐 ---------------- */
 
 function computeSnap(starts, dx, dy) {
   const guides = [];
@@ -515,7 +515,7 @@ function onWheel(e) {
   }
 }
 
-/* ---------------- 键盘（规格 §8.3） ---------------- */
+/* ---------------- 键盘 ---------------- */
 
 function isTyping(e) {
   const t = e.target;
@@ -574,7 +574,7 @@ function onKeyDown(e) {
     return;
   }
 
-  // 方向键微调：1px / Shift+方向键按网格单位（规格 §8.1）
+  // 方向键微调：1px / Shift+方向键按网格单位
   const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (arrows[e.key] && state.selection.size) {
     e.preventDefault();
@@ -737,3 +737,5 @@ export function setTool(tool) {
   emit('tool');
   emit('render');
 }
+
+

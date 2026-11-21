@@ -989,3 +989,4 @@ export function initPaintPanel() {
   const expBtnJ = $('btnExportPaintJpg');
   if (expBtnJ) expBtnJ.onclick = () => exportPaintedImage('.jpg');
 }
+

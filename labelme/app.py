@@ -113,7 +113,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.labelList = LabelListWidget()
         self.lastOpenDir = None
-        # XCcv V0.6 T5-6：上次目录记忆（ui_prefs，跨启动）
+        # 上次目录记忆（ui_prefs，跨启动）
         try:
             from xccv.ui_widgets import load_prefs
 
@@ -163,7 +163,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fileListWidget = QtWidgets.QTreeWidget()
         self.fileListWidget.setHeaderHidden(True)
         self.fileListWidget.itemSelectionChanged.connect(self.fileSelectionChanged)
-        # XCcv V0.6 T5-6：右键「打开所在文件夹」
+        # 右键「打开所在文件夹」
         self.fileListWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.fileListWidget.customContextMenuRequested.connect(
             self._file_list_menu)
@@ -363,7 +363,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         toggle_keep_prev_mode.setChecked(self._config["keep_prev"])
 
-        # XCcv V0.6 T5-6：标签文字显隐（C）与灰度显示（G）
+        # 标签文字显隐（C）与灰度显示（G）
         showLabelTexts = action(
             self.tr("Show Label Texts"),
             self.toggleLabelTexts,
@@ -430,7 +430,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Start drawing linestrip. Ctrl+LeftClick ends creation."),
             enabled=False,
         )
-        # XCcv V0.6 T5-3：AI 智能多边形（SAM 点提示实时提取）
+        # AI 智能多边形（SAM 点提示实时提取）
         createAiPolygonMode = action(
             self.tr("创建智能多边形"),
             lambda: self.toggleDrawMode(False, createMode="ai_polygon"),
@@ -442,7 +442,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ),
             enabled=False,
         )
-        # XCcv V0.6 T5-5：画笔标注
+        # 画笔标注
         createBrushMode = action(
             self.tr("创建画笔"),
             lambda: self.toggleDrawMode(False, createMode="brush"),
@@ -1159,7 +1159,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def setEditMode(self):
         self.toggleDrawMode(True)
 
-    # ---- XCcv V0.6 T5-6：交互精选 ----
+    # ---- XCcv 交互精选 ----
     def toggleLabelTexts(self):
         self.canvas.setLabelsVisible(self.actions.showLabelTexts.isChecked())
 
@@ -1184,7 +1184,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.toggleGrayscale()
 
     def _file_list_menu(self, pos):
-        """文件列表右键：打开所在文件夹+ 设为 OK 目录（O9，V0.7）。"""
+        """文件列表右键：打开所在文件夹+ 设为 OK 目录。"""
         import subprocess
 
         item = self.fileListWidget.itemAt(pos)
@@ -1419,7 +1419,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._review_thread.start()
 
     def _init_ai_model(self):
-        """T5-3：智能多边形进入前初始化 SAM（权重缺失=动作提示，不进入）。"""
+        """智能多边形进入前初始化 SAM（权重缺失=动作提示，不进入）。"""
         if getattr(self.canvas, "_sam", None) is not None:
             return
         try:
@@ -2537,7 +2537,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._config["keep_prev"]:
             prev_shapes = self.canvas.shapes
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
-        self._apply_grayscale_if_enabled()   # T5-6：灰度显示状态延续
+        self._apply_grayscale_if_enabled()   # 灰度显示状态延续
         flags = {k: False for k in self._config["flags"] or []}
         if self.labelFile:
             self.loadLabels(self.labelFile.shapes)
@@ -3044,7 +3044,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                 _item, _lb, self._get_rgb_by_label(_lb))
             except OSError:
                 pass
-        # XCcv V0.6 T5-6：记录上次目录（ui_prefs）
+        # 记录上次目录（ui_prefs）
         try:
             from xccv.ui_widgets import save_prefs
 
@@ -3142,3 +3142,6 @@ class MainWindow(QtWidgets.QMainWindow):
 # ---- Cython 编译态槽包装（信号槽参数裁剪修复，见 xccv/qt_slots.py）----
 from xccv.qt_slots import apply_auto_slot_module  # noqa: E402
 apply_auto_slot_module(globals())
+
+
+

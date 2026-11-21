@@ -48,3 +48,4 @@ class ImageLoader(VisionNode):
 
 # 占位（D4 决策：文件夹逐张源缓做）——批处理走测试平台/流程图平台页批量线程；
 # 二期如需会话游标语义，在此文件内新增 image_folder_source（ctx 维护游标）。
+

@@ -61,3 +61,4 @@ def setup_logging(platform: str, console_level: int = logging.WARNING) -> Path:
 def get_logger(name: str) -> logging.Logger:
     """模块 logger 快捷入口（名字自动带 xccv 前缀层级）。"""
     return logging.getLogger(name)
+
