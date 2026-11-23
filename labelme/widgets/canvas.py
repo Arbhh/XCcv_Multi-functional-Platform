@@ -324,9 +324,11 @@ class Canvas(QtWidgets.QWidget):
                 self.aiModelReady.emit(model_name)
             except Exception as e:  # noqa: BLE001
                 # 失败必须解锁：_ai_loading 卡 True 会吞掉后续所有点击与
-                # 重试（S 键入口首行即被拦），AI 标注永久失效（T5 根因）
-                self._ai_loading = False
+                # 重试（S 键入口首行即被拦），AI 标注永久失效（T5 根因）。
+                # 先发信号再解锁：外部一旦观察到「已解锁」，失败通知必已
+                # 入队，消除两步行序互换时「解锁了但通知未到」的竞态窗口
                 self.aiModelFailed.emit(str(e))
+                self._ai_loading = False
 
         threading.Thread(target=_work, daemon=True).start()
 
