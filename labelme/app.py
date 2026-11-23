@@ -2,6 +2,7 @@
 
 import functools
 import html
+import json
 import math
 import os
 import os.path as osp
@@ -45,6 +46,52 @@ from . import utils
 
 
 LABEL_COLORMAP = imgviz.label_colormap()
+
+
+class _EscExitFilter(QtCore.QObject):
+    """窗口族内 Esc 退出标注的事件过滤器（与焦点位置无关）。
+
+    应用级安装：无论焦点落在画布、标签列表（含浮动 dock 内的独立窗口化
+    列表）、工具栏还是搜索框，Esc 都先经此过滤器。仅当画布处于标注模式
+    时拦截；对话框（QDialog 系，含标签输入框/消息框）一律放行以保留
+    对话框自身 Esc 语义。
+    """
+
+    def __init__(self, window):
+        super(_EscExitFilter, self).__init__(window)
+        self._window = window
+
+    def eventFilter(self, obj, event):
+        try:
+            if (event.type() == QtCore.QEvent.KeyPress
+                    and event.key() == Qt.Key_Escape):
+                window = self._window
+                canvas = window.__dict__.get("canvas")
+                if canvas is not None and canvas.drawing():
+                    widget = obj if isinstance(obj, QtWidgets.QWidget) else None
+                    if widget is not None and self._belongs(widget, window):
+                        canvas._exit_drawing()
+                        return True
+        except Exception:  # noqa: BLE001  过滤器内异常不得中断事件流
+            logger.debug("Esc 退出过滤器异常", exc_info=True)
+        return False
+
+    @staticmethod
+    def _belongs(widget, window):
+        """控件是否属于主窗口族（对话框一律不算）。
+
+        parentWidget() 链手工上溯：QDockWidget 浮出成独立窗口后，
+        QWidget.isAncestorOf 在窗口边界处返回 False，但 parent 链仍指向
+        主窗口——必须沿链走到主窗口才算本族。
+        """
+        node = widget
+        while node is not None:
+            if isinstance(node, QtWidgets.QDialog):
+                return False
+            if node is window:
+                return True
+            node = node.parentWidget()
+        return False
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -169,6 +216,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._file_list_menu)
         self._file_items: dict = {}   # 完整路径 -> 树节点
         self._file_order: list = []   # 展平后的图片路径顺序（导航用）
+        # 标注文件内容判定缓存：{路径: ((mtime_ns, size), 是否有内容)}
+        self._label_content_cache: dict = {}
         fileListLayout = QtWidgets.QVBoxLayout()
         fileListLayout.setContentsMargins(0, 0, 0, 0)
         fileListLayout.setSpacing(0)
@@ -213,12 +262,18 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         self.canvas.scrollRequest.connect(self.scrollRequest)
 
-        self.canvas.on_right_click = self._undo_last_action  # XCcv：右键撤销
         self.canvas.on_exit_drawing = self._exit_drawing_mode  # XCcv：退出标注走标准切换
         self.canvas.newShape.connect(self.newShape)
         self.canvas.shapeMoved.connect(self.setDirty)
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
+        # XCcv：标注模式下 Esc 退出与焦点无关——应用级事件过滤器接管
+        # （标签列表 dock 浮动成独立窗口时，窗口级 QShortcut 匹配不到，
+        #  且列表控件会先吃掉 Esc；过滤器在事件派发前统一处理）
+        self._esc_exit_filter = _EscExitFilter(self)
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self._esc_exit_filter)
         # 批注修复：AI 后台加载/状态提示（原同步加载卡死 UI 数秒）
         self.canvas.aiModelReady.connect(
             lambda name: self._on_ai_model_ready(name))
@@ -336,6 +391,19 @@ class MainWindow(QtWidgets.QMainWindow):
             enabled=True,
         )
         saveAuto.setChecked(self._config["auto_save"])
+
+        deleteConfirm = action(
+            text=self.tr("Confirm Before Deleting"),
+            # 勾选状态即配置（triggered 携带切换后的新状态）：
+            # deleteSelectedShape 读该配置决定是否弹确认框
+            slot=lambda checked: self._config.__setitem__(
+                "delete_confirm", bool(checked)),
+            icon="close",
+            tip=self.tr("Ask before deleting polygons"),
+            checkable=True,
+            enabled=True,
+        )
+        deleteConfirm.setChecked(self._config.get("delete_confirm", False))
 
         saveWithImageData = action(
             text=self.tr("Save With Image Data"),
@@ -683,6 +751,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Store actions for further handling.
         self.actions = utils.struct(
             saveAuto=saveAuto,
+            deleteConfirm=deleteConfirm,
             saveWithImageData=saveWithImageData,
             changeOutputDir=changeOutputDir,
             save=save,
@@ -800,6 +869,9 @@ class MainWindow(QtWidgets.QMainWindow):
             lang_act.setChecked(current_language() == lang_id)
             lang_group.addAction(lang_act)
             settings_menu.addAction(lang_act)
+
+        # 删除确认开关（用户可调；默认关闭）
+        settings_menu.addAction(self.actions.deleteConfirm)
 
         utils.addActions(
             self.menus.file,
@@ -1130,7 +1202,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.editMode.setEnabled(not drawing)
         self.actions.undoLastPoint.setEnabled(drawing)
         self.actions.undo.setEnabled(not drawing)
-        self.actions.delete.setEnabled(not drawing)
+        # 删除不随绘制模式禁用：绘制期间标签列表选中的多边形同样可删
+        #（可用性按选中集合决定；删除只作用于已完成的形状，
+        # 不触碰绘制中的进行时形状）
+        self.actions.delete.setEnabled(
+            bool(self.canvas.selectedShapes) or not drawing)
 
     def toggleDrawMode(self, edit=True, createMode="polygon"):
         draw_actions = {
@@ -2165,6 +2241,26 @@ class MainWindow(QtWidgets.QMainWindow):
             key = item.text()
             flag = item.checkState() == Qt.Checked
             flags[key] = flag
+        # 空标注不落盘：无任何形状且图片级标记全未勾选时，删除既有标注文件
+        #（历史空 json 一并清掉），文件列表保持「未标注」——避免空文件被
+        # 后续流程当作已标注图片
+        if not shapes and not any(flags.values()):
+            if filename and osp.isfile(filename):
+                # 保护：既有文件有内容但本次未成功加载（解析失败/损坏）时
+                # 不误删用户数据，仅跳过写入
+                loaded_ok = self.labelFile is not None
+                if loaded_ok or not self._label_file_has_content(filename):
+                    try:
+                        os.remove(filename)
+                    except OSError:
+                        logger.warning(
+                            "空标注文件删除失败: {}".format(filename))
+            self.labelFile = None
+            item = self._file_items.get(self.imagePath)
+            if item is not None:
+                item.setCheckState(0, Qt.Unchecked)
+            self._label_content_cache = {}
+            return True
         try:
             imagePath = osp.relpath(self.imagePath, osp.dirname(filename))
             imageData = self.imageData if self._config["store_data"] else None
@@ -2282,14 +2378,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def labelSelectionChanged(self):
         if self._noSelectionSlot:
             return
-        if self.canvas.editing():
-            selected_shapes = []
-            for item in self.labelList.selectedItems():
-                selected_shapes.append(item.shape())
-            if selected_shapes:
-                self.canvas.selectShapes(selected_shapes)
-            else:
-                self.canvas.deSelectShape()
+        selected_shapes = []
+        for item in self.labelList.selectedItems():
+            selected_shapes.append(item.shape())
+        if selected_shapes:
+            self.canvas.selectShapes(selected_shapes)
+        else:
+            self.canvas.deSelectShape()
 
     def labelItemChanged(self, item):
         shape = item.shape()
@@ -2301,11 +2396,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Callback functions:
 
-    def _undo_last_action(self) -> None:
-        """XCcv：画布右键触发的撤销（非绘制状态撤销上一步编辑）。"""
-        if self.actions.undo.isEnabled():
-            self.actions.undo.trigger()
-
     def setLanguage(self, lang: str) -> None:
         """XCcv：切换界面语言（重启后生效）。"""
         set_language(lang)
@@ -2314,6 +2404,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _exit_drawing_mode(self) -> None:
         """XCcv：退出标注状态时走标准切换流程，恢复所有绘制动作的可用状态。"""
         self.setEditMode()
+
+    def _on_escape_exit_drawing(self) -> None:
+        """XCcv：绘制态 Esc 退出标注（窗口级快捷键，与焦点无关）。"""
+        if self.canvas.drawing():
+            self.canvas._exit_drawing()
 
     def newShape(self):
         """Pop-up and give focus to the label editor.
@@ -2645,6 +2740,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         if not self.mayContinue():
             event.ignore()
+        # 释放应用级 Esc 过滤器（窗口关闭后不再拦截任何事件）
+        esc_filter = self.__dict__.get("_esc_exit_filter")
+        app = QtWidgets.QApplication.instance()
+        if esc_filter is not None and app is not None:
+            app.removeEventFilter(esc_filter)
+            self.__dict__.pop("_esc_exit_filter", None)
         self.settings.setValue("filename", self.filename if self.filename else "")
         self.settings.setValue("window/size", self.size())
         self.settings.setValue("window/position", self.pos())
@@ -2939,18 +3040,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setDirty()
 
     def deleteSelectedShape(self):
-        yes, no = QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No
-        msg = self.tr(
-            "You are about to permanently delete {} polygons, " "proceed anyway?"
-        ).format(len(self.canvas.selectedShapes))
-        if yes == QtWidgets.QMessageBox.warning(
-            self, self.tr("Attention"), msg, yes | no, yes
-        ):
-            self.remLabels(self.canvas.deleteSelected())
-            self.setDirty()
-            if self.noShapes():
-                for action in self.actions.onShapesPresent:
-                    action.setEnabled(False)
+        shapes = list(self.canvas.selectedShapes)
+        if not shapes:
+            return
+        if self._config.get("delete_confirm"):
+            # 确认弹窗按名称列出目标（序号从 1 起），不再是“多边形 N”
+            names = []
+            for i, shape in enumerate(shapes, 1):
+                label = (str(shape.label) or "").strip()
+                names.append("{}. {}".format(i, label or self.tr("Unnamed")))
+            shown = "\n".join(names[:8])
+            if len(names) > 8:
+                shown += "\n… +{}".format(len(names) - 8)
+            msg = self.tr(
+                "You are about to permanently delete {} polygons:\n"
+                "{}. Proceed anyway?"
+            ).format(len(shapes), shown)
+            yes, no = QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No
+            if yes != QtWidgets.QMessageBox.warning(
+                self, self.tr("Attention"), msg, yes | no, yes
+            ):
+                return
+        self.remLabels(self.canvas.deleteSelected())
+        self.setDirty()
+        # 画布选中集已清空：删除动作同步禁用（此前残留启用，再按 Delete 空转）
+        self.actions.delete.setEnabled(bool(self.canvas.selectedShapes))
+        if self.noShapes():
+            for action in self.actions.onShapesPresent:
+                action.setEnabled(False)
 
     def copyShape(self):
         self.canvas.endMove(copy=True)
@@ -2999,14 +3116,10 @@ class MainWindow(QtWidgets.QMainWindow):
         for file in imageFiles:
             if file in self.imageList or not file.lower().endswith(tuple(extensions)):
                 continue
-            label_file = osp.splitext(file)[0] + ".json"
-            if self.output_dir:
-                label_file_without_path = osp.basename(label_file)
-                label_file = osp.join(self.output_dir, label_file_without_path)
             item = QtWidgets.QTreeWidgetItem([osp.basename(file)])
             item.setData(0, QtCore.Qt.UserRole, file)
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-            if QtCore.QFile.exists(label_file) and LabelFile.is_label_file(label_file):
+            if self._has_label_file(file):
                 item.setCheckState(0, Qt.Checked)
             else:
                 item.setCheckState(0, Qt.Unchecked)
@@ -3071,14 +3184,10 @@ class MainWindow(QtWidgets.QMainWindow):
                          if self._has_label_file(f) == want]
 
         def _make_file_item(filename):
-            label_file = osp.splitext(filename)[0] + ".json"
-            if self.output_dir:
-                label_file_without_path = osp.basename(label_file)
-                label_file = osp.join(self.output_dir, label_file_without_path)
             item = QtWidgets.QTreeWidgetItem([osp.basename(filename)])
             item.setData(0, QtCore.Qt.UserRole, filename)
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-            if QtCore.QFile.exists(label_file) and LabelFile.is_label_file(label_file):
+            if self._has_label_file(filename):
                 item.setCheckState(0, Qt.Checked)
             else:
                 item.setCheckState(0, Qt.Unchecked)
@@ -3116,12 +3225,44 @@ class MainWindow(QtWidgets.QMainWindow):
                 folder_item.addChild(_make_file_item(filename))
         self.openNextImg(load=load)
 
+    def _label_file_has_content(self, label_file):
+        """标注文件是否有实际内容：shapes 非空，或图片级标记有勾选。
+
+        历史遗留的空标注文件（shapes=[] 且 flags 全 False）不算已标注；
+        缓存按 (mtime, size) 失效，目录刷新不重复解析同一文件。
+        """
+        key = str(label_file)
+        try:
+            st = os.stat(key)
+            sig = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            self._label_content_cache.pop(key, None)
+            return False
+        cache = self._label_content_cache
+        hit = cache.get(key)
+        if hit is not None and hit[0] == sig:
+            return hit[1]
+        has_content = False
+        try:
+            with open(key, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                has_content = bool(data.get("shapes")) or any(
+                    bool(v) for v in (data.get("flags") or {}).values())
+        except (OSError, ValueError):
+            has_content = False
+        cache[key] = (sig, has_content)
+        return has_content
+
     def _has_label_file(self, filename):
+        """是否已标注：标注文件存在且有实际内容（空文件不计）。"""
         label_file = osp.splitext(filename)[0] + ".json"
         if self.output_dir:
             label_file = osp.join(self.output_dir, osp.basename(label_file))
-        return QtCore.QFile.exists(label_file) and \
-            LabelFile.is_label_file(label_file)
+        if not (QtCore.QFile.exists(label_file)
+                and LabelFile.is_label_file(label_file)):
+            return False
+        return self._label_file_has_content(label_file)
 
     def scanAllImages(self, folderPath):
         extensions = [

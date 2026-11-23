@@ -272,7 +272,7 @@ class _Bridge(QObject):
         node_id = msg.get("node_id")
         try:
             summary = self._session().run(
-                flow, to_node=node_id, label="画布运行",
+                flow, to_node=node_id, label=tr('画布运行'),
                 flow_dir=(str(self.win.current_path.parent)
                           if self.win.current_path else None))
         except Exception as e:
@@ -289,7 +289,7 @@ class _Bridge(QObject):
 
     def do_rerun_node(self, msg):
         try:
-            summary = self._session().rerun(int(msg.get("node_id")), label="画布")
+            summary = self._session().rerun(int(msg.get("node_id")), label=tr('画布'))
         except Exception as e:
             log.error("单节点重跑失败: %s", e, exc_info=True)
             self.send({"event": "status", "text": f"{tr('重跑失败：')}{e}"})
@@ -400,7 +400,9 @@ def _chain_position(chain: dict, node: dict) -> int | None:
 
 class FlowGraphWebWindow(QMainWindow):
     tool_key = "flow"
-    tool_title = "流程图编辑器"
+    @property
+    def tool_title(self):
+        return tr('流程图编辑器')
 
     def __init__(self, on_closed=None):
         super().__init__()

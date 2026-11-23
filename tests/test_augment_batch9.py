@@ -256,6 +256,19 @@ class FingerprintTest(unittest.TestCase):
             (root / ".hidden").write_text("x", encoding="utf-8")
             self.assertEqual(f1, dataset_fingerprint(root))
 
+    def test_copy_dir_same_content_same_fingerprint(self):
+        """v2 口径：拷贝目录（mtime 重置、大小不变）不改变指纹。"""
+        import os
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "a.txt").write_text("1", encoding="utf-8")
+            f1 = dataset_fingerprint(root)
+            os.utime(root / "a.txt", (0, 0))   # mtime 重置（拷贝语义）
+            self.assertEqual(f1, dataset_fingerprint(root),
+                             "mtime 变化不得改变指纹（拷贝误报修复）")
+            self.assertTrue(f1.startswith("v2:"))
+
 
 class GuardDecisionTest(unittest.TestCase):
     def test_no_rotate_passes(self):

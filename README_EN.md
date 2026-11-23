@@ -15,10 +15,11 @@ data never leaves the local network.
 The UI supports **one-click Chinese / English switching** (in the workbench "Settings"
 dialog; applies across the whole platform).
 
-![XCcv workbench (AI platform)](docs/images/main.png)
+![XCcv main window (AI platform)](docs/images/main.png)
 
-> Workbench: Annotate → Train → Test in three steps; the left navigation opens the
-> Deployment platform and Flowchart, plus Model Tools and Defect Sample Synthesis.
+> Main window: Annotate → Train → Test → Deploy in four steps; the left navigation
+> opens Traditional Platform and Flowchart, and the cards include Model Tools and the
+> Deployment platform with a live inference-service status pill.
 
 ## Feature Overview
 

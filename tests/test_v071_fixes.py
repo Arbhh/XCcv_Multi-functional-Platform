@@ -379,7 +379,11 @@ class TrainingWindowLockTest(unittest.TestCase):
             encoding="utf-8")
         self.assertIn("banner.repaint()", src)          # 同步绘制保底
         self.assertIn("remain_ms", src)                  # 最小可见时长
-        self.assertIn("700 - (time.monotonic()", src)
+        # 0.8.2 T5：横幅逻辑抽为 _show_busy_banner/_finish_busy_banner
+        # （新建项目/打开项目共用），最小可见 700ms 默认进助手签名
+        self.assertIn("_show_busy_banner(", src)
+        self.assertIn("_finish_busy_banner(banner, t0)", src)
+        self.assertIn("min_ms: int = 700", src)
 
     def test_per_class_table_no_stretch(self):
         # 0.7.6 P-1 拆分：逐类表构建在 panels/train_page.py（锁随迁）

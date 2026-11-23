@@ -73,13 +73,13 @@ class LabelmeForkTest(unittest.TestCase):
             import shutil
             shutil.rmtree(self.det_dir / "more")
 
-    def test_shortcuts_and_right_click_undo(self):
+    def test_shortcuts_and_right_click_no_undo_in_edit(self):
         win = _make_window(self.det_dir)
         self.assertEqual(win._config["shortcuts"]["create_polygon"], "Q")
         self.assertEqual(win._config["shortcuts"]["create_rectangle"], "W")
         self.assertEqual(win._config["shortcuts"]["create_circle"], "E")
-        self.assertTrue(callable(win.canvas.on_right_click))  # 右键撤销回调已注入
-        # 模拟右键撤销：先制造一次编辑，再触发回调
+        self.assertFalse(hasattr(win.canvas, "on_right_click"))
+        # 右键语义收敛：编辑态右键不得撤销已完成形状（撤销走 Ctrl+Z/菜单）
         json_path = self.det_dir / "img00.json"
         original = json_path.read_text(encoding="utf-8")
         try:
@@ -88,11 +88,99 @@ class LabelmeForkTest(unittest.TestCase):
             win.addLabel(win.canvas.shapes[-1])
             win.setDirty()
             self.assertEqual(len(win.canvas.shapes), 2)
-            win.canvas.on_right_click()
-            self.assertEqual(len(win.canvas.shapes), 1)  # 上一步编辑已撤销
+            from PyQt5.QtCore import QEvent, QPointF, Qt
+            from PyQt5.QtGui import QMouseEvent
+
+            ev = QMouseEvent(QEvent.MouseButtonPress, QPointF(3, 3),
+                             Qt.RightButton, Qt.RightButton, Qt.NoModifier)
+            win.canvas.mousePressEvent(ev)
+            self.assertEqual(len(win.canvas.shapes), 2,
+                             "编辑态右键不得触发撤销")
+            # 撤销能力本身仍在：actions.undo 撤销上一步编辑
+            win.actions.undo.trigger()
+            self.assertEqual(len(win.canvas.shapes), 1)
         finally:
             json_path.write_text(original, encoding="utf-8")
             (self.det_dir / "classes.txt").write_text("cat\ndog\n", encoding="utf-8")
+
+    def test_delete_while_drawing_via_label_list(self):
+        """1.4 回归：绘制期间在标签列表选中已完成形状 → Delete 可删。
+
+        修复前 labelSelectionChanged 被 canvas.editing() 门禁挡住，
+        绘制态下列表选中不同步画布，删除动作保持禁用。
+        """
+        from PyQt5.QtWidgets import QApplication
+
+        win = _make_window(self.det_dir)
+        json_path = self.det_dir / "img00.json"
+        original = json_path.read_text(encoding="utf-8")
+        try:
+            self.assertGreaterEqual(len(win.canvas.shapes), 1)
+            # 进入多边形绘制态（画布 mode=CREATE，无进行中形状）
+            win.toggleDrawMode(False, createMode="polygon")
+            self.assertTrue(win.canvas.drawing())
+            # 在标签列表选中第一个已完成形状
+            item = win.labelList.findItemByShape(win.canvas.shapes[0])
+            self.assertIsNotNone(item)
+            win.labelList.selectItem(item)
+            QApplication.processEvents()
+            self.assertTrue(win.canvas.selectedShapes,
+                            "绘制态下列表选中必须同步画布选中集")
+            self.assertTrue(win.actions.delete.isEnabled(),
+                            "绘制态且有选中时删除动作必须可用")
+            # 删除只作用于已完成形状，绘制态保持
+            n_before = len(win.canvas.shapes)
+            win.deleteSelectedShape()
+            QApplication.processEvents()
+            self.assertEqual(len(win.canvas.shapes), n_before - 1)
+            self.assertTrue(win.canvas.drawing(), "删除不得打断绘制状态")
+            # 清选后删除动作回到禁用（绘制态无选中）
+            win.labelList.clearSelection()
+            QApplication.processEvents()
+            self.assertFalse(win.actions.delete.isEnabled())
+        finally:
+            json_path.write_text(original, encoding="utf-8")
+            win._exit_drawing_mode()
+            win.setClean()
+
+    def test_delete_confirm_menu_toggle_writes_config(self):
+        """1.6 回归：「删除前确认」菜单开关必须写配置并即时生效。
+
+        修复前 slot 只回写勾选状态（自赋值空转），配置从不更新，
+        勾选后删除依旧不弹窗。
+        """
+        from PyQt5.QtWidgets import QApplication, QMessageBox
+        from unittest import mock
+
+        win = _make_window(self.det_dir)
+        json_path = self.det_dir / "img00.json"
+        original = json_path.read_text(encoding="utf-8")
+        try:
+            act = win.actions.deleteConfirm
+            self.assertFalse(win._config.get("delete_confirm", False))
+            act.trigger()   # 未勾选 → trigger 翻为勾选，triggered(True) → 配置写入
+            self.assertTrue(win._config["delete_confirm"],
+                            "菜单勾选必须写入 delete_confirm 配置")
+            # 先在画布选中形状（删除动作只作用于画布选中集）
+            item = win.labelList.findItemByShape(win.canvas.shapes[0])
+            win.labelList.selectItem(item)
+            QApplication.processEvents()
+            n_before = len(win.canvas.shapes)
+            # 即时生效：删除弹确认框，No 取消不删
+            with mock.patch.object(QMessageBox, "warning",
+                                   return_value=QMessageBox.No) as warn:
+                win.deleteSelectedShape()
+            warn.assert_called_once()
+            self.assertEqual(len(win.canvas.shapes), n_before, "No 取消不得删除")
+            # 再勾选关闭 → 配置翻转，删除不再弹窗
+            act.trigger()
+            self.assertFalse(win._config["delete_confirm"])
+            with mock.patch.object(QMessageBox, "warning") as warn:
+                win.deleteSelectedShape()
+            warn.assert_not_called()
+        finally:
+            json_path.write_text(original, encoding="utf-8")
+            win.setClean()
 
     def test_pan_press_hold_release(self):
         """平移必须按住才拖、松开即停（回归：此前松开不复位导致永远拖动）。"""

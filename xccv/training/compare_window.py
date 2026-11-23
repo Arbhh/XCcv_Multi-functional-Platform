@@ -137,15 +137,31 @@ def history_series(history: list) -> tuple:
     return loss, metric
 
 
+_FP_V2_PREFIX = "v2:"
+
+
 def fingerprint_warnings(records: list, current_fp: str | None) -> list:
-    """数据集指纹提示（明确展示在对比视图中）。"""
+    """数据集指纹提示（明确展示在对比视图中）。
+
+    指纹 v2 起 = sha1(相对路径+大小)（不含 mtime）：拷贝目录不再误报
+    「数据已修改」。旧口径（含 mtime 的裸哈希）与新口径无法精确比对，
+    按「口径变更」提示，不判「已修改」。
+    """
     warnings = []
     fps = {}
     for r in records:
         fp = r.metrics.get("dataset_fingerprint")
         if fp:
             fps[r.run_dir.name] = fp
-        if fp and current_fp and fp != current_fp:
+        if not fp or not current_fp:
+            continue
+        if not str(fp).startswith(_FP_V2_PREFIX) \
+                or not str(current_fp).startswith(_FP_V2_PREFIX):
+            warnings.append(
+                f"ℹ 记录「{r.start_time or r.run_dir.name}」使用旧口径数据指纹"
+                "（不含修改时间），无法与当前数据精确比对。")
+            continue
+        if fp != current_fp:
             warnings.append(
                 f"⚠ 记录「{r.start_time or r.run_dir.name}」训练完成后数据集已修改，"
                 "其指标可能与当前数据不对应。")
@@ -161,11 +177,14 @@ def _run_caption(rec: RunRecord) -> str:
 
 
 class _AdaptiveFigure(FigureCanvasQTAgg):
-    """随窗口宽度 1:1 重设 matplotlib 画布尺寸。
+    """随窗口同步的 matplotlib 画布。
 
-    固定 figsize 的画布放进滚动区会被 Qt 拉伸（字号/线宽比例失真，全屏时
-    严重变形、非全屏时被裁剪不可见）。此处监听
-    resizeEvent，把 figure 的英寸尺寸同步为控件实际像素，渲染与显示一致。
+    固定 figsize 的画布放进滚动区会被 Qt 拉伸（字号/线宽比例失真）。
+    matplotlib 自带的 resizeEvent 已把 figure 尺寸同步为控件的
+    物理像素（逻辑×devicePixelRatio）——此处不得再用逻辑像素二次
+    覆写：高分屏缩放（125%/150%）下会产生"sizeHint 每轮 ÷dpr"的
+    收缩反馈环，最终被下限钳制成裁剪态（标题与 x 轴标签被切掉）。
+    此处只在尺寸变化后补紧布局与重绘。
     """
 
     def __init__(self, fig: Figure, min_height: int = 320):
@@ -174,13 +193,10 @@ class _AdaptiveFigure(FigureCanvasQTAgg):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-        dpi = self.figure.dpi
-        w = max(self.width(), 480) / dpi
-        h = max(self.height(), 200) / dpi
-        if abs(self.figure.get_figwidth() - w) > 0.01 or \
-                abs(self.figure.get_figheight() - h) > 0.01:
-            self.figure.set_size_inches(w, h)
+        prev = self.figure.get_size_inches().tolist()
+        super().resizeEvent(ev)          # matplotlib：按物理像素同步尺寸
+        now = self.figure.get_size_inches().tolist()
+        if abs(prev[0] - now[0]) > 0.01 or abs(prev[1] - now[1]) > 0.01:
             try:
                 self.figure.tight_layout()
             except Exception:

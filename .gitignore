@@ -47,6 +47,7 @@ docs/开源合规参考_*.md
 docs/0.7.*/
 docs/0.8.0/
 docs/0.8.1/
+docs/0.8.2/
 
 # Office 锁文件
 ~$*.docx

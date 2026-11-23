@@ -372,7 +372,30 @@ class TrainingWindow(QMainWindow):
         # 的琥珀底作微差取暗暖灰；V0.7）
         from ..i18n import tr
 
-        banner = QLabel(f"{tr('正在打开项目')}「{name}」…", self)
+        banner, t0 = self._show_busy_banner(
+            f"{tr('正在打开项目')}「{name}」…")
+        self.statusBar().showMessage(
+            f"{tr('正在打开项目')}「{name}」…", 8000)
+        QApplication.setOverrideCursor(_Qt.WaitCursor)
+        try:
+            window = ProjectWindow(
+                load_project(name),
+                on_renamed=self._on_project_renamed,
+                on_closed=self._on_project_closed,
+            )
+            window.show()
+        finally:
+            QApplication.restoreOverrideCursor()
+            self._finish_busy_banner(banner, t0)
+        self.statusBar().showMessage(f"{tr('项目')}「{name}」{tr('已打开')}", 4000)
+        self._project_windows[name] = window
+
+    def _show_busy_banner(self, text: str):
+        """顶部悬浮胶囊等待提示（打开项目/新建项目共用，U1 模式）。
+
+        返回 (banner, t0)；长任务结束后以 _finish_busy_banner 收尾。
+        """
+        banner = QLabel(text, self)
         banner.setObjectName("openProjectBanner")
         banner.setStyleSheet(
             "QLabel#openProjectBanner { background: rgba(58, 46, 34, 224);"
@@ -388,31 +411,22 @@ class TrainingWindow(QMainWindow):
         banner.repaint()
         QApplication.processEvents()
         QApplication.processEvents()
-        t0 = time.monotonic()
-        self.statusBar().showMessage(
-            f"{tr('正在打开项目')}「{name}」…", 8000)
-        QApplication.setOverrideCursor(_Qt.WaitCursor)
-        try:
-            window = ProjectWindow(
-                load_project(name),
-                on_renamed=self._on_project_renamed,
-                on_closed=self._on_project_closed,
-            )
-            window.show()
-        finally:
-            QApplication.restoreOverrideCursor()
-            # 等待横幅固定可见 ≥0.7s：构建很快时也给出可感知的反馈，
-            # 避免"一闪而过/根本没出现"的间歇观感
-            remain_ms = max(0, int(700 - (time.monotonic() - t0) * 1000))
+        return banner, time.monotonic()
 
-            def _hide_open_banner():
+    def _finish_busy_banner(self, banner, t0: float, min_ms: int = 700):
+        """等待横幅固定可见 ≥min_ms：构建很快时也给出可感知的反馈，
+        避免"一闪而过/根本没出现"的间歇观感。"""
+        remain_ms = max(0, int(min_ms - (time.monotonic() - t0) * 1000))
+
+        def _hide_busy_banner():
+            try:
                 banner.hide()
                 banner.setParent(None)
                 banner.deleteLater()
+            except RuntimeError:
+                pass  # 窗口已销毁（快速关闭）——横幅随之消亡
 
-            QTimer.singleShot(remain_ms, _hide_open_banner)
-        self.statusBar().showMessage(f"{tr('项目')}「{name}」{tr('已打开')}", 4000)
-        self._project_windows[name] = window
+        QTimer.singleShot(remain_ms, _hide_busy_banner)
 
     def on_platform_message(self, args):
         """单实例激活携带业务参数：args[0]=项目名 → 直接打开该项目。
@@ -507,7 +521,13 @@ class TrainingWindow(QMainWindow):
 
     # ---- 创建 ----
     def _create_project(self):
-        dialog = CreateProjectDialog(self)
+        # 新建项目对话框要构建模型清单（触发深度学习组件加载，卡顿数秒）——
+        # 与打开项目同款悬浮提示（U1 模式复用）
+        banner, t0 = self._show_busy_banner(tr("正在准备新建项目") + "…")
+        try:
+            dialog = CreateProjectDialog(self)
+        finally:
+            self._finish_busy_banner(banner, t0)
         if dialog.exec_() != QDialog.Accepted:
             return
         try:

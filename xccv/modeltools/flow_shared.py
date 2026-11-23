@@ -22,7 +22,7 @@ from ..i18n import tr
 log = logging.getLogger(__name__)
 
 _EMPTY_FLOW = {"last_node_id": 0, "last_link_id": 0, "nodes": [], "links": []}
-_MODEL_FILE_DLG = "模型权重 (*.pt *.engine *.onnx);;所有文件 (*)"
+_MODEL_FILE_DLG = tr('模型权重 (*.pt *.engine *.onnx);;所有文件 (*)')
 
 
 def _write_flow_json(path: Path, flow: dict) -> None:
@@ -45,21 +45,20 @@ def _model_file_problems(model_file: str) -> list[str]:
     """
     p = Path(model_file)
     if not p.is_file():
-        return [f"模型节点引用的权重文件不存在：{model_file}"]
+        return [tr('模型节点引用的权重文件不存在：{}').format(model_file)]
     with p.open("rb") as f:
         head = f.read(8)
     if len(head) < 4:
-        return [f"模型文件为空或损坏：{p.name}"]
+        return [tr('模型文件为空或损坏：{}').format(p.name)]
     suffix = p.suffix.lower()
     if suffix == ".xvap":
         if not head.startswith(_MAGIC_XVAP):
-            return [f"流程包文件不是有效的 .xvap（缺 XVAP 头）：{p.name}"]
+            return [tr('流程包文件不是有效的 .xvap（缺 XVAP 头）：{}').format(p.name)]
     elif suffix in (".pt", ".pth"):
         if head.startswith(_LEGACY_CRYPTO_MAGIC):
-            return [f"模型文件是旧版加密容器（.xva/.xcs），当前版本只支持明文权重，"
-                    f"请重新训练或重新导出：{p.name}"]
+            return [tr('模型文件是旧版加密容器（.xva/.xcs），当前版本只支持明文权重，请重新训练或重新导出：{}').format(p.name)]
         if not head.startswith(_TORCH_HEADS):
-            return [f"模型文件不是有效的 torch 权重（既非 zip 也非 pickle 格式）：{p.name}"]
+            return [tr('模型文件不是有效的 torch 权重（既非 zip 也非 pickle 格式）：{}').format(p.name)]
     return []
 
 
@@ -93,18 +92,17 @@ def _xcv_pack_problems(flow: dict) -> list[str]:
         if t.startswith("xccv2/"):
             t = t[6:]
         if get_node_class(t) is None:
-            problems.append(f"节点 {i}：类型 {n.get('type')!r} 未注册"
-                            "（可能混入了旧版节点，请改用「传统算子」面板节点）")
+            problems.append(tr('节点 {}：类型 {!r} 未注册（可能混入了旧版节点，请改用「传统算子」面板节点）').format(i, n.get('type')))
             continue
         props = dict(n.get("properties") or n.get("params") or {})
         cls = get_node_class(t)
         errs = cls().validate(props)
         for e in errs:
-            problems.append(f"节点 {i}（{node_title(cls)}）：{e}")
+            problems.append(tr('节点 {}（{}）：{}').format(i, node_title(cls), e))
         if t in _XCV_MODEL_NODES:
             mp = str(props.get("model_path") or "")
             if not mp:
-                problems.append(f"节点 {i}（{node_title(cls)}）：尚未选择权重文件")
+                problems.append(tr('节点 {}（{}）：尚未选择权重文件').format(i, node_title(cls)))
             else:
                 problems += _model_file_problems(mp)
         norm.append({**n, "type": t})
@@ -112,7 +110,7 @@ def _xcv_pack_problems(flow: dict) -> list[str]:
         Executor({"nodes": norm, "links": flow.get("links") or []},
                  RunContext()).validate()
     except FlowError as e:
-        problems.append(f"流程结构问题：{e}")
+        problems.append(tr('流程结构问题：{}').format(e))
     # 必需输入缺连线（Executor.validate 不查必填，运行期才会报——打包期提前拦）
     linked_in = {(int(lk[3]), int(lk[4])) for lk in flow.get("links") or []}
     for i, n in enumerate(norm, start=1):
@@ -121,15 +119,14 @@ def _xcv_pack_problems(flow: dict) -> list[str]:
             continue
         for slot, port in enumerate(cls.INPUTS):
             if port.required and (int(n.get("id")), slot) not in linked_in:
-                problems.append(f"节点 {i}（{node_title(cls)}）：必需输入"
-                                f"「{port.name}」缺少连线")
+                problems.append(tr('节点 {}（{}）：必需输入「{}」缺少连线').format(i, node_title(cls), port.name))
     # 区域参数用打包口径严查（节点 validate 为宽容口径，这里补严）
     for i, n in enumerate(norm, start=1):
         cls = get_node_class(str(n.get("type", "")))
         if cls is not None and getattr(cls, "OP", "") in ("region_block", "region_keep"):
             props = dict(n.get("properties") or {})
             problems += region_param_problems(
-                props.get("regions"), f"节点 {i}（{node_title(cls)}）：")
+                props.get("regions"), tr('节点 {}（{}）：').format(i, node_title(cls)))
     return problems
 
 
@@ -143,7 +140,7 @@ def validate_flow_for_pack(flow: dict) -> list[str]:
     problems: list[str] = []
     nodes = flow.get("nodes") or []
     if not nodes:
-        return ["流程为空：请先添加模型节点与后处理节点"]
+        return [tr('流程为空：请先添加模型节点与后处理节点')]
 
     is_graph = isinstance(nodes[0], dict) and "type" in nodes[0]
     if is_graph:
@@ -161,14 +158,13 @@ def validate_flow_for_pack(flow: dict) -> list[str]:
         model_nodes = [n for n in nodes
                        if str(n.get("type", "")).startswith(("model/", "xccv/model"))]
         if not model_nodes:
-            problems.append("流程中没有模型节点（推理无从开始）")
+            problems.append(tr('流程中没有模型节点（推理无从开始）'))
         elif len(model_nodes) > 1:
-            problems.append(f"流程中有 {len(model_nodes)} 个模型节点，运行时只会使用"
-                            "第一个（请删掉多余模型节点）")
+            problems.append(tr('流程中有 {} 个模型节点，运行时只会使用第一个（请删掉多余模型节点）').format(len(model_nodes)))
         for n in model_nodes:
             mf = (n.get("properties") or n.get("params") or {}).get("model_file")
             if not mf:
-                problems.append("模型节点尚未选择权重文件（右键节点 → 选择模型文件）")
+                problems.append(tr('模型节点尚未选择权重文件（右键节点 → 选择模型文件）'))
             else:
                 problems += _model_file_problems(str(mf))
         # 连接完整性：从模型节点拓扑可达的后处理节点才会被执行
@@ -178,8 +174,7 @@ def validate_flow_for_pack(flow: dict) -> list[str]:
         reached = len(chain.get("nodes", []))
         if declared > reached:
             problems.append(
-                f"有 {declared - reached} 个后处理节点未与模型节点连通"
-                "（其参数不会生效），请检查连线")
+                tr('有 {} 个后处理节点未与模型节点连通（其参数不会生效），请检查连线').format(declared - reached))
     else:
         chain = flow
 
@@ -187,13 +182,13 @@ def validate_flow_for_pack(flow: dict) -> list[str]:
     for i, node in enumerate(chain.get("nodes", []), start=1):
         op = node.get("op")
         params = node.get("params") or {}
-        ctx = f"节点 {i}（{op}）："
+        ctx = tr('节点 {}（{}）：').format(i, op)
         if op in ("region_block", "region_keep"):
             problems += df.region_param_problems(params.get("regions"), ctx)
         if op == "count_check":
             lo, hi = int(params.get("min") or 0), int(params.get("max") or 0)
             if lo and hi and lo > hi:
-                problems.append(f"{ctx}数量判定下限 {lo} 大于上限 {hi}")
+                problems.append(tr('{}数量判定下限 {} 大于上限 {}').format(ctx, lo, hi))
     return problems
 
 

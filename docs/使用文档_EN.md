@@ -1,6 +1,6 @@
 # XCcv Multi-functional Vision Platform · User Guide
 
-Version V0.8.1 ｜ Five steps: **Annotation → Training → Testing → Deployment**
+Version V0.8.2 ｜ Five steps: **Annotation → Training → Testing → Deployment**
 (with flow-chart orchestration and model tools)
 Maintained by: Arbhh
 

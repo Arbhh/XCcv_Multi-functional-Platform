@@ -92,15 +92,28 @@ class CompareHelpersTest(unittest.TestCase):
     def test_fingerprint_warnings(self):
         from xccv.training.compare_window import fingerprint_warnings
 
-        self.rec0.metrics["dataset_fingerprint"] = "aaa"
-        self.rec1.metrics["dataset_fingerprint"] = "aaa"
-        self.assertEqual(fingerprint_warnings([self.rec0, self.rec1], "aaa"), [])
-        warns = fingerprint_warnings([self.rec0, self.rec1], "bbb")
+        # v2 口径（路径+大小）：一致无提示；不一致逐条「已修改」
+        self.rec0.metrics["dataset_fingerprint"] = "v2:aaa"
+        self.rec1.metrics["dataset_fingerprint"] = "v2:aaa"
+        self.assertEqual(
+            fingerprint_warnings([self.rec0, self.rec1], "v2:aaa"), [])
+        warns = fingerprint_warnings([self.rec0, self.rec1], "v2:bbb")
         self.assertEqual(len(warns), 2)  # 与当前数据不一致 → 每条记录各提示一次
         self.assertIn("已修改", warns[0])
-        self.rec1.metrics["dataset_fingerprint"] = "ccc"
-        warns = fingerprint_warnings([self.rec0, self.rec1], "ccc")
+        self.rec1.metrics["dataset_fingerprint"] = "v2:ccc"
+        warns = fingerprint_warnings([self.rec0, self.rec1], "v2:ccc")
         self.assertTrue(any("不同版本的数据集" in w for w in warns))  # 互不一致
+
+    def test_fingerprint_legacy_neutral(self):
+        """旧口径（含 mtime 裸哈希）不判「已修改」，按「口径变更」提示。"""
+        from xccv.training.compare_window import fingerprint_warnings
+
+        self.rec0.metrics["dataset_fingerprint"] = "aaa"   # 旧口径裸哈希
+        self.rec1.metrics["dataset_fingerprint"] = "v2:bbb"
+        warns = fingerprint_warnings([self.rec0, self.rec1], "v2:bbb")
+        self.assertTrue(any("口径" in w and "已修改" not in w for w in warns))
+        self.assertFalse(any("已修改" in w for w in warns),
+                         "旧口径不得判为「数据已修改」")
 
     def test_compare_window_builds(self):
         from xccv.training.compare_window import CompareWindow

@@ -105,7 +105,7 @@ class _ToolCard(QFrame):
         head.addWidget(title_label)
         head.addStretch(1)
         if not enabled:
-            soon = QLabel("即将上线")
+            soon = QLabel(tr("即将上线"))
             soon.setObjectName("muted")
             head.addWidget(soon)
         lay.addLayout(head)
@@ -117,7 +117,7 @@ class _ToolCard(QFrame):
         lay.addWidget(desc_label, stretch=1)
 
         foot = QHBoxLayout()
-        tip = QLabel("点击打开窗口 →" if enabled else "敬请期待")
+        tip = QLabel(tr('点击打开窗口 →') if enabled else tr('敬请期待'))
         tip.setStyleSheet(
             f"color: {color if enabled else '#9aa7b8'}; font-size: 14px;"
             "background: transparent; border: none;")
@@ -204,7 +204,7 @@ class _PruneProc(QObject):
         self.proc.start()
         if not self.proc.waitForStarted(8000):
             self.proc = None
-            raise RuntimeError("剪枝子进程启动失败（python -m xccv.engine.prune_worker）")
+            raise RuntimeError(tr('剪枝子进程启动失败（python -m xccv.engine.prune_worker）'))
         self._timer = QTimer(self)
         self._timer.setInterval(PRUNE_POLL_MS)
         self._timer.timeout.connect(self._watchdog)
@@ -248,11 +248,10 @@ class _PruneProc(QObject):
             (round(elapsed, 1), round(rss_mb, 1), round(sys_pct, 1)))
         self._peak_mb = max(self._peak_mb, rss_mb)
         if sys_pct >= PRUNE_RAM_LIMIT_PCT:
-            self.kill(f"系统内存水位 {sys_pct:.0f}% ≥ {PRUNE_RAM_LIMIT_PCT}%"
-                      f"（子进程 RSS {rss_mb:.0f} MB）")
+            self.kill(tr('系统内存水位 {:.0f}% ≥ {}%（子进程 RSS {:.0f} MB）').format(sys_pct, PRUNE_RAM_LIMIT_PCT, rss_mb))
             return
         if elapsed >= self._timeout_s:
-            self.kill(f"硬超时 {self._timeout_s:.0f}s")
+            self.kill(tr('硬超时 {:.0f}s').format(self._timeout_s))
 
     # ---- stdout JSON 行协议 ----
     def _drain_stdout(self):
@@ -282,7 +281,7 @@ class _PruneProc(QObject):
 
     def _on_error(self, err):
         if err == QProcess.FailedToStart and not self._killed:
-            self._final = {"status": "error", "message": "剪枝子进程启动失败"}
+            self._final = {"status": "error", "message": tr('剪枝子进程启动失败')}
 
     def _on_finished(self, code, status):
         if self._timer is not None:
@@ -301,7 +300,7 @@ class _PruneProc(QObject):
             out.setdefault("peak_rss_mb", self._peak_mb)
             out.setdefault("elapsed_s", round(elapsed, 1))
             if not out:
-                out = {"status": "error", "message": f"子进程退出码 {code}"}
+                out = {"status": "error", "message": tr('子进程退出码 {}').format(code)}
         proc, self.proc = self.proc, None
         if proc is not None:
             proc.deleteLater()
@@ -371,15 +370,15 @@ class _ToolWindow(QMainWindow):
             root.addWidget(body, stretch=1)
             self.setCentralWidget(central)
             return
-        g_sel = QGroupBox("选择模型")
+        g_sel = QGroupBox(tr("选择模型"))
         f_sel = QFormLayout(g_sel)
         self.project_combo = QComboBox()
         self.project_combo.currentIndexChanged.connect(self._on_project_changed)
         self.run_combo = QComboBox()
-        self.run_combo.setToolTip("选择要处理的训练记录")
+        self.run_combo.setToolTip(tr("选择要处理的训练记录"))
         self.run_combo.currentIndexChanged.connect(self._on_run_changed)
-        f_sel.addRow("项目（来自训练平台）", self.project_combo)
-        f_sel.addRow("训练记录", self.run_combo)
+        f_sel.addRow(tr('项目（来自训练平台）'), self.project_combo)
+        f_sel.addRow(tr('训练记录'), self.run_combo)
         lay.addWidget(g_sel)
         # 模型档案摘要行（类别数 / OK 负样本 / 数据与依赖指纹）
         self.manifest_hint = QLabel("")
@@ -416,7 +415,7 @@ class _ToolWindow(QMainWindow):
                 if not has_weights:
                     continue
                 pruned = any((rec.run_dir / n).is_file() for n in _PRUNED_WEIGHTS)
-                tag = "（已剪枝）" if pruned else ""
+                tag = tr('（已剪枝）') if pruned else ""
                 self.run_combo.addItem(
                     f"{rec.start_time or rec.run_dir.name}　{rec.status_text}{tag}",
                     str(rec.run_dir))
@@ -443,12 +442,12 @@ class _ToolWindow(QMainWindow):
             try:
                 m = json.loads((rd / "metrics.json").read_text(encoding="utf-8"))
                 neg = m.get("neg_train_images") or 0
-                parts = [f"类别 {len(m.get('classes') or [])} 个"]
+                parts = [tr('类别 {} 个').format(len(m.get('classes') or []))]
                 fp = m.get("dataset_fingerprint")
                 if fp:
-                    parts.append(f"数据指纹 {str(fp)[:10]}…")
+                    parts.append(tr('数据指纹 {}…').format(str(fp)[:10]))
                 if neg:
-                    parts.append(f"OK 负样本 {neg} 张")
+                    parts.append(tr('OK 负样本 {} 张').format(neg))
                 try:
                     man = json.loads((rd / "run_manifest.json").read_text(
                         encoding="utf-8"))
@@ -458,15 +457,15 @@ class _ToolWindow(QMainWindow):
                     if env.get("gpu"):
                         parts.append(str(env["gpu"]))
                     if man.get("lock_sha1"):
-                        parts.append(f"依赖锁 {str(man['lock_sha1'])[:10]}…")
+                        parts.append(tr('依赖锁 {}…').format(str(man['lock_sha1'])[:10]))
                     if man.get("deterministic"):
-                        parts.append("确定性训练")
+                        parts.append(tr('确定性训练'))
                     app = man.get("application") or {}
                     if app.get("version"):
                         parts.append(f"app {app['version']}")
                 except Exception:
                     pass  # V0.7 之前的训练记录无 manifest：只显示 metrics 侧
-                text = "模型档案：　" + "　·　".join(parts)
+                text = tr('模型档案：\u3000') + "　·　".join(parts)
             except Exception:
                 log.debug("模型 manifest 摘要构建失败（按空提示）")
                 text = ""
@@ -535,7 +534,9 @@ class PruneToolWindow(_ToolWindow):
     """模型剪枝窗口：训练后剪枝（处理已有训练记录）+ 训练前剪枝（按项目生成剪枝模型）。"""
 
     tool_key = "prune"
-    tool_title = "模型剪枝"
+    @property
+    def tool_title(self):
+        return tr('模型剪枝')
 
     def _build_settings(self, lay: QVBoxLayout):
         scroll = QScrollArea()
@@ -546,64 +547,64 @@ class PruneToolWindow(_ToolWindow):
         inner.setSpacing(12)
 
         # 模式切换
-        g_mode = QGroupBox("剪枝模式")
+        g_mode = QGroupBox(tr("剪枝模式"))
         fm = QFormLayout(g_mode)
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("训练前剪枝：按项目数据集生成剪枝模型", "pre")
-        self.mode_combo.addItem("训练后剪枝：处理某次训练记录的权重", "post")
+        self.mode_combo.addItem(tr("训练前剪枝：按项目数据集生成剪枝模型"), "pre")
+        self.mode_combo.addItem(tr("训练后剪枝：处理某次训练记录的权重"), "post")
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         fm.addRow(self.mode_combo)
         inner.addWidget(g_mode)
 
         # ---- 模式 A：训练前剪枝 ----
-        g_pre = QGroupBox("训练前剪枝")
+        g_pre = QGroupBox(tr("训练前剪枝"))
         f_pre = QFormLayout(g_pre)
         self.pre_model_combo = QComboBox()
         self.pre_model_combo.setToolTip(
-            "选择要剪枝的模型架构：按数据集类别数与输入尺寸构建预训练模型后剪枝")
+            tr("选择要剪枝的模型架构：按数据集类别数与输入尺寸构建预训练模型后剪枝"))
         self.pre_ratio_spin = _ToolSpin()
         self.pre_ratio_spin.setRange(5, 90)
         self.pre_ratio_spin.setValue(30)
         self.pre_ratio_spin.setSuffix(" %")
         self.pre_ratio_spin.setToolTip(
-            "剪掉的通道比例：30% 起步通常精度损失 <1 个点，训练可恢复；\n"
-            "只剪骨干/颈部冗余通道，分类头/检测头/RPN/工业模块不受影响")
+            tr("剪掉的通道比例：30% 起步通常精度损失 <1 个点，训练可恢复；\n"
+            "只剪骨干/颈部冗余通道，分类头/检测头/RPN/工业模块不受影响"))
         self.pre_size_hint = QLabel("")
         self.pre_size_hint.setObjectName("accentText")
-        self.btn_preprune = QPushButton("▶ 生成剪枝模型")
+        self.btn_preprune = QPushButton(tr("▶ 生成剪枝模型"))
         self.btn_preprune.setObjectName("accent")
         self.btn_preprune.clicked.connect(self._run_preprune)
-        f_pre.addRow("模型架构", self.pre_model_combo)
-        f_pre.addRow("剪枝比例", self.pre_ratio_spin)
-        f_pre.addRow("输入尺寸", self.pre_size_hint)
+        f_pre.addRow(tr('模型架构'), self.pre_model_combo)
+        f_pre.addRow(tr('剪枝比例'), self.pre_ratio_spin)
+        f_pre.addRow(tr('输入尺寸'), self.pre_size_hint)
         f_pre.addRow(self.btn_preprune)
         inner.addWidget(g_pre)
         self.pre_group = g_pre
 
         pre_hint = QLabel(
-            "剪枝模型（.pt）保存到项目「模型储存路径\\pruned」文件夹；\n"
-            "训练平台的模型下拉会自动出现该模型，选择后即可开始迁移学习。")
+            tr("剪枝模型（.pt）保存到项目「模型储存路径\\pruned」文件夹；\n"
+            "训练平台的模型下拉会自动出现该模型，选择后即可开始迁移学习。"))
         pre_hint.setObjectName("hint")
         pre_hint.setWordWrap(True)
         inner.addWidget(pre_hint)
         self.pre_hint = pre_hint
 
         # ---- 模式 B：训练后剪枝 ----
-        g_post = QGroupBox("训练后剪枝（处理所选训练记录）")
+        g_post = QGroupBox(tr("训练后剪枝（处理所选训练记录）"))
         f_post = QFormLayout(g_post)
         self.ratio_spin = _ToolSpin()
         self.ratio_spin.setRange(5, 90)
         self.ratio_spin.setValue(30)
         self.ratio_spin.setSuffix(" %")
         self.ratio_spin.setToolTip(
-            "剪掉的通道比例：30% 起步通常精度损失 <1 个点，微调可恢复；\n"
+            tr("剪掉的通道比例：30% 起步通常精度损失 <1 个点，微调可恢复；\n"
             "只剪骨干/颈部冗余通道，分类头/检测头/RPN/工业模块不受影响；\n"
             "YOLO 权重剪枝已停用（torch-pruning 上游对 ultralytics 图内存爆炸）；\n"
-            "剪后副本与源文件同格式，测试平台可直接加载对比效果")
-        self.btn_prune = QPushButton("▶ 执行剪枝")
+            "剪后副本与源文件同格式，测试平台可直接加载对比效果"))
+        self.btn_prune = QPushButton(tr("▶ 执行剪枝"))
         self.btn_prune.setObjectName("accent")
         self.btn_prune.clicked.connect(self._run_prune)
-        f_post.addRow("剪枝比例", self.ratio_spin)
+        f_post.addRow(tr('剪枝比例'), self.ratio_spin)
         f_post.addRow(self.btn_prune)
         inner.addWidget(g_post)
         self.post_group = g_post
@@ -614,15 +615,15 @@ class PruneToolWindow(_ToolWindow):
         inner.addWidget(self.prune_result)
 
         # 紧急终止：执行中常驻显示；剪枝在独立子进程，终止即时生效
-        self.btn_kill = QPushButton("■ 紧急终止剪枝")
+        self.btn_kill = QPushButton(tr("■ 紧急终止剪枝"))
         self.btn_kill.clicked.connect(self._kill_prune)
         self.btn_kill.setVisible(False)
         inner.addWidget(self.btn_kill)
         self._prune_proc = None  # _PruneProc（QProcess 托管）
 
         post_hint = QLabel(
-            "剪枝结果保存为所选记录文件夹内的 best_pruned.pt（源权重不变）；\n"
-            "可在测试平台直接加载该文件，与原模型对比速度与精度。")
+            tr("剪枝结果保存为所选记录文件夹内的 best_pruned.pt（源权重不变）；\n"
+            "可在测试平台直接加载该文件，与原模型对比速度与精度。"))
         post_hint.setObjectName("hint")
         post_hint.setWordWrap(True)
         inner.addWidget(post_hint)
@@ -645,9 +646,9 @@ class PruneToolWindow(_ToolWindow):
         resize = (getattr(self, "_project", None) and self._project.augment_ops or {}).get("resize")
         if resize and resize.get("width") and resize.get("height"):
             self.pre_size_hint.setText(
-                f"{int(resize['width'])} × {int(resize['height'])}（随项目增强策略 resize）")
+                tr('{} × {}（随项目增强策略 resize）').format(int(resize['width']), int(resize['height'])))
         else:
-            self.pre_size_hint.setText("模型默认")
+            self.pre_size_hint.setText(tr("模型默认"))
 
     def _on_project_changed(self):
         super()._on_project_changed()
@@ -689,7 +690,7 @@ class PruneToolWindow(_ToolWindow):
             if ans != QMessageBox.Yes:
                 event.ignore()
                 return
-            self._prune_proc.kill("窗口关闭")
+            self._prune_proc.kill(tr('窗口关闭'))
             proc = self._prune_proc.proc
             if proc is not None:
                 proc.waitForFinished(5000)
@@ -738,8 +739,7 @@ class PruneToolWindow(_ToolWindow):
                 "--height", str(int(resize.get("height", 0) or 0)),
                 "--ratio", repr(ratio), "--dst", str(dst)]
         self._start_prune(
-            args, f"生成中…（{model_name}，独立子进程执行，视模型规模数秒到数分钟；"
-                  "可随时紧急终止）")
+            args, tr('生成中…（{}，独立子进程执行，视模型规模数秒到数分钟；可随时紧急终止）').format(model_name))
 
     # ---- 剪枝子进程（主窗口零剪枝内存，超水位/超时自动终止）----
     def _start_prune(self, args: list, busy_text: str):
@@ -759,11 +759,11 @@ class PruneToolWindow(_ToolWindow):
 
     def _kill_prune(self):
         if self._prune_proc is not None and self._prune_proc.running():
-            self._prune_proc.kill("手动紧急终止")
+            self._prune_proc.kill(tr('手动紧急终止'))
 
     def _on_prune_phase(self, name: str, detail: str):
-        text = {"scan": "扫描数据集", "load": "加载权重", "trace": "追踪依赖图（重）",
-                "apply": "执行剪枝", "cleanup": "回收内存", "save": "保存结果"
+        text = {"scan": tr('扫描数据集'), "load": tr('加载权重'), "trace": tr('追踪依赖图（重）'),
+                "apply": tr('执行剪枝'), "cleanup": tr('回收内存'), "save": tr('保存结果')
                 }.get(name, name)
         suffix = f"（{detail}）" if detail else ""
         self.prune_result.setText(f"{tr('剪枝中…')} {text}{suffix}")
@@ -778,26 +778,19 @@ class PruneToolWindow(_ToolWindow):
             result = outcome.get("result", {})
             if result.get("dst"):
                 self.prune_result.setText(
-                    f"✅ 剪枝模型已生成：{Path(result['dst']).name}\n"
-                    f"{result.get('detail', '')}\n"
-                    "在训练平台的模型下拉中选择它即可开始迁移学习。")
+                    tr('✅ 剪枝模型已生成：{}\n{}\n在训练平台的模型下拉中选择它即可开始迁移学习。').format(Path(result['dst']).name, result.get('detail', '')))
             else:
                 self.prune_result.setText(
-                    f"✅ 剪枝完成：{result.get('detail', '')}\n"
-                    f"参数量 {result.get('params_before', 0):,} → "
-                    f"{result.get('params_after', 0):,}；输出：best_pruned.pt"
-                    f"（子进程峰值 RSS {outcome.get('peak_rss_mb', 0):.0f} MB）")
+                    tr('✅ 剪枝完成：{}\n参数量 {:,} → {:,}；输出：best_pruned.pt（子进程峰值 RSS {:.0f} MB）').format(result.get('detail', ''), result.get('params_before', 0), result.get('params_after', 0), outcome.get('peak_rss_mb', 0)))
         elif status == "killed":
             reason = outcome.get("reason", "")
-            toast(self, f"剪枝已终止：{reason}", "warn")
+            toast(self, tr('剪枝已终止：{}').format(reason), "warn")
             self.prune_result.setText(
-                f"🛑 剪枝已终止：{reason}\n"
-                f"（子进程峰值 RSS {outcome.get('peak_rss_mb', 0):.0f} MB；"
-                "源权重不受影响，半截输出不会落盘）")
+                tr('🛑 剪枝已终止：{}\n（子进程峰值 RSS {:.0f} MB；源权重不受影响，半截输出不会落盘）').format(reason, outcome.get('peak_rss_mb', 0)))
         elif status == "error":
-            toast(self, "剪枝失败，详见结果区", "error")
+            toast(self, tr('剪枝失败，详见结果区'), "error")
             self.prune_result.setText(
-                f"❌ 剪枝失败：{outcome.get('message', '')}")
+                tr('❌ 剪枝失败：{}').format(outcome.get('message', '')))
         else:
             self.prune_result.setText(f"⚠️ {tr('未执行剪枝：')}{status}")
         self._refresh_after_task()
@@ -911,7 +904,9 @@ class AccelerateToolWindow(_ToolWindow):
     """
 
     tool_key = "accel"
-    tool_title = "模型加速（TensorRT）"
+    @property
+    def tool_title(self):
+        return tr('模型加速（TensorRT）')
     file_mode = True  # 不依赖训练平台项目：文件管理器直接选择权重
 
     def _build_settings(self, lay: QVBoxLayout):
@@ -922,32 +917,32 @@ class AccelerateToolWindow(_ToolWindow):
         inner.setContentsMargins(0, 4, 0, 0)
         inner.setSpacing(12)
 
-        g2 = QGroupBox("TensorRT 引擎导出")
+        g2 = QGroupBox(tr("TensorRT 引擎导出"))
         f2 = QFormLayout(g2)
         self.source_edit = QLineEdit()
-        self.source_edit.setPlaceholderText("选择要加速的权重文件（.pt）")
-        btn_pick = QPushButton("浏览…")
+        self.source_edit.setPlaceholderText(tr("选择要加速的权重文件（.pt）"))
+        btn_pick = QPushButton(tr("浏览…"))
         btn_pick.clicked.connect(self._pick_accel_source)
         accel_src_row = QHBoxLayout()
         accel_src_row.addWidget(self.source_edit, stretch=1)
         accel_src_row.addWidget(btn_pick)
         self.imgsz_edit = QLineEdit("640")
-        self.imgsz_edit.setPlaceholderText("640 或 高x宽（如 586x1920）")
+        self.imgsz_edit.setPlaceholderText(tr("640 或 高x宽（如 586x1920）"))
         self.imgsz_edit.setToolTip(
-            "引擎输入尺寸（YOLO 用；分类/R-CNN 按训练尺寸自动确定）；\n"
-            "支持矩形（高x宽），与训练尺寸一致时矩形模型效果最佳")
+            tr("引擎输入尺寸（YOLO 用；分类/R-CNN 按训练尺寸自动确定）；\n"
+            "支持矩形（高x宽），与训练尺寸一致时矩形模型效果最佳"))
         self.precision_combo = QComboBox()
-        self.precision_combo.addItem("FP16 半精度（推荐：体积小、速度快）", True)
-        self.precision_combo.addItem("FP32 全精度（精度优先：体积大）", False)
+        self.precision_combo.addItem(tr("FP16 半精度（推荐：体积小、速度快）"), True)
+        self.precision_combo.addItem(tr("FP32 全精度（精度优先：体积大）"), False)
         self.precision_combo.setToolTip(
-            "FP16：引擎体积约减半、推理更快，检出分数可能有小数级漂移；\n"
-            "FP32：与 torch 权重推理数值最接近，体积较大")
-        self.btn_export = QPushButton("▶ 导出 TensorRT 引擎")
+            tr("FP16：引擎体积约减半、推理更快，检出分数可能有小数级漂移；\n"
+            "FP32：与 torch 权重推理数值最接近，体积较大"))
+        self.btn_export = QPushButton(tr("▶ 导出 TensorRT 引擎"))
         self.btn_export.setObjectName("accent")
         self.btn_export.clicked.connect(self._run_export)
-        f2.addRow("源权重", accel_src_row)
-        f2.addRow("输入尺寸", self.imgsz_edit)
-        f2.addRow("精度", self.precision_combo)
+        f2.addRow(tr('源权重'), accel_src_row)
+        f2.addRow(tr('输入尺寸'), self.imgsz_edit)
+        f2.addRow(tr('精度'), self.precision_combo)
         f2.addRow(self.btn_export)
         inner.addWidget(g2)
 
@@ -962,10 +957,10 @@ class AccelerateToolWindow(_ToolWindow):
         inner.addWidget(self.accel_bar)
 
         accel_hint = QLabel(
-            "引擎输出为源权重同目录的同名 .engine 文件；\n"
+            tr("引擎输出为源权重同目录的同名 .engine 文件；\n"
             "构建需要 NVIDIA GPU 与 TensorRT 运行库（建议在目标部署机执行）；\n"
             "引擎与构建时的 GPU 型号、TensorRT 版本绑定，只能在该环境加载；\n"
-            "测试平台可直接加载 .engine 进行预测（需同款 GPU + TensorRT 环境）。")
+            "测试平台可直接加载 .engine 进行预测（需同款 GPU + TensorRT 环境）。"))
         accel_hint.setObjectName("hint")
         accel_hint.setWordWrap(True)
         inner.addWidget(accel_hint)
@@ -976,13 +971,13 @@ class AccelerateToolWindow(_ToolWindow):
 
     def _pick_accel_source(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择要加速的权重文件", "",
-            "模型权重 (*.pt *.engine *.onnx);;所有文件 (*)")
+            self, tr('选择要加速的权重文件'), "",
+            tr('模型权重 (*.pt *.engine *.onnx);;所有文件 (*)'))
         if not path:
             return
         self.source_edit.setText(path)
         # 默认输入尺寸随源模型走（读训练输入尺寸预填，可手改）
-        self.accel_result.setText("正在读取源权重的训练输入尺寸…")
+        self.accel_result.setText(tr("正在读取源权重的训练输入尺寸…"))
         self._start_worker(
             lambda: {"imgsz": _suggest_imgsz(Path(path))},
             self._on_imgsz_suggested)
@@ -993,15 +988,15 @@ class AccelerateToolWindow(_ToolWindow):
         if isinstance(v, tuple):
             self.imgsz_edit.setText(_imgsz_text(v))
             self.accel_result.setText(
-                f"已按源权重自动填入输入尺寸 {v[0]}x{v[1]}（矩形，可手动修改）")
+                tr('已按源权重自动填入输入尺寸 {}x{}（矩形，可手动修改）').format(v[0], v[1]))
             return
         v = int(v or 0)
         if v >= 32:
             self.imgsz_edit.setText(str(v))
             self.accel_result.setText(
-                f"已按源权重自动填入输入尺寸 {v}（可手动修改）")
+                tr('已按源权重自动填入输入尺寸 {}（可手动修改）').format(v))
         else:
-            self.accel_result.setText("未能从源权重识别输入尺寸，可手动设置")
+            self.accel_result.setText(tr("未能从源权重识别输入尺寸，可手动设置"))
 
     def _on_export_progress(self, frac: float, text: str):
         if frac < 0:
@@ -1061,7 +1056,7 @@ class AccelerateToolWindow(_ToolWindow):
         super()._on_task_failed(message)
         self.accel_bar.setRange(0, 100)
         self.accel_bar.setValue(0)
-        self.accel_result.setText("⚠️ 导出失败（详见平台日志 logs/tools.log）")
+        self.accel_result.setText(tr("⚠️ 导出失败（详见平台日志 logs/tools.log）"))
 
 
 class ModelToolsWindow(QMainWindow):
@@ -1074,7 +1069,7 @@ class ModelToolsWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("XCcv 模型工具")
+        self.setWindowTitle(tr('XCcv 模型工具'))
         self.setWindowIcon(QIcon(str(icon_path("tools.png"))))
         self.resize(1180, 540)
         apply_app_theme(self)
@@ -1082,7 +1077,7 @@ class ModelToolsWindow(QMainWindow):
         self._build_ui()
         from ..status_bus import attach_platform_status
 
-        attach_platform_status(self, "模型工具", "modeltools")
+        attach_platform_status(self, tr('模型工具'), "modeltools")
 
     # ================= 界面骨架 =================
     def _build_ui(self):
@@ -1096,7 +1091,7 @@ class ModelToolsWindow(QMainWindow):
         header.setFixedHeight(64)
         head = QHBoxLayout(header)
         head.setContentsMargins(22, 10, 22, 10)
-        app_title = QLabel("XCcv 模型工具")
+        app_title = QLabel(tr('XCcv 模型工具'))
         app_title.setObjectName("appTitle")
         head.addWidget(app_title)
         head.addStretch(1)
@@ -1116,14 +1111,11 @@ class ModelToolsWindow(QMainWindow):
         cards_grid.setSpacing(14)
         cards_grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         tools = [
-            ("prune", "模型剪枝", "结构化通道剪枝：压缩参数量、提升推理速度；"
-             "剪后副本可在测试平台与原模型直接对比", "#8b5cf6", True,
+            ("prune", tr('模型剪枝'), tr('结构化通道剪枝：压缩参数量、提升推理速度；剪后副本可在测试平台与原模型直接对比'), "#8b5cf6", True,
              "prune.png"),
-            ("accel", "模型加速（TensorRT）", "导出 TensorRT 引擎，产线推理提速数倍；"
-             "支持分类 / YOLO / Mask R-CNN（特征段加速），单文件 .engine",
+            ("accel", tr('模型加速（TensorRT）'), tr('导出 TensorRT 引擎，产线推理提速数倍；支持分类 / YOLO / Mask R-CNN（特征段加速），单文件 .engine'),
              "#8b5cf6", True, "accelerate.png"),
-            ("defectgen", "缺陷生成", "DefectAugmentStudio：在背景板上合成"
-             "缺陷样本（抠图/融合/批量），扩充训练集", "#0f9488", True,
+            ("defectgen", tr('缺陷生成'), tr('DefectAugmentStudio：在背景板上合成缺陷样本（抠图/融合/批量），扩充训练集'), "#0f9488", True,
              "defectgen.png"),
         ]  # 流程图编辑器已独立为主界面「流程图」平台页（xccv/flow_platform.py）
         for i, (key, title, desc, color, enabled, icon) in enumerate(tools):
@@ -1153,8 +1145,40 @@ class ModelToolsWindow(QMainWindow):
             window.activateWindow()
             window.raise_()
             return
-        window = factory(on_closed=self._on_tool_closed)
-        window.show()
+        # 打开剪枝/加速窗口要加载深度学习组件（卡顿数秒）——顶部悬浮胶囊
+        # 提示（对齐训练平台打开项目横幅模式，U1）
+        banner = QLabel(tr("正在加载工具组件") + "…", self)
+        banner.setObjectName("openProjectBanner")
+        banner.setStyleSheet(
+            "QLabel#openProjectBanner { background: rgba(46, 38, 58, 224);"
+            " color: white; padding: 6px 18px; border-radius: 12px;"
+            " font-weight: bold; font-size: 13px; }")
+        banner.adjustSize()
+        banner.move((self.width() - banner.width()) // 2, 12)
+        banner.show()
+        banner.raise_()
+        banner.repaint()               # 空闲窗口横幅未必上屏，同步绘制保底
+        _QApp.processEvents()
+        _QApp.processEvents()
+        t0 = time.monotonic()
+        _QApp.setOverrideCursor(_Qt.WaitCursor)
+        try:
+            window = factory(on_closed=self._on_tool_closed)
+            window.show()
+        finally:
+            _QApp.restoreOverrideCursor()
+            # 横幅固定可见 ≥0.7s：构建很快时也给出可感知的反馈
+            remain_ms = max(0, int(700 - (time.monotonic() - t0) * 1000))
+
+            def _hide_tool_banner():
+                try:
+                    banner.hide()
+                    banner.setParent(None)
+                    banner.deleteLater()
+                except RuntimeError:
+                    pass  # 窗口已销毁（快速关闭）——横幅随之消亡
+
+            QTimer.singleShot(remain_ms, _hide_tool_banner)
         self._tool_windows[key] = window
 
     def _on_tool_closed(self, key: str):

@@ -1,6 +1,6 @@
 # XCcv 多功能视觉平台 · 常见问题（FAQ）
 
-> 适用版本：V0.8.0（全量开源）。排查顺序：先查本文 → 仍未解决时收集
+> 适用版本：V0.8.2（全量开源）。排查顺序：先查本文 → 仍未解决时收集
 > `platform_data/logs/<平台>.log` 与 `crash.log` 最后若干行反馈。
 > 上手步骤见 [quickstart.md](quickstart.md)；术语与架构见
 > [XCcv多功能视觉平台_项目简介.docx](XCcv多功能视觉平台_项目简介.docx)。
@@ -268,4 +268,4 @@ V0.8.0 把外部算子改为**插件后端**：仓库内置 OpenCV 展示后端�
 - 旧流程 JSON 可继续加载（端口迁移表保留兼容），外部算子节点需改选插件后端。
 
 **Q9.6　文档在哪、怎么保证不过期？**
-`README*` → `docs/quickstart*` → 本 FAQ → `CHANGELOG*`。算子数/模型数/支持版本由 `python tools\doc_reconcile.py` 自动对账，漂移即失败；UI 英文词条由覆盖检查脚本守护（当前 673 站点 / 1719 词条，覆盖 100%）。
+`README*` → `docs/quickstart*` → 本 FAQ → `CHANGELOG*`。算子数/模型数/支持版本由 `python tools\doc_reconcile.py` 自动对账，漂移即失败；UI 英文词条由覆盖检查脚本守护（当前 801 站点 / 1773 词条，覆盖 100%）。

@@ -275,6 +275,10 @@ class DevOptionsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # 摘除 Windows 对话框标题栏默认的「?」上下文帮助按钮：本对话框无
+        # WhatsThis 内容，点击后光标进入问号模式、再点任意处无任何反馈
+        #（表现为点击无响应且鼠标短暂被占用）
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle("开发者选项（体检 / 预检阈值）")
         self.setMinimumWidth(460)
         self.setStyleSheet(self.parent().styleSheet() if parent else "")

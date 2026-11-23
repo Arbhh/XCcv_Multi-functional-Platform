@@ -6,6 +6,90 @@ Notable changes to the XCcv Multi-functional Platform. The format follows
 
 Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.8.2] - 2026-11-22
+
+> User-feedback batch: annotation interaction fixes plus training/tool
+> platform UX improvements and a rendering performance optimization.
+> Includes one annotation-canvas gesture-decision fix (click a node and drag
+> = move the node).
+
+### Annotation platform
+
+- **Drag timing**: clicking a polygon node (including its outside edge) and
+  dragging immediately now **moves the node** instead of panning the canvas —
+  the pan decision shares one hit-test semantics with selection (vertex hit
+  by epsilon radius takes priority over shape body); also fixes the same-root
+  issue where Alt+Shift point deletion and Alt edge point insertion were
+  swallowed by panning;
+- **Delete while drawing**: polygons selected in the label list can now be
+  deleted while a polygon is being drawn (Delete key and right-click menu
+  both work; deletion only affects finished shapes, never the in-progress one);
+- **Configurable delete confirmation**: the delete confirmation dialog is now
+  a setting (default off; "Language" menu → Confirm Before Deleting); when
+  enabled it lists the targets **by name starting at 1** (no more generic
+  "polygon N" numbering);
+- **Large-image / many-vertex mask rendering optimization**: the canvas keeps
+  an image-layer and a static-shape-layer offscreen cache; each frame is two
+  1:1 blits plus live elements (hover highlight and dragged shapes stay live).
+  Measured on a 3000×2000 image with 12×1000-vertex self-crossing polygons:
+  plain frame 1085→110 ms (~10×), hover 2164→221 ms (~10×), drag 2160→782 ms
+  (~2.8×); paintEvent is now exception-safe (guaranteed painter end);
+- **Esc exit fix**: Esc-to-exit is now handled by an application-level event
+  filter (`_EscExitFilter`) — it works with focus in any dock, the floating
+  label list or a drawing state; Esc inside dialogs is not intercepted; in a
+  drawing state Esc first discards the in-progress shape;
+- **Empty annotations are not written**: with no shapes and no image-level
+  flags set, saving or switching images no longer writes an empty label file;
+  legacy empty files (`shapes=[]` with all flags false) do not count as
+  annotated, and clearing a previously non-empty annotation removes the file
+  on switch.
+
+### Training platform
+
+- A "Preparing new project…" floating banner shows before the new-project
+  dialog opens (reuses the open-project U1 pattern with a repaint fallback and
+  a ≥0.7 s minimum visibility; bilingual);
+- The developer-options dialog no longer shows the title-bar "?" context-help
+  button (no WhatsThis content — the culprit behind the stuck question-mark
+  cursor);
+- **Confusion-matrix rendering fix in the compare window**: a matplotlib
+  canvas sizing regression — on high-DPI scaling (125%/150%) the old code
+  overwrote matplotlib's physical-pixel sync with logical pixels, creating a
+  shrinking sizeHint feedback loop that clipped the title and x-axis labels;
+  sizing is now fully delegated to matplotlib (plus tight_layout and redraw).
+
+### Model tools
+
+- A "Loading tool components…" floating banner shows before the pruning /
+  acceleration windows open (same U1 pattern);
+- About 30 UI strings in the pruning/acceleration windows are now wired into
+  the English translation layer (FP16/FP32 explanations, Browse, Export, etc.
+  previously fell back to Chinese in English mode).
+
+### Engineering & data
+
+- **Dataset fingerprint v2**: the hash now covers relative paths + sizes
+  (mtime removed) — copying a dataset no longer falsely reports "the dataset
+  has changed"; legacy-fingerprint records show a "protocol changed" notice
+  in the compare window instead of "changed";
+- New `tools/i18n_audit.py`: AST audit of Chinese string literals vs the
+  i18n_en.TABLE (A: tr sites missing keys / B: unwrapped literals / C: unused
+  keys), wired into CI as a non-blocking report step; currently 801 tr sites /
+  1773 TABLE keys / 0 missing.
+
+### Tests
+
+- New annotation QTest behavior locks `tests/test_v082_annotation.py`
+  (17 cases: pan-gesture locks / node dragging / delete-while-drawing /
+  delete-confirmation contract / render-cache behavior) and
+  `tests/test_v082_ux.py` (6 cases: busy banners / help-button removal /
+  canvas sizing sync / tool-open banner);
+- New on-device follow-up behavior locks `tests/test_v082_followup.py`
+  (10 cases: Esc exit across six focus scenarios, dialog Esc not intercepted,
+  Esc discards the in-progress shape, empty annotation not written, file
+  removed after clearing, legacy empty files not counted, flags-only counted
+  as annotated).
+
 ## [0.8.1] - 2026-11-21
 
 > Hotfix for stop-the-bleeding correctness and security issues found in reviews.

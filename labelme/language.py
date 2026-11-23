@@ -21,6 +21,12 @@ _ZH_SUPPLEMENT = {
     ("MainWindow", "Save"): "保存",
     ("MainWindow", "&Save"): "保存(&S)",
     ("MainWindow", "Save As"): "另存为",
+    ("MainWindow", "Confirm Before Deleting"): "删除前确认",
+    ("MainWindow", "Ask before deleting polygons"): "删除多边形前弹窗确认（默认关闭）",
+    ("MainWindow", "Unnamed"): "未命名",
+    ("MainWindow",
+     "You are about to permanently delete {} polygons:\n{}. Proceed anyway?"):
+        "即将永久删除 {} 个多边形：\n{}\n还要继续吗?",
     ("MainWindow", "&Delete"): "删除(&D)",
     ("MainWindow", "Delete File"): "删除文件",
     ("MainWindow", "Zoom in"): "放大",

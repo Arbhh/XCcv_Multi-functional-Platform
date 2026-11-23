@@ -34,21 +34,24 @@ FAMILY_TASKS = {
 
 
 def dataset_fingerprint(dataset_dir: Path) -> str:
-    """数据集内容指纹：sha1(排序后的 相对路径+大小+mtime)。
+    """数据集内容指纹（v2）：sha1(排序后的 相对路径+大小)，前缀 "v2:"。
 
+    不含 mtime——拷贝目录（mtime 被重置）不再误报「数据已修改」。
+    旧口径（含 mtime 的裸哈希）与新口径无法精确比对，对比视图对旧
+    记录给「口径变更」提示而非「已修改」。
     只读元数据不解码图片，万张图秒级完成；训练完成时写入 metrics.json，
-    对比视图据此提示"该训练完成后数据集已修改，指标可能与当前数据不对应"。
+    对比视图据此提示数据集是否与训练时一致。
     """
     root = Path(dataset_dir)
     items = []
     for p in root.rglob("*"):
         if p.is_file() and not p.name.startswith("."):
             st = p.stat()
-            items.append((p.relative_to(root).as_posix(), st.st_size, int(st.st_mtime)))
+            items.append((p.relative_to(root).as_posix(), st.st_size))
     digest = hashlib.sha1()
-    for rel, size, mtime in sorted(items):
-        digest.update(f"{rel}\n{size}\n{mtime}\n".encode("utf-8", "surrogateescape"))
-    return digest.hexdigest()
+    for rel, size in sorted(items):
+        digest.update(f"{rel}\n{size}\n".encode("utf-8", "surrogateescape"))
+    return "v2:" + digest.hexdigest()
 
 
 @dataclass

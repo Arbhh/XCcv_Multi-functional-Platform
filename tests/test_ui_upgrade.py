@@ -48,7 +48,7 @@ class ThemeTokenTest(unittest.TestCase):
     def test_version_bumped(self):
         import xccv
 
-        self.assertEqual(xccv.__version__, "0.8.1")
+        self.assertEqual(xccv.__version__, "0.8.2")
 
     def test_launcher_has_deploy_family(self):
         from xccv.launcher import PLATFORMS

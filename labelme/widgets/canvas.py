@@ -151,10 +151,19 @@ class Canvas(QtWidgets.QWidget):
         # 0: right-click without selection and dragging of shapes
         # 1: right-click with selection and dragging of shapes
         self.menus = (QtWidgets.QMenu(), QtWidgets.QMenu())
-        # XCcv：右键撤销回调（主窗口注入）与画布平移状态
-        self.on_right_click = None
-        self.on_exit_drawing = None  # 退出标注状态回调（主窗口走标准切换流程）
+        # XCcv：退出标注状态回调（主窗口走标准切换流程）与画布平移状态
+        self.on_exit_drawing = None
         self._panning = False
+        # 静态形状层缓存（大图/多顶点蒙版渲染优化）：
+        # 可见形状整层离屏渲染一次，逐帧只做一次位图贴绘 + 实时元素；
+        # hover 高亮与拖动中的形状走实时层，避免逐帧重建。
+        self._overlay_cache = None            # QPixmap（设备像素尺寸）
+        self._overlay_key = None              # 缓存键（尺寸/缩放/偏移/版本/排除集）
+        self._overlay_version = 0             # 形状集变更版本号
+        self._image_cache = None              # 图像层设备像素缓存
+        self._image_cache_key = None
+        self._vertex_drag = False             # 顶点拖动中（该形状不进缓存）
+        self._shape_drag = False              # 整形拖动中（被拖形状不进缓存）
         # Set widget options.
         self.setMouseTracking(True)
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
@@ -370,6 +379,7 @@ class Canvas(QtWidgets.QWidget):
         if len(self.shapesBackups) > self.num_backups:
             self.shapesBackups = self.shapesBackups[-self.num_backups - 1 :]
         self.shapesBackups.append(shapesBackup)
+        self._invalidate_overlay()
 
     @property
     def isShapeRestorable(self):
@@ -395,6 +405,7 @@ class Canvas(QtWidgets.QWidget):
         self.selectedShapes = []
         for shape in self.shapes:
             shape.selected = False
+        self._invalidate_overlay()
         self.update()
 
     def enterEvent(self, ev):
@@ -651,15 +662,26 @@ class Canvas(QtWidgets.QWidget):
     def mousePressEvent(self, ev):
         pos = self.transformPos(ev.localPos())
 
+        # 每次按压重置拖动状态（静态形状层的实时排除集）
+        self._vertex_drag = False
+        self._shape_drag = False
+
         is_shift_pressed = ev.modifiers() & QtCore.Qt.ShiftModifier
 
-        # XCcv：平移视图，按住才拖、松开即停（Shift+左键 / 中键 / 编辑模式空白处左键）
+        # XCcv：平移视图，按住才拖、松开即停（Shift+左键 / 中键 / 编辑模式空白处左键）。
+        # 空白判定与选择命中同口径：顶点（epsilon 半径）优先于形状内部——
+        # 点击节点（含外沿）立即拖动=移动节点，不得被判为拖画布；
+        # Alt 组合（删点/加点）有专属语义，不参与平移
+        alt_pressed = bool(ev.modifiers() & QtCore.Qt.AltModifier)
         pan_button = None
         if ev.button() == QtCore.Qt.MiddleButton:
             pan_button = ev.button()
         elif ev.button() == QtCore.Qt.LeftButton and (
             self.editing() and not self.drawing()
-            and (is_shift_pressed or self._shape_at(pos) is None)
+            and ((is_shift_pressed and not alt_pressed)
+                 or (self._vertex_at(pos) is None
+                     and self._shape_at(pos) is None
+                     and not (alt_pressed and self._edge_at(pos))))
         ):
             pan_button = ev.button()
         if pan_button is not None and self._begin_pan(ev, pan_button):
@@ -760,10 +782,16 @@ class Canvas(QtWidgets.QWidget):
                 group_mode = int(ev.modifiers()) == QtCore.Qt.ControlModifier
                 self.selectShapePoint(pos, multiple_selection_mode=group_mode)
                 self.prevPoint = pos
+                # 拖动语义：按压命中顶点→顶点拖动；命中形状→整形拖动。
+                # 被拖形状进实时层（缓存不收），拖动全程缓存保持有效
+                self._vertex_drag = self.selectedVertex()
+                self._shape_drag = (not self._vertex_drag
+                                    and bool(self.selectedShapes))
                 self.repaint()
         elif ev.button() == QtCore.Qt.RightButton:
-            # XCcv：右键 = 撤销（绘制中撤销上一个点；点删光后仍留在标注状态，
-            # 再次右键才通过标准流程退出标注状态）
+            # XCcv：右键语义仅限绘制流程——绘制中撤销上一个建点；
+            # 无进行中形状时退出绘制模式。编辑态右键不做任何事
+            # （撤销统一走 Ctrl+Z/编辑菜单，不得误删已完成形状）
             if self.createMode == "brush":
                 # 画笔右键拖动=擦除（含未起笔时直接擦既有形状）；
                 # 撤销本笔仍用 Esc/E
@@ -776,8 +804,6 @@ class Canvas(QtWidgets.QWidget):
                     self.undoLastPoint()
                 else:
                     self._exit_drawing()
-            elif self.on_right_click is not None:
-                self.on_right_click()
 
     def mouseReleaseEvent(self, ev):
         # XCcv：松开平移按键即结束拖动
@@ -800,6 +826,10 @@ class Canvas(QtWidgets.QWidget):
             # XCcv：右键撤销已在按下时处理
             return
         if ev.button() == QtCore.Qt.LeftButton:
+            if self._vertex_drag or self._shape_drag:
+                # 拖动结束：被拖形状回到静态层（键随排除集变化自动重建）
+                self._vertex_drag = False
+                self._shape_drag = False
             if self.editing():
                 if (
                     self.hShape is not None
@@ -872,19 +902,29 @@ class Canvas(QtWidgets.QWidget):
             index, shape = self.hVertex, self.hShape
             shape.highlightVertex(index, shape.MOVE_VERTEX)
         else:
-            for shape in reversed(self.shapes):
-                if self.isVisible(shape) and shape.containsPoint(point):
-                    self.setHiding()
-                    if shape not in self.selectedShapes:
-                        if multiple_selection_mode:
-                            self.selectionChanged.emit(self.selectedShapes + [shape])
+            hit = self._vertex_at(point)
+            if hit is not None:
+                # 快速点击未经过 hover：按压点即顶点命中——直接武装顶点
+                #（点击节点后拖动=移动节点，含多边形外沿）
+                index, shape = hit
+                self.hVertex, self.hShape = index, shape
+                self.prevhVertex, self.prevhShape = index, shape
+                shape.highlightVertex(index, shape.MOVE_VERTEX)
+            else:
+                for shape in reversed(self.shapes):
+                    if self.isVisible(shape) and shape.containsPoint(point):
+                        self.setHiding()
+                        if shape not in self.selectedShapes:
+                            if multiple_selection_mode:
+                                self.selectionChanged.emit(
+                                    self.selectedShapes + [shape])
+                            else:
+                                self.selectionChanged.emit([shape])
+                            self.hShapeIsSelected = False
                         else:
-                            self.selectionChanged.emit([shape])
-                        self.hShapeIsSelected = False
-                    else:
-                        self.hShapeIsSelected = True
-                    self.calculateOffsets(point)
-                    return
+                            self.hShapeIsSelected = True
+                        self.calculateOffsets(point)
+                        return
         self.deSelectShape()
 
     def calculateOffsets(self, point):
@@ -971,12 +1011,20 @@ class Canvas(QtWidgets.QWidget):
     def paintEvent(self, event: Optional[QtGui.QPaintEvent]) -> None:
         if not self.pixmap:
             return super(Canvas, self).paintEvent(event)
-
         p = self._painter
         p.begin(self)
+        try:
+            self._paint_scene(p)
+        finally:
+            # 中途异常也必须收笔——持久 painter 若被中断，后续销毁画布
+            # 会触发原生崩溃（QPaintDevice destroyed while being painted）
+            if p.isActive():
+                p.end()
+
+    def _paint_scene(self, p) -> None:
+        # HighQualityAntialiasing 已被 Qt 弃用且在 raster 引擎上显著更慢，
+        # 与普通 Antialiasing 视觉差异可忽略——统一用普通抗锯齿
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setRenderHint(QtGui.QPainter.HighQualityAntialiasing)
-        p.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
 
         p.scale(self.scale, self.scale)
         p.translate(self.offsetToCenter())
@@ -989,11 +1037,46 @@ class Canvas(QtWidgets.QWidget):
         # 统一用 labelme 原生鼠标光标样式（CURSOR_DRAW 十字光标），
         # 不再自绘任何跟随鼠标的锚框
 
+        # 图像层 + 静态形状层：各自离屏缓存为设备像素，逐帧只做两次 1:1 贴绘。
+        # 大图逐帧重采样 + 多顶点蒙版逐帧重栅格化是卡顿两大主因；
+        # hover 高亮与拖动中的形状走实时层，避免逐帧重建。
         Shape.scale = self.scale
+        excluded = self._live_shape_ids()
+        offset = self.offsetToCenter()
+        s = self.scale
+        img_key = (self._overlay_version, round(s, 4))
+        if self._image_cache is None or self._image_cache_key != img_key:
+            self._image_cache = self._build_image_cache()
+            self._image_cache_key = img_key
+        key = (self._overlay_version, round(s, 4),
+               self.width(), self.height(),
+               round(offset.x() * s, 2), round(offset.y() * s, 2),
+               self._hideBackround, tuple(sorted(excluded)))
+        if self._overlay_cache is None or self._overlay_key != key:
+            self._overlay_cache = self._build_overlay(excluded)
+            self._overlay_key = key
+        p.save()
+        p.resetTransform()
+        p.drawPixmap(int(round(offset.x() * s)), int(round(offset.y() * s)),
+                     self._image_cache)
+        p.drawPixmap(0, 0, self._overlay_cache)
+        p.restore()
+
+        # 实时层：拖动中的形状（几何逐帧变化）
         for shape in self.shapes:
-            if (shape.selected or not self._hideBackround) and self.isVisible(shape):
+            if id(shape) in excluded and (
+                    shape.selected or not self._hideBackround) \
+                    and self.isVisible(shape):
                 shape.fill = shape.selected or shape == self.hShape
                 shape.paint(p)
+        # hover 高亮：仅在缓存层之上补一层填充+重描（hover 变化不重建缓存）
+        if self.hShape is not None and id(self.hShape) not in excluded \
+                and (self.hShape.selected or not self._hideBackround) \
+                and self.isVisible(self.hShape):
+            saved_fill = self.hShape.fill
+            self.hShape.fill = True
+            self.hShape.paint(p)
+            self.hShape.fill = saved_fill
 
         # XCcv：类别名称贴着标注目标（质心处，字号不随缩放变化）
         if self._show_labels and not self._hideBackround:
@@ -1853,10 +1936,90 @@ class Canvas(QtWidgets.QWidget):
             p = p.parent()
         return None
 
+    def _invalidate_overlay(self):
+        """形状集/外观变更后使静态形状层缓存失效（拖动生命周期除外）。"""
+        self._overlay_version += 1
+        self._overlay_cache = None
+        self._image_cache = None
+
+    def _live_shape_ids(self):
+        """实时层形状集合：拖动中的形状（几何逐帧变化，不得进缓存）。"""
+        ids = set()
+        if self._vertex_drag and self.hShape is not None:
+            ids.add(id(self.hShape))
+        if self._shape_drag or self.movingShape:
+            ids.update(id(s) for s in self.selectedShapes)
+        return ids
+
+    def _build_image_cache(self):
+        """图像层设备像素缓存：按当前缩放预采样，逐帧 1:1 贴绘。
+
+        逐帧对 3000×2000 级原图做 Smooth 缩放采样是大图卡顿的另一主因
+        （纯缩放/平移期间图像内容不变，只有缓存键随缩放变化才重建）。
+        """
+        s = self.scale
+        w = max(1, int(round(self.pixmap.width() * s)))
+        h = max(1, int(round(self.pixmap.height() * s)))
+        if w == self.pixmap.width() and h == self.pixmap.height():
+            return self.pixmap          # 1:1 直接用原图（免复制）
+        return self.pixmap.scaled(w, h, QtCore.Qt.IgnoreAspectRatio,
+                                  QtCore.Qt.SmoothTransformation)
+
+    def _build_overlay(self, excluded_ids):
+        """离屏渲染静态形状层（含选中填充，不含 hover 高亮与实时元素）。
+
+        Shape.paint 自带 _scale_point 设备像素口径——缓存画笔恒为
+        恒等变换 + Shape.scale=当前缩放，几何落点 = s·p + s·offset。
+        """
+        w, h = max(1, self.width()), max(1, self.height())
+        pm = QtGui.QPixmap(w, h)
+        pm.fill(QtCore.Qt.transparent)
+        pt = QtGui.QPainter(pm)
+        try:
+            pt.setRenderHint(QtGui.QPainter.Antialiasing)
+            off = self.offsetToCenter() * self.scale
+            if off.x() or off.y():
+                pt.translate(off)
+            Shape.scale = self.scale
+            for shape in self.shapes:
+                if id(shape) in excluded_ids:
+                    continue
+                if not ((shape.selected or not self._hideBackround)
+                        and self.isVisible(shape)):
+                    continue
+                shape.fill = shape.selected
+                shape.paint(pt)
+        finally:
+            if pt.isActive():
+                pt.end()
+        return pm
+
     def _shape_at(self, pos):
         for shape in reversed(self.shapes):
             if self.isVisible(shape) and shape.containsPoint(pos):
                 return shape
+        return None
+
+    def _vertex_at(self, pos):
+        """按压坐标处的顶点命中（epsilon 半径，自上而下）。
+
+        与 hover 高亮同一口径——顶点常在多边形边界外侧，containsPoint 会把
+        外沿点击判成空白区；顶点抓取必须走半径命中。
+        """
+        for shape in reversed(self.shapes):
+            if self.isVisible(shape):
+                index = shape.nearestVertex(pos, self.epsilon)
+                if index is not None:
+                    return index, shape
+        return None
+
+    def _edge_at(self, pos):
+        """按压坐标处的边命中（epsilon 半径，Alt+点击加点用）。"""
+        for shape in reversed(self.shapes):
+            if self.isVisible(shape) and shape.canAddPoint():
+                index = shape.nearestEdge(pos, self.epsilon)
+                if index is not None:
+                    return index, shape
         return None
 
     def _begin_pan(self, ev, button):
@@ -1956,6 +2119,7 @@ class Canvas(QtWidgets.QWidget):
         self.current = self.shapes.pop()
         self.current.setOpen()
         self.current.restoreShapeRaw()
+        self._invalidate_overlay()
         if self.createMode in ["polygon", "linestrip"]:
             self.line.points = [self.current[-1], self.current[0]]
         elif self.createMode in ["rectangle", "line", "circle"]:
@@ -2013,6 +2177,7 @@ class Canvas(QtWidgets.QWidget):
     def loadPixmap(self, pixmap, clear_shapes=True):
         self.pixmap = pixmap
         self._px_img = pixmap.toImage()
+        self._invalidate_overlay()
         # 切换图片清 AI 交互残留（锚点跨图留存）
         self._ai_prompts = []
         self._ai_last_mask = None
@@ -2031,6 +2196,7 @@ class Canvas(QtWidgets.QWidget):
         self.update()
 
     def loadShapes(self, shapes, replace=True):
+        self._invalidate_overlay()
         if replace:
             self.shapes = list(shapes)
         else:
@@ -2044,6 +2210,7 @@ class Canvas(QtWidgets.QWidget):
 
     def setShapeVisible(self, shape, value):
         self.visible[shape] = value
+        self._invalidate_overlay()
         self.update()
 
     def overrideCursor(self, cursor):
@@ -2058,6 +2225,7 @@ class Canvas(QtWidgets.QWidget):
         self.restoreCursor()
         self.pixmap = None
         self.shapesBackups = []
+        self._invalidate_overlay()
         self.update()
 
 

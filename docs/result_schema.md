@@ -142,8 +142,8 @@ Demo 见 platform_data/csharp_demo/XCcvCSharpDemo.exe）。
    （同一模型的其它分支不受影响）。原类别名只保留在流程内部（不进 JSON）。
 2. **级联流程（检测 → 按检出裁图 → 分割，模板 `tmpl_cascade_det_seg`）**：`source.width/height`
    取自接入「保存结果」image 端口的图像（模板中为裁图）；该份 JSON 的 bbox/掩码坐标**相对裁图**。
-   裁图在原图中的位置由流程内图像 meta `roi_rect=[x1,y1,x2,y2]` 给出（回映原图坐标的合并算子
-   见 `docs/V0.6/image_list_端口设计稿.md`，后续 Phase 实施）。
+   裁图在原图中的位置由流程内图像 meta `roi_rect=[x1,y1,x2,y2]` 给出（据此把 bbox/掩码
+   坐标回映到原图坐标系）。
 3. **`inference.flow_removed`** 口径不变（过滤移除数）。被滤掉的检出在流程内可经各过滤算子新增的
    `removed` 输出端口继续处理（如接另一个「保存结果」单独导出），默认不进 JSON。
 4. **区域过滤参数**（屏蔽区域 / 保留区域）新增形状语法 `rect:` / `circle:cx,cy,r` /
