@@ -23,6 +23,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       QT_QPA_PLATFORM: offscreen
+      PYTHONIOENCODING: utf-8    # Windows runner 控制台 cp1252，脚本打印中文即崩
     steps:
       - uses: actions/checkout@v4
 
@@ -58,4 +59,5 @@ jobs:
 
       # i18n 对账审计（报告制，不阻断；报告随日志输出供增量补表）
       - name: i18n audit (report, non-blocking)
+        continue-on-error: true
         run: python tools/i18n_audit.py --top 20

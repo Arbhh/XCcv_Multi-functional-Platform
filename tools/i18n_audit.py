@@ -94,6 +94,12 @@ def audit() -> dict:
 
 
 def main() -> int:
+    # 报告含中文；Windows 控制台默认代码页（cp1252 等）打印即
+    # UnicodeEncodeError（CI 实测），统一 UTF-8 输出
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=None, help="明细报告输出文件")
     ap.add_argument("--top", type=int, default=30, help="展示未包 tr 高频串条数")
