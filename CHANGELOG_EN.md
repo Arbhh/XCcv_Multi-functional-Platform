@@ -43,6 +43,10 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
   legacy empty files (`shapes=[]` with all flags false) do not count as
   annotated, and clearing a previously non-empty annotation removes the file
   on switch.
+- **Failure-notification ordering**: the SAM background-load failure path now
+  **emits the failure signal before unlocking clicks** — once an observer sees
+  "unlocked", the failure notification is already queued, removing the
+  occasional "UI usable but no failure message" window.
 
 ### Training platform
 
@@ -74,8 +78,8 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
   in the compare window instead of "changed";
 - New `tools/i18n_audit.py`: AST audit of Chinese string literals vs the
   i18n_en.TABLE (A: tr sites missing keys / B: unwrapped literals / C: unused
-  keys), wired into CI as a non-blocking report step; currently 801 tr sites /
-  1773 TABLE keys / 0 missing.
+  keys), wired into CI as a non-blocking report step (UTF-8 output for
+  non-Chinese consoles); currently 801 tr sites / 1773 TABLE keys / 0 missing.
 
 ### Tests
 

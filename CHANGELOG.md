@@ -33,6 +33,9 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 - **空标注不落盘**：无任何形状且图片级标记全未勾选时，保存与切换不再写出
   空标注文件；历史遗留空文件（`shapes=[]` 且 flags 全为 False）不计入已标注，
   非空标注被清空后切走会删除既有文件。
+- **失败通知时序**：SAM 模型后台加载的失败路径改为**先发失败信号再解锁点击**
+  ——外部观察到「已解锁」时失败通知必已送达，消除偶发的「界面已可用但无
+  失败提示」窗口。
 
 ### 训练平台
 
@@ -58,7 +61,8 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
   不判"已修改"；
 - 新增 `tools/i18n_audit.py`：AST 扫描中文字符串字面量与 i18n_en.TABLE
   对账（A 类 tr 缺表 / B 类未包 tr / C 类未引用键），CI 接入报告步
-  （不阻断）；当前 tr 站点 801 / TABLE 1773 / A 类缺失 0。
+  （不阻断，输出统一 UTF-8 以适配非中文控制台）；当前 tr 站点 801 /
+  TABLE 1773 / A 类缺失 0。
 
 ### 测试
 
