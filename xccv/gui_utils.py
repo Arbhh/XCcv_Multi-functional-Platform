@@ -219,6 +219,11 @@ def auto_cleanup_thread(owner, attr: str, thread):
     finished→deleteLater 释放 Qt 底层对象。thread 参数须显式传入
     （连接建立于 start 之前；普通函数槽会直连在工作线程执行，
     跨线程碰已亡 C++ 对象即段错误）。
+
+    同时登记模块级保活：线程若只被 owner 属性持有，owner（窗口/页）先被
+    销毁时 Python 引用随之消失，运行中的 QThread 会被 GC 回收，Qt 报
+    "Destroyed while thread is still running" 并中止进程；保活集合在
+    finished 前持有强引用。
     """
     from PyQt5.QtCore import QObject
 
@@ -234,8 +239,13 @@ def auto_cleanup_thread(owner, attr: str, thread):
                 setattr(owner, attr, None)
 
     proxy = _CleanupProxy(owner)
+    _LIVE_THREADS.add(thread)
+    thread.finished.connect(lambda t=thread: _LIVE_THREADS.discard(t))
     thread.finished.connect(proxy._on_finished)
     thread.finished.connect(thread.deleteLater)
     return proxy
+
+
+_LIVE_THREADS: set = set()   # 运行中线程的模块级强引用（见 auto_cleanup_thread）
 
 

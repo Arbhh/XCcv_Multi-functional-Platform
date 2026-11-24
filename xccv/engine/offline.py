@@ -49,3 +49,7 @@ def setup_offline_weights() -> None:
     except Exception:
         pass  # 目录不可写时退回 ultralytics 默认配置位置
 
+    # 打包环境依赖已用 lock 固定；关闭 ultralytics 运行期 pip 自动安装，
+    # 避免训练首次调用 YOLO() 时弹出终端窗口或联网安装（离线交付口径）。
+    os.environ.setdefault("YOLO_AUTOINSTALL", "false")
+

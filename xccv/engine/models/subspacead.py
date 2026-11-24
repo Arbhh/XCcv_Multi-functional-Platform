@@ -1,25 +1,22 @@
 """SubspaceAD 无监督少样本异常检测后端（训练免梯度，PCA 子空间）。
 
 来源：SubspaceAD（CVPR 2026，arXiv 2602.23013）Training-Free Few-Shot
-Anomaly Detection via Subspace Modeling；本地复现参考
-`E:\Zcode\Study\SubspaceAD`（官方 repo 全量 + 评估报告）。
-接入要求（遗留待办 §六）：SubspaceAD 先行接入；k-shot 可调但设上限 12
-（避免脱离免训练范畴），与 UI 适配同步（支持集张数/增强样本数替代
-轮次类参数，见 training_window §四适配）。
+Anomaly Detection via Subspace Modeling；平台按论文口径复现并适配本平台
+数据集与推理契约。k-shot 可调但设上限 12，避免脱离免训练范畴；支持集
+张数/增强样本数替代轮次类参数，与 UI 适配同步。
 
-依赖：transformers（DINOv2-with-registers 特征，已随复现工作装在平台
-venv，不新增安装）；PCA 为纯 torch 两遍流式 fp64 实现（repo PCAModel
-同式，不依赖 sklearn）；增强走 torchvision T（缺失回退 cv2 旋转）。
+依赖：transformers（DINOv2-with-registers 特征，已随平台环境安装，不新增
+安装）；PCA 为纯 torch 两遍流式 fp64 实现（与参考实现 PCAModel 同式，不
+依赖 sklearn）；增强走 torchvision T（缺失回退 cv2 旋转）。
 
 管线（论文主表口径：无显著性掩码/docrop/CLAHE）：
 1. k-shot 采样：OK 池按种子随机取 k 张（k∈[1,12]，不足取全部）；
-2. 增强：每张支持图 aug_count 张随机旋转（默认 30，0=关闭；与 repo
-   get_augmentation_transform("rotate") 同族）；
+2. 增强：每张支持图 aug_count 张随机旋转（默认 30，0=关闭；旋转增强
+   与参考实现同族）；
 3. 特征：DINOv2 patch token，末段层 mean 聚合（骨干深度 ≥18 时取
    hidden states -12..-18 与论文一致；浅骨干退末 7 层）；
 4. PCA：两遍流式（均值→协方差→eigh）fp64，按 pca_ev=0.99 选主成分数；
-5. 打分：重构残差 Σ(x−(Z·Cᵀ+μ))²（repo "reconstruction" 同式）→
-   patch 网格上采样 → 高斯平滑 → 图像分 = top1% 均值（mtop1p）；
+5. 打分：重构残差 Σ(x−(Z·Cᵀ+μ))² → patch 网格上采样 → 高斯平滑 → 图像分 = top1% 均值（mtop1p）；
 6. z 标定（与 patchcore/CIF 同链）：OK 图像分 mu/sigma + 像素图
    mu/sigma；conf→z=1/conf−1；连通域出框/掩码 + 图像级 z 分数。
 
@@ -57,7 +54,7 @@ DEFAULT_CKPT_ID = "facebook/dinov2-with-registers-small"
 _REGISTER_FAMILY = ("giant", "large", "base", "small")   # 缓存择优顺序
 _PCA_EV = 0.99              # 主成分方差覆盖率（论文 Table 4 最优档）
 _MAX_LAYER_SPAN = 7         # 末段聚合层数（论文 -12..-18 共 7 层）
-_IMG_AGG_TOP_FRAC = 0.01    # 图像分 = top1% 均值（repo mtop1p）
+_IMG_AGG_TOP_FRAC = 0.01    # 图像分 = top1% 均值（参考实现 mtop1p）
 _CALIB_CAP = 16             # 标定图上限（支持图+增强子集）
 _VAL_CAP = 64               # 验证 NG/OK 各自上限（训练时长护栏）
 _EXTRACT_BATCH = 4
@@ -126,11 +123,11 @@ def _find_backbone() -> tuple[str, str]:
 
 
 def _augment_fn(aug_count: int):
-    """k-shot 增强工厂（repo get_augmentation_transform("rotate") 同族）。
+    """k-shot 增强工厂（旋转增强与参考实现同族）。
 
     返回 fn(pil_img) -> pil_img；aug_count=0 返回 None。torchvision 缺失
     回退 cv2 随机旋转（边界复制填充）。随机性由 BaseModel.train 的全局
-    种子驱动（与 repo --seed 语义一致）。
+    种子驱动（与参考实现 --seed 语义一致）。
     """
     if aug_count <= 0:
         return None
@@ -155,7 +152,7 @@ def _augment_fn(aug_count: int):
 
 
 def _topk_mean(arr: np.ndarray, frac: float = _IMG_AGG_TOP_FRAC) -> float:
-    """图像分聚合（repo mtop1p 同式：top k 均值，k=1% 像素数）。"""
+    """图像分聚合（参考实现 mtop1p 同式：top k 均值，k=1% 像素数）。"""
     flat = arr.ravel()
     k = max(1, int(len(flat) * frac))
     idx = np.argpartition(flat, -k)[-k:]
@@ -163,7 +160,7 @@ def _topk_mean(arr: np.ndarray, frac: float = _IMG_AGG_TOP_FRAC) -> float:
 
 
 def _post_process(anomaly_map: np.ndarray, res: int) -> np.ndarray:
-    """repo post_process_map 同式：上采样到 res → 高斯平滑（k=3, σ=4）。"""
+    """参考实现 post_process_map 同式：上采样到 res → 高斯平滑（k=3, σ=4）。"""
     if anomaly_map.dtype != np.float32:
         anomaly_map = anomaly_map.astype(np.float32)
     out = cv2.resize(anomaly_map, (res, res), interpolation=cv2.INTER_LINEAR)
@@ -182,12 +179,12 @@ class SubspaceAdModel(BaseModel):
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
         self.task = TaskType.ANOMALY
-        # §三（V0.7.3）：图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
         self.score_semantics = {
             "key": "z", "name": "图像分数", "range": [0.0, None],
             "higher": "分数越高越异常（OK 分布 z 标定）",
         }
-        self.train_mode = "free"                 # §四：免训练范式声明
+        self.train_mode = "free"                 # 免训练范式声明
         self.image_size = self.default_image_size
         self.params = {
             "k_shot": 4, "aug_count": 30, "ev": _PCA_EV,
@@ -271,7 +268,7 @@ class SubspaceAdModel(BaseModel):
     @staticmethod
     def _fit_pca(batches: list[torch.Tensor], dim: int, total: int,
                  device: str, ev: float) -> dict:
-        """两遍流式 PCA（repo PCAModel 同式，fp64）：均值→协方差→eigh→按
+        """两遍流式 PCA（参考实现 PCAModel 同式，fp64）：均值→协方差→eigh→按
         方差覆盖率选 k。
 
         batches：每项 (N_i, C) token 矩阵（已摊平）；返回
@@ -302,7 +299,7 @@ class SubspaceAdModel(BaseModel):
     @staticmethod
     def _residual_scores(x: torch.Tensor, mu: torch.Tensor,
                          components: torch.Tensor) -> torch.Tensor:
-        """重构残差（repo _calculate_pca_scores("reconstruction") 同式）：
+        """重构残差（参考实现 _calculate_pca_scores("reconstruction") 同式）：
         x (N,D) fp32、mu (D,)、components (k,D) → (N,) 每行残差平方和。"""
         x0 = x - mu
         z = x0 @ components.T                    # (N,k)

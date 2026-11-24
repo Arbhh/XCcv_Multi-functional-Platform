@@ -636,7 +636,7 @@ class HomeWindow(ChromeMainWindow):
 
     # ---- 系统区 ----
     def refresh_theme(self):
-        """主题实时切换（V0.6 F2-5）：圆角壳/顶栏 + 导航矢量图标按当前 token 重绘。"""
+        """主题实时切换：圆角壳/顶栏 + 导航矢量图标按当前 token 重绘。"""
         super().refresh_theme()
         ink = token("text_2", "#5f7086")
         for i, (_key, _text, icon_kind) in enumerate(_NAV_ITEMS):
@@ -647,7 +647,7 @@ class HomeWindow(ChromeMainWindow):
             btn.setIcon(nav_icon(kind, ink, 36))
 
     def _show_settings_placeholder(self):
-        """设置对话框：界面主题切换**即时生效**（V0.6 F2-5；此前需重启）
+        """设置对话框：界面主题切换**即时生效**（此前需重启）
         + 界面语言切换（V0.7.2，保存后重启主界面生效）+ 版本信息。
 
         主题：本进程 set_theme 立即重绘；写入 ui_prefs.json 后，已打开的各
@@ -783,7 +783,7 @@ def main():
     install_freeze_watchdog()  # 主线程卡顿留痕
     from .ui_style import install_theme_watcher
 
-    install_theme_watcher()  # F2-5：主题偏好文件监听（OS 通知，非轮询）
+    install_theme_watcher()  # 主题偏好文件监听（OS 通知，非轮询）
     app.setWindowIcon(QIcon(str(icon_path("app.png"))))
     # 全局"加载中"界面：主界面与其他九入口行为一致
     from .splash import LoadingSplash

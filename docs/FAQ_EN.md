@@ -1,6 +1,6 @@
 # XCcv Multi-functional Vision Platform · FAQ (English)
 
-> Applies to: V0.8.2 (fully open source). Troubleshooting order: check this FAQ
+> Applies to: V0.8.3 (fully open source). Troubleshooting order: check this FAQ
 > first; if unresolved, collect the last lines of `platform_data/logs/<platform>.log`
 > and `crash.log` when reporting. For a quick start see
 > [quickstart_EN.md](quickstart_EN.md); for terms and architecture see
@@ -269,4 +269,4 @@ Do not open a public issue. Use the private channel in `SECURITY.md` (GitHub Sec
 - Old flow JSON files still load (the port migration table remains compatible); external-operator nodes must switch to the plugin backend.
 
 **Q9.6  Where is the documentation, and how does it stay current?**
-`README*` → `docs/quickstart*` → this FAQ → `CHANGELOG*`. Operator/model counts and supported versions are audited by `python tools\doc_reconcile.py` — any drift fails the build; UI English strings are guarded by a coverage check (currently 801 sites / 1773 entries, 100% coverage).
+`README*` → `docs/quickstart*` → this FAQ → `CHANGELOG*`. Operator/model counts and supported versions are audited by `python tools\doc_reconcile.py` — any drift fails the build; UI English strings are guarded by a coverage check (currently 904 sites / 1887 entries, 100% coverage).

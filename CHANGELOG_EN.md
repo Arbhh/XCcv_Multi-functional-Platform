@@ -6,6 +6,76 @@ Notable changes to the XCcv Multi-functional Platform. The format follows
 
 Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.8.3] - 2026-11-24
+
+> Data-tool expansion: Toolbox workbench (five data utilities) + two UX fixes
+> + test-suite consolidation. Every data operation runs the
+> "scan preview → confirm → execute" two-step flow; pure logic is layered
+> separately from UI (xccv/engine/dataops has no Qt; UI lives in
+> xccv/modeltools/toolbox).
+
+### Added: Toolbox workbench
+
+- The "Model tools" home card wall gains a **Toolbox** card opening a
+  **standalone workbench window**: features laid out as project cards with a
+  top **search box** (registry-driven); **extension port** — new tools
+  register themselves in the toolbox subpackage and appear without host changes;
+- Five utilities (all run in background with busy state and close-confirm,
+  bilingual UI):
+  - **Replace labels**: batch-rename labels in a dataset (optional full-word
+    regex), syncing shape labels and image/shape flags keys;
+  - **Delete labels**: delete matching shapes or filter whole images
+    (image + annotation); emptied annotations remove the JSON per platform
+    semantics; same-name image flags keys are cleared; **optional** backup
+    folder, off by default;
+  - **Move annotations**: filter by label/keyword and move image+JSON pairs,
+    including **unlabeled plain images**; same-name conflicts are skipped with
+    a move report;
+  - **Sliding-window tiling**: crop large images into tiles with synced
+    window-coordinate annotations (per-window polygon clipping); defaults
+    match tiled training (tile 640 / overlap 20% / background keep 15% /
+    min visibility 30%); objects in overlap zones are attributed to the first
+    window only, matching training semantics;
+  - **Video to frames**: extract by frame interval / target FPS / duration cap
+    plus an export cap, with optional perceptual-hash dedup; outputs
+    `<video>_f<index>.png`.
+
+### Annotation platform
+
+- **Immediate cursor switch**: entering/leaving draw mode via shortcuts or
+  right click (Q/W/E/I/S/B/Esc) now switches the cursor instantly
+  (crosshair/arrow) instead of waiting for the next mouse move —
+  `Canvas.setEditing` refreshed the mode but not the cursor; no global cursor
+  is set while the mouse is outside the canvas.
+
+### Training platform
+
+- **Visible pretrained-weight download**: a missing YOLO pretrained weight now
+  downloads **visibly** at training start — the training window progress bar
+  shows "downloading pretrained weight …" with percentage (new
+  `TrainReporter.on_message` hook and `status_message` signal); the file lands
+  in `weights/ultralytics/` (same location as bundled weights, so later runs
+  hit the cache); on failure it falls back to the previous path (ultralytics
+  handles it, default behavior unchanged).
+
+### Engineering
+
+- **Test-suite consolidation**: the 101 legacy test modules in `tests/` are
+  merged into **39 domain modules** (annotation/training/testing/service/
+  flow/tools), migrating all 1375 cases verbatim (structural equivalence
+  asserted: class names and per-class counts match); the per-module subprocess
+  runner `tools/run_tests.py` is unchanged;
+- New pure-logic layer `xccv/engine/dataops/` (labelops / tiling_export /
+  video_frames, no Qt) reusable by tool windows and services.
+
+### Tests
+
+- New contract/behavior locks merged into existing modules (no loose files):
+  cursor immediacy 3, pretrained-weight download 7, dataops logic 12,
+  toolbox registry/window/card-wall 7;
+- Full regression `python tools/run_tests.py`: all 39 modules green;
+  i18n audit A-class missing 0 (tr sites 904 / TABLE 1872).
+
 ## [0.8.2] - 2026-11-22
 
 > User-feedback batch: annotation interaction fixes plus training/tool
@@ -300,7 +370,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
   (194 from 0.7.2 + 45 CIF/review/semantics/language regressions; 5 CIF
   integration tests skipped by design when DINO weights are absent).
 - `compileall` and the four-platform offscreen self-tests are recorded in the
-  release acceptance material.
+  release packaging step.
 
 ### Third-party license changes
 
@@ -482,7 +552,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - The annotation platform's `_ai_loading` flag stuck after an AI model load failure, making
   later clicks ineffective.
 - Threshold-line out-of-range dragging, leftover review cache and crowded Standard-page entries
-  found during 0.7 real-machine testing.
+  found during 0.7 interface testing.
 
 ### Tests
 
@@ -505,7 +575,7 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 
 - Interpreter hint file `python_path.txt` (one full path per line; gitignored, may differ per
   machine); the launcher candidate order was extended and each candidate is probed
-  (`XCCV_PY` → `python_path.txt` → PATH `python` → `py -3` → `C:\XCcv\venv` → local venv/.venv).
+  (`XCCV_PY` → `python_path.txt` → PATH `python` → `py -3` → a venv under a custom directory → local venv/.venv).
 - Environment diagnosis script `tools/env_check.py`: prints the usability and failure reason of
   each candidate interpreter.
 - Appendix `docs/XCcv社区版_项目简介.docx` and workbench screenshot `docs/images/main.png`.

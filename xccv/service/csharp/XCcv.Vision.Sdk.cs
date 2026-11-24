@@ -9,7 +9,7 @@
 //
 // 用法示例：
 //   using (var client = new XccvClient("http://127.0.0.1:8600", "你的APIKey")) {
-//       ModelHandle m = await client.LoadModelAsync(@"C:\XCcv\models\best.pt");
+//       ModelHandle m = await client.LoadModelAsync(@"D:\models\best.pt");
 //       string json = await client.InferImageJsonAsync(m.ModelId, imageBytes, "a.png");
 //       Console.WriteLine(json);
 //   }

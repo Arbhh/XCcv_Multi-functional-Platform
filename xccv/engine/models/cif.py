@@ -1,10 +1,10 @@
 """CIF 无监督异常检测后端（RGB-only，论文口径 L=1/α=0.9/K=4）。
 
-来源：CIF（AAAI 2026，arXiv 2511.05966）少样本多模态异常检测；本地复现
-`E:\Zcode\Study\CIF`（B+）。平台集成口径按集成设计落地。
+来源：CIF（AAAI 2026，arXiv 2511.05966）少样本多模态异常检测；平台按论文
+口径复现并适配本平台数据集与推理契约。
 依赖对齐：主路径与参考实现一致——timm ViT 特征
 （dino_vit.py）、sklearn.KMeans(random_state=0)、anomalib SRP(eps=0.9)
-（三包均已随复现装在平台 venv，不新增安装）；anomalib/timm/sklearn 缺失
+（三包均已随平台环境安装，不新增安装）；anomalib/timm/sklearn 缺失
 时各自回退（cv2.kmeans / 纯 torch ViT / 原始特征直算），零依赖能力保留。
 torchmetrics 仍不需要（平台自有 image_auroc/image_ap）。
 
@@ -21,7 +21,7 @@ torchmetrics 仍不需要（平台自有 image_auroc/image_ap）。
    阈值语义（conf→z=1/conf−1）→ 连通域出框/掩码 + 图像级 z 分数。
 
 ------------------------------------------------------------------------
-ANOMALY 后端契约（后续 SubspaceAD/RAD 等接入模板；本类即参照实现）：
+ANOMALY 后端契约（同族后端接入模板；本类即参照实现）：
 - 注册：engine/models/registry.py MODEL_SPECS + load_model 容器分支（模型层
   唯一触碰点）；supported_tasks=(TaskType.ANOMALY,)，family="folder"；
 - fit(data, cfg, reporter) -> metrics：metrics.json 键与 patchcore 同构
@@ -60,7 +60,7 @@ log = logging.getLogger(__name__)
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
 
-# ---- 论文/复现口径超参（runs 评估 bat 显式传参，见设计文档 §二）----
+# ---- 论文/复现口径超参（评估脚本可显式传参覆盖）----
 N_CLUSTERS = 4            # 超边数 K
 SAHC_THRESHOLD = 0.9      # SAHC 余弦邻接阈值
 SAMPLING_RATIO = 0.1      # 记忆库共采样比例
@@ -68,7 +68,7 @@ BITFMP_LAYERS = 1         # Bi-TF-MP 传播层数 L
 BITFMP_ALPHA = 0.9        # 自信息保留比 α
 EDGE_TOPK = 3             # 超边级检索 topk
 N_NEIGHBORS = 9           # 图像级分数 softmax 修正近邻数
-MAX_MEMORY_NODES = 4000   # 记忆库绝对上限（联合超图 W 矩阵规模可控，设计文档 §三）
+MAX_MEMORY_NODES = 4000   # 记忆库绝对上限（联合超图 W 矩阵规模可控）
 _CALIB_RATIO = 0.10       # 留出标定的 OK 图比例（图像级/图级 z 标定源）
 
 _SMOOTH_L = (5, 2, 5)     # 平滑链：(kernel, pad, 次数)——5×5 均值卷积 ×5
@@ -116,8 +116,8 @@ def _kmeans(feats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
 def _make_srp(seed: int):
     """anomalib SparseRandomProjection(eps=0.9)（参考实现 KCenter 算法）。
 
-    返回工厂函数；anomalib 缺失回退复现工程 anomalib_compat 的本地 JL 实现；
-    两者都缺返回 None（调用方退原始特征直算）。
+    返回工厂函数；anomalib 缺失回退本地兼容实现的 JL 投影；两者都缺返回
+    None（调用方退原始特征直算）。
     """
     try:
         from anomalib.models.components.dimensionality_reduction import (
@@ -532,12 +532,12 @@ class CifModel(BaseModel):
                  use_pretrained: bool = True):
         super().__init__(num_classes, device)
         self.task = TaskType.ANOMALY
-        # §三（V0.7.3）：图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
+        # 图像分 = OK 分布标定 z（无上界），conf→z=1/conf−1
         self.score_semantics = {
             "key": "z", "name": "图像分数", "range": [0.0, None],
             "higher": "分数越高越异常（OK 分布 z 标定）",
         }
-        # §四（V0.7.3）：免训练范式声明（UI 隐藏轮次类参数、阶段化进度）
+        # 免训练范式声明（UI 隐藏轮次类参数、阶段化进度）
         self.train_mode = "free"
         self.image_size = self.default_image_size
         # DINO 权重缺失在此即抛（创建模型时用户即见提示，训练前不空转）
@@ -684,7 +684,7 @@ class CifModel(BaseModel):
             smap, sc, _, _ = self._score_map(img)
             map_vals.append(smap.reshape(-1))
             ok_scores.append(sc)
-            if reporter is not None:      # §四 阶段化进度：2=标定
+            if reporter is not None:      # 阶段化进度：2=标定
                 reporter.on_train_progress(2, _ci, _n_cal)
         if map_vals:
             all_map = np.concatenate(map_vals)
@@ -704,7 +704,7 @@ class CifModel(BaseModel):
                 scores.append(self._score_map(img)[1])
                 labels.append(1)
             _v_done += 1
-            if reporter is not None:      # §四 阶段化进度：3=验证评估
+            if reporter is not None:      # 阶段化进度：3=验证评估
                 reporter.on_train_progress(3, _v_done, _n_val)
         for s in val_ok:
             img = imread_unicode(s.image_path)
@@ -782,7 +782,7 @@ class CifModel(BaseModel):
         """xccv-cif 容器（明文 torch.save）。
 
         冻结骨干不进容器（330MB×每模型不可接受）：只记指纹，加载时按
-        weights/dino 落点重建（设计文档 §四）。
+        weights/dino 落点重建。
         """
         ckpt = {
             "format": "xccv-cif",

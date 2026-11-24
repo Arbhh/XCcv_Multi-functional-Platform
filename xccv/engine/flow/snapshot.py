@@ -108,7 +108,7 @@ def overlay_result(mat: np.ndarray, outputs: dict) -> np.ndarray:
 
 
 def mosaic(images: list, max_side: int = DEFAULT_MAX_SIDE, max_items: int = 16) -> np.ndarray:
-    """多张图 → 一张拼图（列表端口的快照/预览，V0.6 F2-2）。
+    """多张图 → 一张拼图（列表端口的快照/预览）。
 
     近似方阵排布，每格等比缩放居中、左上角标序号；超过 max_items 只拼前
     max_items 张并在末格标注剩余数。空列表返回 1×1 黑图（不返回 0×0）。

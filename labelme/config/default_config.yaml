@@ -106,11 +106,11 @@ shortcuts:
   create_polygon: Q
   create_rectangle: W
   create_circle: E
-  create_line: I         # XCcv T5-6：直线（与 W/Q/E/S/B 并列）
+  create_line: I         # 直线（与 W/Q/E/S/B 并列）
   create_point: null
   create_linestrip: null
-  create_ai_polygon: S    # XCcv T5-3：智能多边形（SAM 点提示）
-  create_brush: B         # XCcv T5-5：画笔标注
+  create_ai_polygon: S    # 智能多边形（SAM 点提示）
+  create_brush: B         # 画笔标注
   edit_polygon: Ctrl+J
   delete_polygon: Delete
   duplicate_polygon: Ctrl+D

@@ -123,6 +123,13 @@ class TrainPageMixin:
             " min-height: 20px; font-weight: bold; font-size: 15px; }"
             "QProgressBar::chunk { background-color: #5ec6dd; border-radius: 5px; }")
         gd.addWidget(self.progress_bar, 1, 0, 1, 6)
+        # 阶段消息（预训练权重下载/重试等）单独一行展示，不占用进度条文本，
+        # 避免每秒轮次刷新与下载进度互相覆盖造成闪烁
+        self.phase_status = QLabel("")
+        self.phase_status.setObjectName("hint")
+        self.phase_status.setWordWrap(True)
+        self.phase_status.setVisible(False)
+        gd.addWidget(self.phase_status, 2, 0, 1, 6)
         lay2.addWidget(g0)
 
         # 训练曲线：悬停显示最近轮次的数值（三位小数）
@@ -232,7 +239,7 @@ class TrainPageMixin:
             return
         self.btn_start.setEnabled(False)
         self.statusBar().showMessage(tr("训练前预检中（数据体检 + 参数检查）…"))
-        self._preflight_worker = _PreflightWorker(self.project, self)
+        self._preflight_worker = _PreflightWorker(self.project)   # 无父：见 info_page 同注
         self._preflight_worker.done.connect(self._on_preflight_done)
         self._preflight_worker.failed.connect(self._on_preflight_failed)
         auto_cleanup_thread(self, "_preflight_worker", self._preflight_worker)  # A-3
@@ -318,6 +325,7 @@ class TrainPageMixin:
         self.final_metrics.setText("")
         self._update_per_class_table(None)  # 新训练开始前清空逐类表
         self._build_echo_form(run_dir=run_dir)
+        self._clear_phase_status()
         self.train_status.setText(tr("训练中…"))
         self.btn_start.setEnabled(False)
         # YOLO 训练由引擎控制，不支持中途停止；§四 免训练范式无轮次概念
@@ -332,6 +340,7 @@ class TrainPageMixin:
         self.thread.epoch_changed.connect(self._on_epoch)
         self.thread.batch_progress.connect(self._on_batch_progress)
         self.thread.train_finished.connect(self._on_train_finished)
+        self.thread.status_message.connect(self._on_status_message)
         auto_cleanup_thread(self, "thread", self.thread)  # A-3
         self.thread.start()
         self._switch_detail(1)  # 跳转到训练可视化页（刷新历史列表并选中本次训练）

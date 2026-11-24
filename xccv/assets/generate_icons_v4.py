@@ -1,4 +1,4 @@
-"""生成 XCcv v0.5.3-b 全套品牌图标（复合构成版，回应「元素单一」批注）。
+"""生成 XCcv 全套品牌图标（复合构成版）。
 
 设计语言（Mobbin / Godly 一类现代应用图标风格：多元素几何构图 + 层次
 + 负空间），每枚 = 对角渐变底座 + 主字形（FontAwesome）+ 手绘辅助元素：
@@ -7,6 +7,8 @@
 - training   ：三根递升柱 + 上升折线箭头（全手绘，层次递进）
 - testing    ：放大镜 + 镜内准星十字 + 角部小 bbox
 - tools      ：齿轮环（衬底）+ 扳手主字形
+- toolbox    ：工具箱主字形 + 星点（百宝箱总入口）
+- toolbox_tool：工具主字形 + 齿轮环（百宝箱各子功能共用）
 - deploy     ：云上传 + 底部服务器横线 ×3 + 信号点
 - csharp_demo：终端窗口框 + 三个窗口点 + 提示符线
 
@@ -36,6 +38,8 @@ SPECS = [
     ("training",    None,                     "#ffbc63", "#ec7412"),
     ("testing",     "fa5s.search",            "#5edcae", "#17a768"),
     ("tools",       "fa5s.wrench",            "#b795ff", "#7243e2"),
+    ("toolbox",     "fa5s.toolbox",           "#67e8f9", "#0e7490"),
+    ("toolbox_tool", "fa5s.tools",            "#5eead4", "#0f766e"),
     ("csharp_demo", "fa5s.terminal",          "#5edcae", "#17a768"),
 ]
 
@@ -229,6 +233,43 @@ def deco_tools(img):
     img.alpha_composite(layer)
 
 
+def _sparkle(d, cx, cy, r, fill=WHITE):
+    """四芒星点（两条细线交叉 + 端点圆点）。"""
+    _line(d, (cx - r, cy), (cx + r, cy), max(2, int(r * 0.30)), fill=fill)
+    _line(d, (cx, cy - r), (cx, cy + r), max(2, int(r * 0.30)), fill=fill)
+    _dot(d, cx, cy, r * 0.45, fill=fill)
+
+
+def deco_toolbox(img):
+    """百宝箱：右上两枚星点 + 左下小圆点（宝箱开启的“新工具”语义）。"""
+    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    _sparkle(d, S * 0.79, S * 0.27, S * 0.050, fill=(255, 255, 255, 235))
+    _sparkle(d, S * 0.88, S * 0.42, S * 0.030, fill=(255, 255, 255, 190))
+    _dot(d, S * 0.20, S * 0.80, S * 0.016, fill=(255, 255, 255, 200))
+    img.alpha_composite(layer)
+
+
+def deco_toolbox_tool(img):
+    """子功能共用：左上齿轮环衬底 + 右下两枚铆钉点。"""
+    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    cx, cy, r = S * 0.27, S * 0.27, S * 0.13
+    d.ellipse([cx - r, cy - r, cx + r, cy + r],
+              outline=(255, 255, 255, 120), width=int(S * 0.022))
+    import math
+
+    for i in range(6):
+        ang = i * 60 * math.pi / 180.0
+        r1, r2 = S * 0.150, S * 0.175
+        d.line([(cx + math.cos(ang) * r1, cy + math.sin(ang) * r1),
+                (cx + math.cos(ang) * r2, cy + math.sin(ang) * r2)],
+               fill=(255, 255, 255, 120), width=int(S * 0.022))
+    _dot(d, S * 0.79, S * 0.76, S * 0.018, fill=(255, 255, 255, 210))
+    _dot(d, S * 0.86, S * 0.68, S * 0.012, fill=(255, 255, 255, 170))
+    img.alpha_composite(layer)
+
+
 def deco_deploy(img):
     """部署：云上传 + 底部三条服务器线 + 信号点。"""
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -260,6 +301,7 @@ def deco_csharp(img):
 DECO = {
     "app": deco_app, "annotation": deco_annotation, "training": deco_training,
     "testing": deco_testing, "tools": deco_tools, "deploy": deco_deploy,
+    "toolbox": deco_toolbox, "toolbox_tool": deco_toolbox_tool,
     "csharp_demo": deco_csharp,
 }
 

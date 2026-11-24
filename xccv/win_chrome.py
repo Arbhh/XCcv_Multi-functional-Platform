@@ -53,7 +53,7 @@ class ChromeButton(QPushButton):
         self._c_close_bg = QColor(token("danger", "#e05252"))
 
     def refresh_theme(self):
-        """主题实时切换（V0.6 F2-5）：矢量键颜色按当前 token 重取。"""
+        """主题实时切换：矢量键颜色按当前 token 重取。"""
         self._load_colors()
         self.update()
 
@@ -201,7 +201,7 @@ class ChromeMainWindow(QMainWindow):
         return self._header
 
     def refresh_theme(self):
-        """主题实时切换（V0.6 F2-5）：圆角壳/顶栏的 token 样式重算。"""
+        """主题实时切换：圆角壳/顶栏的 token 样式重算。"""
         shell = self.centralWidget()
         if shell is not None and shell.objectName() == "chromeShell":
             shell.setStyleSheet(_shell_qss())

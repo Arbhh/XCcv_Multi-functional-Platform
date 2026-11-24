@@ -31,6 +31,10 @@ def _make_reporter(thread: "TrainThread"):
         def on_train_progress(self, epoch: int, batch_index: int, batch_total: int) -> None:
             self._thread.batch_progress.emit(epoch, batch_index, batch_total)
 
+        def on_message(self, text: str, frac: float | None = None) -> None:
+            self._thread.status_message.emit(
+                text, -1.0 if frac is None else float(frac))
+
     return _QtReporter(thread)
 
 
@@ -40,6 +44,7 @@ class TrainThread(QThread):
     epoch_changed = pyqtSignal(int, dict)
     batch_progress = pyqtSignal(int, int, int)  # (epoch, 批序, 批总数)：轮内进度
     train_finished = pyqtSignal(bool, str, dict)  # (成功, 错误信息, 最终指标)
+    status_message = pyqtSignal(str, float)  # (文本, 进度0~1；<0 = 不确定)
 
     def __init__(self, project: Project, run_dir, parent=None):
         super().__init__(parent)

@@ -163,7 +163,7 @@ def run_platform(key: str, display_name: str, build, heavy: bool = False,
     install_freeze_watchdog()  # 主线程卡顿留痕（50ms 级心跳，无常驻负载）
     from .ui_style import install_theme_watcher
 
-    install_theme_watcher()  # F2-5：主界面切主题 → 本平台进程同步（文件通知，非轮询）
+    install_theme_watcher()  # 主界面切主题 → 本平台进程同步（文件通知，非轮询）
 
     from .single_instance import already_running, register
 

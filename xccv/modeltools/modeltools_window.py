@@ -78,11 +78,14 @@ class _ToolCard(QFrame):
     clicked = pyqtSignal(str)
 
     def __init__(self, key: str, title: str, desc: str, color: str,
-                 enabled: bool = True, parent=None, icon: str = "tools.png"):
+                 enabled: bool = True, parent=None, icon: str = "tools.png",
+                 tooltip: str = ""):
         super().__init__(parent)
         self.tool_key = key
         self.setObjectName("card")
         self.setFixedSize(340, 152)
+        if tooltip:
+            self.setToolTip(tooltip)
         if not enabled:
             self.setEnabled(False)  # 即将上线的工具不响应点击
         else:
@@ -1117,6 +1120,8 @@ class ModelToolsWindow(QMainWindow):
              "#8b5cf6", True, "accelerate.png"),
             ("defectgen", tr('缺陷生成'), tr('DefectAugmentStudio：在背景板上合成缺陷样本（抠图/融合/批量），扩充训练集'), "#0f9488", True,
              "defectgen.png"),
+            ("toolbox", tr('百宝箱'), tr('数据工具集工作台：替换/删除标签、迁移标注数据、滑窗裁图、视频切分图片'),
+             "#0ea5e9", True, "toolbox.png"),
         ]  # 流程图编辑器已独立为主界面「流程图」平台页（xccv/flow_platform.py）
         for i, (key, title, desc, color, enabled, icon) in enumerate(tools):
             card = _ToolCard(key, title, desc, color, enabled, icon=icon)
@@ -1137,9 +1142,15 @@ class ModelToolsWindow(QMainWindow):
 
             launch_platform("defectgen")
             return
-        factory = self._TOOL_FACTORIES.get(key)
-        if factory is None:
-            return  # 即将上线的工具
+        if key == "toolbox":
+            # 百宝箱子包反向引用本模块的窗口基类——惰性导入避免循环依赖
+            from .toolbox import ToolboxWindow
+
+            factory = ToolboxWindow
+        else:
+            factory = self._TOOL_FACTORIES.get(key)
+            if factory is None:
+                return  # 即将上线的工具
         window = self._tool_windows.get(key)
         if window is not None and window.isVisible():
             window.activateWindow()

@@ -5,7 +5,7 @@
 - environment：python/torch/torchvision/ultralytics/tensorrt/CUDA 版本 +
   GPU 名称与算力（替代 git commit 字段——代码树无 git）；
 - lock：requirements.lock 的 sha1（存在时；路径可用 XCCV_LOCK_PATH 覆盖，
-  E1 生成物默认 E:\\zcode\\XCcv_dist\\build_tools\\requirements.lock）；
+  默认取仓库根 requirements.txt）；
 - dataset：数据集指纹（复用 dataset_fingerprint）+ 路径；
 - config：完整 TrainConfig 快照（asdict）；
 - products：best.pt/metrics.json 相对名 + 最终指标摘要；

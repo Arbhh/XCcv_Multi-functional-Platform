@@ -127,12 +127,26 @@ The workbench "Model Tools" card (or `run_modeltools.bat`):
    FP16/FP32; needs GPU + TensorRT; YOLO via the native ultralytics path, classification via
    in-memory ONNX→TRT, Mask R-CNN feature-segment acceleration). The testing platform loads
    `.engine` directly; engines are bound to the building GPU model — cross-GPU loading gives
-   a clear message.
+   a clear message;
+3. **Toolbox** (data-tool suite, standalone window with a search box): five feature cards,
+   each running the "scan preview → confirm → execute" two-step flow —
+   - **Replace labels**: batch rename labels (optional full-word regex), syncing shape
+     labels and flags keys;
+   - **Delete labels**: delete matching shapes or filter whole images (emptied annotations
+     remove the JSON per platform semantics; optional backup folder, off by default);
+   - **Move annotations**: filter by label/keyword and move image+JSON pairs; unlabeled
+     plain images can be included; same-name conflicts are skipped with a move report;
+   - **Sliding-window tiling**: crop large images into tiles with synced annotations
+     (defaults match tiled training: tile 640 / overlap 20% / background keep 15% /
+     min visibility 30%; objects in overlap zones are attributed to the first window only);
+   - **Video to frames**: extract by frame interval / target FPS / duration cap, with
+     optional perceptual-hash dedup for near-identical frames.
 
 ## FAQ
 
 - **First training is slow / stuck downloading**: pretrained weights (YOLO / torchvision) are
-  downloaded from the official source on first use. For offline machines, download them on a
+  downloaded from the official source on first use (with visible progress in the training
+  window since 0.8.3). For offline machines, download them on a
   connected machine beforehand and place them under `weights/` (see the comments in
   `xccv/engine/offline.py`);
 - **AI annotation says weights missing**: place the SAM weights under `weights/sam/` as

@@ -15,6 +15,7 @@ from ultralytics import YOLO
 from ..dataset.base import TaskType
 from ..dataset.converters import _clipped_bbox
 from ..io_utils import imread_unicode
+from ..weights.ensure_weight import ensure_pretrained_weight
 from ..metrics.detection import detection_confusion_matrix
 from ..metrics.per_class import ultralytics_per_class_ap50
 from .base import BaseModel, Prediction, TrainConfig, TrainReporter, negative_fp_stats
@@ -137,6 +138,27 @@ def _shift_head_levels(net, src_net) -> int:
     return len(moved)
 
 
+def _disable_amp_probe() -> None:
+    """跳过 ultralytics AMP 自检的 yolo26n.pt 下载。
+
+    ultralytics 训练前会用官方 yolo26n.pt 做 AMP 数值一致性探测；权重缺失时
+    走 safe_download（curl 子进程/无超时），会在窗口程序里弹终端或静默卡住。
+    平台依赖版本已锁定，直接视为通过并记录日志，训练仍按项目 AMP 设置执行。
+    """
+    try:
+        from ultralytics.engine import trainer as _trainer
+        from ultralytics.utils import checks as _checks
+    except Exception:  # noqa: BLE001
+        return
+
+    def _check_amp(_model):
+        log.info("AMP 自检跳过：避免 ultralytics 额外下载 yolo26n.pt")
+        return True
+
+    _checks.check_amp = _check_amp
+    _trainer.check_amp = _check_amp
+
+
 class YoloModel(BaseModel):
     family = "yolo"
     supported_tasks = (TaskType.DETECTION, TaskType.SEGMENTATION)
@@ -175,9 +197,15 @@ class YoloModel(BaseModel):
     def fit(self, data, cfg: TrainConfig, reporter: TrainReporter) -> dict:
         # 恢复训练（剪枝模型）时直接用已加载的 YOLO 对象，否则从预训练权重起步
         resume = getattr(self, "resume_weights", False)
+        if not resume:
+            # 预训练权重缺项时前台可见下载（进度经 on_message 上报）；
+            # 下载失败抛错，由训练线程把原因带回界面并结束，不再交给
+            # ultralytics 自带下载（其重试会弹终端窗口且可能无超时）
+            self.init_weight = ensure_pretrained_weight(
+                self.init_weight, notify=getattr(reporter, "on_message", None))
         model = self.model if resume else YOLO(self.init_weight)
         if self.p2 and not resume and cfg.use_pretrained:
-            self._p2_transfer(model)
+            self._p2_transfer(model, reporter)
         self._reporter = reporter
         self._history: list[dict] = []
         self._loss_patch = "off"
@@ -228,6 +256,7 @@ class YoloModel(BaseModel):
         if resume:
             trainer_cls.resume_module = model.model  # 剪后网络直接参与训练
 
+        _disable_amp_probe()
         model.train(
             trainer=trainer_cls,
             data=str(cfg.dataset_dir),
@@ -290,16 +319,20 @@ class YoloModel(BaseModel):
             "classes": data.classes,
         }
 
-    def _p2_transfer(self, model) -> None:
+    def _p2_transfer(self, model, reporter=None) -> None:
         """P2 头无官方预训练：同尺寸官方权重同名迁移（骨干 + 颈部）+ 检测头
         按步长对齐迁移（_shift_head_levels），仅新增的 stride 4 分支从头学。
+
+        官方权重缺项时先走平台下载器（进度可见/失败可提示），不让
+        ultralytics 自行下载；迁移失败不阻塞，按随机初始化继续训练。
 
         必须经 model.load()：它同时置 ckpt，ultralytics Model.train 只在 ckpt
         非空时把内存权重交给训练器，否则按 yaml 重建随机网络。
         """
-        bundled = WEIGHTS_DIR / "ultralytics" / f"{self.p2_source}.pt"
-        src_path = str(bundled) if bundled.is_file() else f"{self.p2_source}.pt"
         try:
+            src_path = ensure_pretrained_weight(
+                f"{self.p2_source}.pt",
+                notify=getattr(reporter, "on_message", None))
             model.load(src_path)
             ck = model.ckpt or {}
             src = ck.get("ema") if ck.get("ema") is not None else ck.get("model")
@@ -308,6 +341,12 @@ class YoloModel(BaseModel):
                      self.p2_source, self.p2_source, moved)
         except Exception as e:  # noqa: BLE001  迁移失败不阻塞：随机初始化继续训练
             log.warning("P2 预训练迁移失败（按随机初始化继续训练）: %s", e)
+            try:
+                if reporter is not None:
+                    reporter.on_message(
+                        "P2 基底权重迁移失败，已按随机初始化继续训练", None)
+            except Exception:  # noqa: BLE001  回调异常不影响训练
+                pass
 
     def _final_metrics(self, trainer) -> dict:
         """用最优权重在内存验证集上评估（复用训练期 validator，不产生任何文件）。"""

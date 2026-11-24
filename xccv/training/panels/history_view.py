@@ -97,6 +97,7 @@ class HistoryViewMixin:
         self._show_run(rec)
     def _show_run(self, rec: RunRecord):
         """渲染所选记录：实时训练显示进行中的数据，其余读 metrics.json。"""
+        self._clear_phase_status()
         m = rec.metrics or {}
         live = rec.status == "running" and self.thread is not None
         if live:
@@ -149,6 +150,7 @@ class HistoryViewMixin:
     def _reset_progress(self):
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("%p%")
+        self._clear_phase_status()
         self.run_start.setText("—")
         self.run_end.setText("—")
         self.run_duration.setText("—")
@@ -208,6 +210,27 @@ class HistoryViewMixin:
     def _on_batch_progress(self, epoch: int, batch_index: int, batch_total: int):
         """轮内进度上报：只缓存，由 1s 定时器统一刷新进度条（避免频繁重绘）。"""
         self._latest_progress = (epoch, batch_index, batch_total)
+    def _on_status_message(self, text: str, frac: float):
+        """阶段性消息（预训练权重下载/重试等）单独显示，不写进度条文本。
+
+        进度条由轮次/批次定时器刷新，若与下载进度共用格式字符串，会在
+        网络波动（进度回调密集）时来回覆盖造成闪烁。
+        """
+        label = getattr(self, "phase_status", None)
+        if label is None:
+            return
+        if frac >= 0:
+            pct = int(round(100 * max(0.0, min(frac, 1.0))))
+            text = f"{text}　{pct}%"
+        label.setText(text)
+        label.setVisible(bool(text))
+
+    def _clear_phase_status(self):
+        """清空阶段消息（训练轮次开始/结束、切换历史记录时调用）。"""
+        label = getattr(self, "phase_status", None)
+        if label is not None:
+            label.setText("")
+            label.setVisible(False)
     def _update_overall_progress(self):
         """总体进度：轮次式 =（已完成轮次 + 当前轮内批次比例）/ 总轮次；
         §四 免训练范式 = 阶段化（1 特征抽取与建库 / 2 标定 / 3 验证评估）。"""
@@ -256,6 +279,7 @@ class HistoryViewMixin:
             log.debug("GPU 显存查询失败（隐藏显存标签）")
             self.gpu_mem.setText("")
     def _on_epoch(self, epoch: int, logs: dict):
+        self._clear_phase_status()   # 轮次开始后不再保留下载/阶段消息
         self._live_history.append({"epoch": epoch, **logs})
         if self._selected_run_dir == self._run_dir:  # 正在查看本次训练 → 实时刷新
             self._history = self._live_history
@@ -308,6 +332,7 @@ class HistoryViewMixin:
         self._metric_hover.install()
     def _on_train_finished(self, ok: bool, message: str, metrics: dict):
         self._live_timer.stop()
+        self._clear_phase_status()
         self.thread = None
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)

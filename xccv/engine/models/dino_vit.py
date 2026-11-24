@@ -1,10 +1,9 @@
-"""DINO ViT-B/8 特征器（CIF 后端特征底座；V0.7.3）。
+"""DINO ViT-B/8 特征器（CIF 后端特征底座）。
 
-主路径：timm `vit_base_patch8_224_dino`（与复现工程 `E:\Zcode\Study\CIF`
-逐行一致的调用——依赖已对齐；timm 已随平台环境安装
-venv，不新增安装）。回退：纯 torch 重建的 DinoViT（键名与 timm
+主路径：timm `vit_base_patch8_224_dino`（与参考实现一致的调用；timm 已随
+平台环境安装，不新增安装）。回退：纯 torch 重建的 DinoViT（键名与 timm
 VisionTransformer 一致：150 键 cls_token/pos_embed/patch_embed.proj/12×
-block/norm，探针 runs/probe_dino_ckpt.py 全部核对；保留零依赖能力）。
+block/norm，逐键核对；保留零依赖能力）。
 
 权重路径（用户自备或可选下载，与 SAM weights/sam 惯例一致）：
   1) 环境变量 XCCV_DINO_CKPT 指向权重文件；
@@ -148,7 +147,7 @@ def find_dino_checkpoint() -> Path | None:
 
 
 class _TimmViT(nn.Module):
-    """timm VisionTransformer 包装：forward 与复现工程 ViTExtractor 逐行同构
+    """timm VisionTransformer 包装：forward 与参考 ViTExtractor 逐行同构
     （patch_embed → _pos_embed → norm_pre → blocks → norm → 丢 cls）。"""
 
     def __init__(self, backbone: nn.Module, depth: int):

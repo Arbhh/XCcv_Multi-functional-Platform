@@ -16,6 +16,8 @@ weights/*
 !**/weights/download_weights.py
 xccv/engine/weights/*
 !xccv/engine/weights/download_weights.py
+!xccv/engine/weights/ensure_weight.py
+!xccv/engine/weights/__init__.py
 *.pt
 *.pth
 *.onnx
@@ -48,6 +50,7 @@ docs/0.7.*/
 docs/0.8.0/
 docs/0.8.1/
 docs/0.8.2/
+docs/0.8.3/
 
 # Office 锁文件
 ~$*.docx

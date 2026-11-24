@@ -1050,7 +1050,10 @@ class InfoPageMixin:
             return
         self.btn_health.setEnabled(False)
         self.statusBar().showMessage(tr("数据体检中…（大集合的重复图检测可能稍慢）"))
-        self._health_worker = _PreflightWorker(self.project, self)
+        # 无父对象：以页为父的运行线程会随页销毁被 Qt 删除，
+        # 触发 "Destroyed while thread is still running"（auto_cleanup_thread
+        # 的模块级保活负责持有至 finished）
+        self._health_worker = _PreflightWorker(self.project)
         self._health_worker.done.connect(self._on_health_done)
         self._health_worker.failed.connect(self._on_health_failed)
         auto_cleanup_thread(self, "_health_worker", self._health_worker)  # A-3

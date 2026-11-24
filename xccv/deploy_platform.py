@@ -45,7 +45,7 @@ from .win_chrome import ChromeMainWindow
 
 
 def _tok(name: str) -> str:
-    """按当前主题取色（状态提示在设置时取色，暗色下用亮色变体，F2-5）。"""
+    """按当前主题取色（状态提示在设置时取色，暗色下用亮色变体）。"""
     from .ui_style import token
 
     return token(name)

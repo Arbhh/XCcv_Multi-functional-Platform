@@ -143,7 +143,7 @@ class ImageData:
 
 @dataclass
 class ImageList:
-    """多张图像（V0.6 F2-2，裁图/分块族生产）。
+    """多张图像（裁图/分块族生产）。
 
     不再是端口类型：ImageList 作为 image 端口的**数据载体**
     在图上传递（单张=ImageData，多张=ImageList）；下游节点由执行器逐张
@@ -165,7 +165,7 @@ class ImageList:
 
 
 def result_kind(value) -> str:
-    """统一结果"度量衡"的种类判定（V0.6 F2-2，设计建议：各节点输出统一格式）。
+    """统一结果"度量衡"的种类判定（各节点输出统一格式）。
 
     detection（AI 检出：框/掩码）、classification（AI 分类：无框有类别概率）、
     geometry、measure、number、bool、image；其余 unknown。
@@ -217,7 +217,7 @@ class ResultItem:
 
 @dataclass
 class ResultList:
-    """结果列表（与 ImageList 逐项对应，V0.6 F2-2）：items 为 ResultItem。
+    """结果列表（与 ImageList 逐项对应）：items 为 ResultItem。
 
     meta 可带 source_size=[W,H]（掩码回贴原图尺寸用）。AI 逐图推理与传统算子
     逐图执行都产出本类型——「结果合并」一个节点统一合并（设计建议 result_list）。

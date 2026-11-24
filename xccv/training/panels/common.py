@@ -115,7 +115,7 @@ def _safe_run_tag(model_name: str) -> str:
             break
     return tag.strip("_") or "model"
 def _apply_theme(widget):
-    """全局样式套用 + 登记主题实时切换（V0.6 F2-5）。"""
+    """全局样式套用 + 登记主题实时切换。"""
     from ...ui_style import apply_app_theme
 
     apply_app_theme(widget)
@@ -224,7 +224,31 @@ class _PagePlot(pg.PlotWidget):
         super().__init__(*args, **kwargs)
         self._on_leave = None
         self._xccv_title = ""
+        self._xccv_legend = None
         self.refresh_theme()
+
+    def place_legend(self):
+        """手动把图例放到视图左上角。
+
+        LegendItem 的 offset 锚定会把自身 geometryChanged 绑到 ViewBox；
+        窗口销毁时若 ViewBox 先删除，锚点回调访问已删除对象会抛
+        RuntimeError（训练页关闭/重建时偶发）。offset=None 不建立该绑定，
+        由本方法在尺寸变化时重新定位。
+        """
+        leg = getattr(self, "_xccv_legend", None)
+        if leg is None:
+            return
+        try:
+            pi = self.getPlotItem()
+            if pi is None:
+                return
+            leg.setPos(pi.vb.boundingRect().topLeft() + QPointF(8, 8))
+        except (RuntimeError, AttributeError):
+            pass
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self.place_legend()
 
     def refresh_theme(self):
         """主题切换：底色/坐标轴/标题随 token 重设（pyqtgraph 不吃 QSS）。"""
@@ -258,11 +282,14 @@ def _style_plot(plot: _PagePlot, title: str):
 
 
 def _add_legend(plot: _PagePlot):
-    """图例字号放大（旧版 pyqtgraph 无 labelTextSize 参数时回退默认）。"""
+    """图例字号放大；offset=None 交由 place_legend 定位，避开销毁期锚点回调。"""
     try:
-        return plot.addLegend(offset=(8, 8), labelTextSize="10pt")
+        legend = plot.addLegend(offset=None, labelTextSize="10pt")
     except TypeError:
-        return plot.addLegend(offset=(8, 8))
+        legend = plot.addLegend(offset=None)
+    plot._xccv_legend = legend
+    plot.place_legend()
+    return legend
 class _PlotHover:
     """曲线图悬停提示：跟随鼠标显示最近采样点的数值（三位小数）。
 

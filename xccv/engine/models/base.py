@@ -99,6 +99,9 @@ class TrainReporter:
     def on_train_progress(self, epoch: int, batch_index: int, batch_total: int) -> None:
         """每个批次训练后触发（轮内进度，用于总体进度条的实时百分比）。"""
 
+    def on_message(self, text: str, frac: float | None = None) -> None:
+        """阶段性消息（如预训练权重下载进度）；frac 为 None 表示不确定进度。"""
+
     def on_finish(self, success: bool, message: str = "") -> None:
         """训练结束（无论成败）触发。"""
 

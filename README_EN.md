@@ -77,7 +77,7 @@ pip install -r requirements.txt
 >
 > If none works, the scripts print English guidance and run `tools\env_check.py` for a detailed
 > diagnosis. It is recommended to write one line into `python_path.txt` on the target machine,
-> e.g. `C:\XCcv\venv\Scripts\python.exe` (the file is gitignored; it may differ per machine).
+> e.g. `<project>\venv\Scripts\python.exe` (the file is gitignored; it may differ per machine).
 
 Double-click `run_main.bat` (or `python -m xccv.app`) to open the workbench, then enter each
 platform from its card:
