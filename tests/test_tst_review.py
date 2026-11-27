@@ -241,6 +241,51 @@ class PanelSignalTest(unittest.TestCase):
         self.assertEqual(got, {"score": 0.25})
 
 
+class PanelScoreSemanticsTest(unittest.TestCase):
+    """阈值面板按 score_semantics 元数据适配：z 语义初始阈值 conf→z
+    换算（换算式与标准页共用 review_logic.conf_to_score）+ 维度名。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _anomaly_stats(self):
+        results = [
+            {"file": "a.png", "path": "d:/ds/OK/a.png", "image_score": 1.2,
+             "detections": []},
+            {"file": "c.png", "path": "d:/ds/NG/c.png", "image_score": 8.2,
+             "detections": []},
+        ]
+        return collect_match_stats(
+            results, task="anomaly",
+            score_semantics={"key": "z", "name": "图像分数",
+                             "range": [0.0, None],
+                             "higher": "分数越高越异常"},
+            weak_classes={"OK", "NG"})
+
+    def test_z_semantics_initial_threshold_and_label(self):
+        from xccv.testing.threshold_panel import ThresholdPanel
+
+        p = ThresholdPanel(compact=True)
+        p.set_stats(self._anomaly_stats(), 0.25)
+        self.assertAlmostEqual(p._dim_state["score"]["thr"], 3.0)  # 1/0.25−1
+        self.assertTrue(p._score_unbounded())
+        self.assertIn("图像分数", p._score_label())
+        idx = p.cmb_dim.findData("score")
+        self.assertGreaterEqual(idx, 0)
+        self.assertIn("图像分数", p.cmb_dim.itemText(idx))
+
+    def test_conf_semantics_kept_for_conf_models(self):
+        """conf 语义（缺失元数据按 conf 兼容）：初始阈值仍是 conf 原值。"""
+        from xccv.testing.threshold_panel import ThresholdPanel
+
+        p = ThresholdPanel(compact=True)
+        p.set_stats({"gt_available": False, "per_image": []}, 0.25)
+        self.assertAlmostEqual(p._dim_state["score"]["thr"], 0.25)
+
+
 class DataHealthIgnoreClassTest(unittest.TestCase):
 
     def test_ignore_not_counted_as_class(self):

@@ -3,7 +3,10 @@
 - 算子数：流程引擎内置 ops 子模块实际注册数（不含自定义算子）；
 - 节点数：内置 ops + 旧链兼容委托节点的总和（前端画布展示口径）；
 - 模型数：engine models 注册表 list_models() 全量数；
-- SECURITY.md 支持版本表须含当前支持线（0.8.x）。
+- SECURITY.md 支持版本表须含当前支持线（0.8.x）；
+- 版本矩阵：torch/torchvision 安装口径在 README（中英）/ requirements.txt
+  注释 / ci.yml 三方一致（requirements.txt 本身不含 torch——对账的是
+  "口径一致"：三处出现的版本号与安装源必须相同，而非字面相同）。
 
 用法：python tools/doc_reconcile.py [--root 仓库根]
 缺省 root = 本脚本所在仓库根。口径不符退出码 1，
@@ -24,6 +27,12 @@ BUILTIN_OPS_MODULES = ("ai_bridge", "crop", "det_filters", "external_ops",
                        "preprocess", "source")
 CURRENT_SUPPORT_LINE = "0.8.x"
 
+# 版本矩阵基准（与 ci.yml 现行 CPU 源版本一致；requirements.txt 注释、
+# README 中英安装段须出现完全相同的版本号——漂移即对账失败）
+TORCH_VERSION = "2.9.1"
+TORCHVISION_VERSION = "0.24.1"
+CPU_INDEX_URL = "https://download.pytorch.org/whl/cpu"
+
 
 def builtin_ops_count() -> int:
     import xccv.engine.flow.ops as ops_pkg
@@ -38,6 +47,53 @@ def all_nodes_count() -> int:
     builtin_ops_count()
     __import__("xccv.engine.flow.legacy_adapter")
     return len(registered_names())
+
+
+def check_dependency_matrix(root: Path, problems: list) -> None:
+    """torch/torchvision 版本矩阵三方对账（CI 为基准源）。
+
+    口径语义：requirements.txt 不含 torch（单独安装），因此对账的是
+    "安装口径一致"——三处出现的 torch/torchvision 版本号与安装源
+    （本地 cu128 / CI cpu）必须一致，而非文件内容字面相同。
+    """
+    ci = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    m = re.search(r'torch==([\w.]+)"\s+"torchvision==([\w.]+)"', ci)
+    if m is None:
+        problems.append("ci.yml 未找到 torch/torchvision 固定版本安装行")
+        return
+    ci_torch, ci_tv = m.group(1), m.group(2)
+    if ci_torch != TORCH_VERSION or ci_tv != TORCHVISION_VERSION:
+        problems.append(f"ci.yml 版本 {ci_torch}/{ci_tv} ≠ 基准 "
+                        f"{TORCH_VERSION}/{TORCHVISION_VERSION}")
+    if CPU_INDEX_URL not in ci:
+        problems.append(f"ci.yml 缺 CPU 源 {CPU_INDEX_URL}")
+    if "torch<2.10" not in ci:
+        problems.append("ci.yml 缺 ultralytics 上界约束说明（torch<2.10）")
+
+    for name in ("README.md", "README_EN.md"):
+        text = (root / name).read_text(encoding="utf-8")
+        if f"torch=={TORCH_VERSION}" not in text:
+            problems.append(f"{name} 缺 torch=={TORCH_VERSION} 固定版本")
+        if f"torchvision=={TORCHVISION_VERSION}" not in text:
+            problems.append(f"{name} 缺 torchvision=={TORCHVISION_VERSION} 固定版本")
+        if "download.pytorch.org/whl/cu128" not in text:
+            problems.append(f"{name} 缺本地 cu128 源示例")
+        # 双语关键字段：CI 用 CPU 源 / 本地按显卡选源（中英文各留锚点词）
+        if "download.pytorch.org/whl/cpu" not in text:
+            problems.append(f"{name} 缺 CPU 源说明")
+        if "torch<2.10" not in text:
+            problems.append(f"{name} 缺 ultralytics 上界约束说明（torch<2.10）")
+
+    req = (root / "requirements.txt").read_text(encoding="utf-8")
+    if f"torch=={TORCH_VERSION}" not in req:
+        problems.append(f"requirements.txt 注释缺 torch=={TORCH_VERSION} 口径")
+    if f"torchvision=={TORCHVISION_VERSION}" not in req:
+        problems.append(f"requirements.txt 注释缺 torchvision=={TORCHVISION_VERSION} 口径")
+    if "ultralytics==" not in req:
+        problems.append("requirements.txt 缺 ultralytics 固定版本")
+    if re.search(r"(?m)^\s*(torch|torchvision)\s*[=<>~!]", req):
+        problems.append("requirements.txt 不应包含 torch/torchvision 安装行"
+                        "（torch 单独按源安装）")
 
 
 def main() -> int:
@@ -79,12 +135,16 @@ def main() -> int:
     if CURRENT_SUPPORT_LINE not in sec:
         problems.append(f"SECURITY.md 缺当前支持线 {CURRENT_SUPPORT_LINE}")
 
+    check_dependency_matrix(root, problems)
+
     if problems:
         print("口径漂移（请修文档至下述事实后重跑）：")
         for p in problems:
             print("  -", p)
         return 1
-    print("对账全绿：README/README_EN/SECURITY 与代码事实一致")
+    print(f"对账全绿：README/README_EN/SECURITY 与代码事实一致；"
+          f"版本矩阵 torch=={TORCH_VERSION} / torchvision=={TORCHVISION_VERSION} "
+          f"（CI=CPU 源，本地按显卡选源）三方一致")
     return 0
 
 

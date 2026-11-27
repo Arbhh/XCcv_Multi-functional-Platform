@@ -38,6 +38,7 @@ from ..i18n import tr  # 模块级：动态文案站点直接用（方法级导�
 from ..training.dataset_stats import collect_stats
 from ..training.project import list_projects, load_project
 from ..ui_style import APP_QSS, ACCENT, apply_app_theme, icon_path  # noqa: F401
+from .review_logic import image_score_of, is_conf_like, score_semantics_of
 
 ensure_console_streams()
 
@@ -685,19 +686,57 @@ class TestingWindow(QMainWindow):
         return panel
 
     def _make_slider(self, layout, title: str, vmin: int, vmax: int, value: int) -> QSlider:
+        from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QWidget
         from ..i18n import tr
 
         label = QLabel(f"{tr(title)}：{value / 100:.2f}")
+        # 数值直接输入框放标签行右端（滑条独占整行）。行右缘留 8px 余
+        # 量：面板竖向滚动条出现会收缩视口宽度，贴边布局会被裁切
+        edit = QLineEdit(f"{value / 100:.2f}")
+        edit.setFixedWidth(64)
+        # 主题对 QLineEdit 默认内边距 7px 12px——窄框会被挤成水平滚动
+        # 的"…"；此处改紧凑内边距（其余样式仍走全局主题）+ 64px 宽，
+        # 保证数值完整可读
+        edit.setStyleSheet("QLineEdit { padding: 2px 6px; }")
+        edit.setAlignment(Qt.AlignRight)
+        edit.setToolTip(tr("可直接输入数值后回车"))
+        label_row = QWidget()
+        lh = QHBoxLayout(label_row)
+        lh.setContentsMargins(0, 0, 8, 0)
+        lh.addWidget(label)
+        lh.addStretch(1)
+        lh.addWidget(edit)
+        layout.addWidget(label_row)
+
         slider = QSlider(Qt.Horizontal)
         slider.setRange(vmin, vmax)
         slider.setValue(value)
         slider._xccv_label = label      # §三：模型加载时按分数语义改题
         slider._xccv_title = tr(title)
-        layout.addWidget(label)
+        slider._xccv_scale = 100.0      # 标签数值刻度（分数语义滑条改 10）
+        slider._xccv_edit = edit
         layout.addWidget(slider)
+
+        def _apply_edit():
+            try:
+                val = float(edit.text())
+            except ValueError:
+                edit.setText(f"{slider.value() / slider._xccv_scale:.2f}")
+                return
+            v = int(round(val * slider._xccv_scale))
+            v = max(slider.minimum(), min(slider.maximum(), v))
+            slider.blockSignals(True)
+            slider.setValue(v)
+            slider.blockSignals(False)
+            slider._xccv_label.setText(
+                f"{slider._xccv_title}：{v / slider._xccv_scale:.2f}")
+            self._infer_timer.start()
+
+        edit.editingFinished.connect(_apply_edit)
         slider.valueChanged.connect(
-            lambda v, lb=label, sl=slider: (
-                lb.setText(f"{sl._xccv_title}：{v / 100:.2f}"),
+            lambda v, lb=label, sl=slider, ed=edit: (
+                lb.setText(f"{sl._xccv_title}：{v / sl._xccv_scale:.2f}"),
+                ed.setText(f"{v / sl._xccv_scale:.2f}"),
                 self._infer_timer.start()))
         return slider
 
@@ -932,17 +971,42 @@ class TestingWindow(QMainWindow):
         is_seg = self.task == "segmentation"
         self.conf_slider.setEnabled(not is_cls)
         self.iou_slider.setEnabled(not is_cls)
-        # §三（V0.7.3）：滑条名随模型分数语义渲染（ANOMALY=图像分数 z）
-        sem = getattr(model, "score_semantics", None) or {}
-        conf_title = str(sem.get("name") or "置信度阈值")
+        # 需求：分数语义 ≠ 置信度的模型（异常检测等）的阈值滑条须与复盘
+        # 页同口径——滑条直接以分数为刻度，不再以 conf 数值展示。
+        # 实现：按 score_semantics.key 判定（元数据驱动，不按模型名硬编
+        # 码）：conf 语义保持「置信度阈值」+IOU 滑条；分数语义改「图像分
+        # 数阈值」分数刻度（0~10，默认 3.0 对应 conf 0.25），IOU 对异常
+        # 检测无意义——隐藏；predict 侧经 _slider_conf 互逆换算（与复盘
+        # conf→分数同式）。
+        # 使用：模型加载完成时调用一次。
+        sem = score_semantics_of(model)
+        if is_conf_like(sem):
+            conf_title = tr("置信度阈值")
+            tip = str(sem.get("higher") or "")
+            # 置信度刻度：滑条 1~100 → conf 0.01~1.00
+            self.conf_slider.setRange(1, 100)
+            self.conf_slider.setValue(25)
+            self.conf_slider._xccv_scale = 100.0
+            self.iou_slider.setVisible(True)
+            self.iou_slider.setEnabled(True)
+        else:
+            key = str(sem.get("key") or "score")
+            conf_title = tr("图像分数阈值")
+            higher = str(sem.get("higher") or "")
+            tip = (f"{tr(higher)}\n{key}=1/conf−1（0.25→{key}=3）"
+                   if higher else f"{key}=1/conf−1（0.25→{key}=3）")
+            tip += "\n" + tr("阈值范围 0~50，拖动滑条或直接输入数值皆可")
+            # 分数刻度 0~50（滑条 0~500 → 0.1 步长），默认 3.0=conf 0.25
+            self.conf_slider.setRange(0, 500)
+            self.conf_slider.setValue(30)
+            self.conf_slider._xccv_scale = 10.0
+            self.iou_slider.setVisible(False)
+            self.iou_slider.setEnabled(False)
         self.conf_slider._xccv_title = conf_title
         lbl = getattr(self.conf_slider, "_xccv_label", None)
         if lbl is not None:
-            lbl.setText(f"{conf_title}：{self.conf_slider.value() / 100:.2f}")
-        tip = str(sem.get("higher") or "")
-        if str(self.task) == "anomaly":
-            tip = (tip + "\n" if tip else "") + \
-                "conf→图像分数 z=1/conf−1（0.25→z=3）"
+            scale = getattr(self.conf_slider, "_xccv_scale", 100.0)
+            lbl.setText(f"{conf_title}：{self.conf_slider.value() / scale:.2f}")
         self.conf_slider.setToolTip(tip)
         self.show_masks.setVisible(is_seg)
         self.show_area.setVisible(not is_cls)
@@ -1137,6 +1201,17 @@ class TestingWindow(QMainWindow):
         total_det = sum(len(r["detections"]) for r in results)
         lines = [f"{tr('批量推理完成：')}{len(results)} {tr('张图')}，"
                  f"{tr('共检出')} {total_det} {tr('个目标')}"]
+        # 需求：异常分数语义模型的批量摘要须声明分数口径，避免把异常
+        # 分数读成置信度。
+        # 实现：语义优先取批量 match_stats（随批量生成），缺省退当前
+        # 模型元数据；非 conf 语义时追加一行语义说明。
+        # 使用：每次标准批量完成回调时执行。
+        sem = (score_semantics_of((summary or {}).get("match_stats"))
+               or score_semantics_of(self.model))
+        if str(self.task) == "anomaly" and not is_conf_like(sem):
+            lines.append(f"{tr(str(sem.get('name') or '图像分数'))}"
+                         f"（{sem.get('key')}）："
+                         f"{tr(str(sem.get('higher') or ''))}")
         if summary:
             pc = summary.get("per_class") or {}
             if pc:
@@ -1208,7 +1283,7 @@ class TestingWindow(QMainWindow):
         try:
             path = save_threshold_flow(model_dir, model_name, dims,
                                        str(weights),
-                                       task=str(getattr(self, "_task", "")
+                                       task=str(getattr(self, "task", "")
                                                 or "detection"))
         except OSError as e:
             QMessageBox.warning(self, tr("生成流程图模板"), f"{tr('写入流程文件失败：')}{e}")
@@ -1277,13 +1352,44 @@ class TestingWindow(QMainWindow):
             QMessageBox.warning(self, tr("应用阈值"), f"{tr('写入检出流程失败：')}{e}")
             return
         self._flow = flow  # 当前会话立即生效
+        # 双向同步：阈值面板滑条跟随应用值（分数语义经互逆换算回滑条
+        # 刻度；blockSignals 防触发重推理，标签/输入框手动刷新）
+        if not self._sem_is_conf() and conf > 0:
+            self.conf_slider.blockSignals(True)
+            self.conf_slider.setValue(
+                int(round(min(max(1.0 / conf - 1.0, 0.0), 50.0) * 10)))
+            self.conf_slider.blockSignals(False)
+            lbl = getattr(self.conf_slider, "_xccv_label", None)
+            ed = getattr(self.conf_slider, "_xccv_edit", None)
+            txt = f"{self.conf_slider.value() / 10.0:.2f}"
+            if lbl is not None:
+                lbl.setText(f"{self.conf_slider._xccv_title}：{txt}")
+            if ed is not None:
+                ed.setText(txt)
+        thr_label = self._applied_threshold_label()
         self.statusBar().showMessage(
-            f"{tr('默认检出阈值已应用：')}conf={conf:.2f} → {flow_path}", 10000)
+            f"{tr('默认检出阈值已应用：')}{thr_label}={conf:.2f} → {flow_path}",
+            10000)
         self._flow_jump_dialog(
             tr("应用阈值"),
-            tr("已写入项目默认检出流程 conf={v:.2f}，可前往流程图界面查看").format(
-                v=conf),
+            tr("已写入项目默认检出流程") + f" {thr_label}={conf:.2f}，"
+            + tr("可前往流程图界面查看"),
             flow_path)
+
+    def _applied_threshold_label(self) -> str:
+        """应用阈值文案的语义标签（"conf" 或 "<语义名>（<key>）"）。
+
+        需求：非置信度语义模型（异常检测）写进检出流程的 min 是分数轴
+        阈值，文案不能再写 conf。
+        实现：语义优先取批量 match_stats（复盘/标准批量都会落此属性），
+        缺省退当前模型元数据；conf 语义恒返回 "conf"。
+        使用：_apply_conf_to_flow 的状态栏与弹窗文案。
+        """
+        stats = getattr(self, "_last_match_stats", None) or {}
+        sem = score_semantics_of(stats) or score_semantics_of(self.model)
+        if is_conf_like(sem):
+            return "conf"
+        return f"{sem.get('name')}（{sem.get('key')}）"
 
     def _resolve_dataset_dir(self):
         """权重所属项目的数据集目录（回流默认目标；找不到返回 None）。"""
@@ -1390,8 +1496,25 @@ class TestingWindow(QMainWindow):
         return Path(data) if data else None
 
     # ================= 推理与可视化 =================
+    def _sem_is_conf(self) -> bool:
+        """当前模型是否置信度语义（异常检测等分数语义返回 False）。"""
+        sem = score_semantics_of(self.model) \
+            if getattr(self, "model", None) is not None else None
+        return sem is None or is_conf_like(sem)
+
+    def _slider_conf(self) -> float:
+        """阈值滑条 → model.predict 的 conf 参数。
+
+        conf 语义：滑条值即置信度；分数语义（异常检测）：滑条为分数
+        （z），conf=1/(1+z)——与复盘页 conf→分数换算同式互逆，保证同
+        一分数阈值下标准页与复盘页口径一致。"""
+        if self._sem_is_conf():
+            return self.conf_slider.value() / 100
+        z = max(self.conf_slider.value() / 10.0, 1e-3)
+        return 1.0 / (1.0 + z)
+
     def _current_params(self) -> tuple[float, float]:
-        return self.conf_slider.value() / 100, self.iou_slider.value() / 100
+        return self._slider_conf(), self.iou_slider.value() / 100
 
     @staticmethod
     def _fmt_cost(seconds: float) -> str:
@@ -1603,6 +1726,31 @@ class TestingWindow(QMainWindow):
             score = prediction.scores[0] if prediction.scores else 0.0
             self.result_stats.setText(
                 f"{name}\n识别为：{top1}（{score:.1%}）{cost_txt}")
+        elif self.task == "anomaly":
+            # 需求：异常检测的主判定口径是图像级异常分数（OK 分布标定），
+            # 标准页单图结果不能只按检出框数展示置信度语义。
+            # 实现：分数语义取模型 score_semantics 元数据；图像分取
+            # probs[0]（缺省退检出最大分，与复盘横幅同源），检出框数与
+            # 流程过滤信息照常附列。
+            # 使用：单图推理与重绘路径（_redraw_last）共用本分支。
+            sem = score_semantics_of(self.model)
+            img = image_score_of(raw_prediction)
+            shown = len(prediction.boxes)
+            extra = ""
+            if self._flow_info:
+                extra += f"（流程移除 {self._flow_info.get('removed', 0)} 个）"
+                verdict = self._flow_info.get("count_check")
+                if verdict:
+                    extra += f"\n数量判定：{verdict}"
+            if img is not None:
+                sem_name = tr(str(sem.get("name") or "图像分数"))
+                higher = str(sem.get("higher") or "")
+                line = (f"{sem_name}（{sem.get('key')}）= {img:.2f}"
+                        + (f"（{tr(higher)}）" if higher else ""))
+            else:
+                line = tr("无图像分数")
+            self.result_stats.setText(
+                f"{name}\n{line}\n检出目标：{shown} 个{extra}{cost_txt}")
         else:
             shown = len(prediction.boxes)
             extra = ""
@@ -1633,6 +1781,18 @@ class TestingWindow(QMainWindow):
                 name = self.classes[idx] if idx < len(self.classes) else str(idx)
                 self.result_list.addItem(f"{name}　{prob:.1%}")
             return
+        if self.task == "anomaly":
+            # 需求：异常检测识别结果列表首行给图像级分数锚点，框级分数
+            # （异常分数）跟在其后，语义与复盘页横幅一致。
+            # 实现：分数名取 score_semantics 元数据，数值取 probs[0]
+            # （缺省退检出最大分）；无分数时不加行。
+            # 使用：单图展示与测试直接调用均可。
+            sem = score_semantics_of(self.model)
+            img = image_score_of(prediction)
+            if img is not None:
+                sem_name = tr(str(sem.get("name") or "图像分数"))
+                self.result_list.addItem(
+                    f"{sem_name}（{sem.get('key')}）　{img:.2f}")
         show_area = self.show_area.isChecked()
         texts = getattr(prediction, "texts", None)   # OCR 识别文本
         for i, (box, idx, score) in enumerate(zip(prediction.boxes, prediction.labels,

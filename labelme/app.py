@@ -281,6 +281,18 @@ class MainWindow(QtWidgets.QMainWindow):
             lambda msg: self._on_ai_banner(None, f"AI 模型加载失败：{msg}"))
         self.canvas.aiStatus.connect(
             lambda msg: self._on_ai_banner(msg, msg))
+        # 下载进度全局钩子：任何接管入口（模型初始化/画布推理/悬停预览/
+        # 批量预标注）的统一下载器进度都回主窗（后台线程内调用）。反馈
+        # 形态=横幅状态（用户口径）：阶段消息（frac=None）更新横幅；
+        # 百分比进度只走状态栏，不灌横幅（防横幅忽隐忽现）
+        try:
+            from xccv.annotation import ai_assist as _ai_progress
+
+            _ai_progress.set_progress_hook(
+                lambda text, frac=None:
+                    self._ai_hook_notify(text, frac))
+        except Exception:
+            pass
 
         self.setCentralWidget(scrollArea)
 
@@ -1501,23 +1513,28 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             from xccv.annotation import ai_assist
 
-            ready = [m for m in ai_assist.available_models() if m["available"]]
-            if not ready:
+            models = ai_assist.available_models()
+            if not models:
                 msg = (
-                    "AI 智能多边形不可用：缺少权重文件。请将 sam2.1_t.pt 或 "
+                    "AI 智能多边形不可用：模型清单为空。请将 sam2.1_t.pt 或 "
                     "mobile_sam.pt 放到 " + str(ai_assist.weights_dir()))
                 self.statusBar().showMessage(msg, 10000)
                 self.setEditMode()
                 return
             name = self._selected_ai_model() \
                 or (self._config.get("ai") or {}).get("default") \
-                or ready[0]["name"]
-            if name not in [m["name"] for m in ready]:
-                name = ready[0]["name"]
-            # 批注修复：模型+嵌入后台加载（原同步初始化卡死 UI 数秒）
+                or models[0]["name"]
+            if name not in [m["name"] for m in models]:
+                name = models[0]["name"]
+            missing = not next(m for m in models
+                               if m["name"] == name)["available"]
+            # 批注修复：模型+嵌入后台加载（原同步初始化卡死 UI 数秒）；
+            # 权重缺失时后台先经统一下载器接管补齐（进度/失败经既有
+            # aiModel 状态链路上报），不再因缺权重拒绝进入
             self.canvas.initializeAiModelAsync(name)
+            hint = "（权重未下载，后台自动下载后就绪）" if missing else ""
             self.statusBar().showMessage(
-                f"AI 智能多边形后台加载中（{name}）：就绪后 左键并入 / "
+                f"AI 智能多边形后台加载中（{name}）{hint}：就绪后 左键并入 / "
                 "Shift+左键挖除 / 右键撤销 / Ctrl+左键完成", 10000)
         except Exception as e:  # noqa: BLE001
             self.statusBar().showMessage(f"AI 模型初始化失败：{e}", 10000)
@@ -1647,24 +1664,43 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage(
             f"批量改名完成：{old} → {new}（{n} 个）", 8000)
 
+    def _ai_hook_notify(self, text: str, frac=None):
+        """AI 下载/加载全局进度回调（后台线程内调用）。
+
+        需求：反馈形态=横幅状态；逐帧百分比不得灌横幅（此前横幅忽隐
+        忽现的根因就是逐帧重进横幅）。
+        实现：阶段消息（frac=None）→ aiStatus 信号更新横幅（含「下载/
+        加载中」关键词持续显示）；百分比进度 → 状态栏常驻刷新。
+        使用：ai_assist.set_progress_hook 注册。"""
+        if frac is None:
+            self.canvas.aiStatus.emit(text)
+        else:
+            self.statusBar().showMessage(f"{text} {frac * 100:.0f}%")
+
     def _on_ai_model_ready(self, name):
         self.canvas._apply_pending_model(name)
         self._on_ai_banner(None, None)   # 加载完成：收起顶部等待横幅
+        # 用户在加载期间可能已切换档位——刷新下拉前先记住当前所选，
+        # 刷新后按所选继续（切换排队），不让 ready 把用户选择冲掉
+        combo = getattr(self, "_aiModelCombo", None)
+        user_sel = self._selected_ai_model()
+        if combo is not None:
+            self._fill_ai_models(combo, want=user_sel or name)
         want = self._selected_ai_model()
         if want and want != name:
             # 加载期间用户又换了模型：继续加载最新所选
             self.canvas.initializeAiModelAsync(want)
             return
         self.statusBar().showMessage(
-            f"AI 智能多边形已就绪（{name}）：左键并入 / Shift+左键挖除 / "
+            f"AI 模型已就绪（{name}）：左键并入 / Shift+左键挖除 / "
             "右键撤销 / 双击或 Ctrl+左键完成", 8000)
 
     def _on_ai_banner(self, wait_msg, done_msg):
-        """AI 等待状态顶部横幅（模型加载/推理等待有可见提示）。
+        """AI 等待状态顶部横幅（模型加载/下载/推理等待有可见提示）。
 
-        wait_msg 含「加载中/稍候/推理」→ 顶部居中悬浮横幅持续显示（用户
-        不再因无反馈而重复点击）；就绪/失败/普通消息 → 横幅收起，重要
-        结论走状态栏。done_msg 为失败文本时同时状态栏展示。
+        wait_msg 含「加载中/下载/稍候/推理」→ 顶部居中悬浮横幅持续显示
+        （用户不再因无反馈而重复点击）；就绪/失败/普通消息 → 横幅收起，
+        重要结论走状态栏。done_msg 为失败文本时同时状态栏展示。
         """
         from PyQt5.QtCore import Qt
 
@@ -1681,7 +1717,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if done_msg and ("失败" in done_msg):
             self.statusBar().showMessage(done_msg, 10000)
         show = bool(wait_msg) and any(
-            k in wait_msg for k in ("加载中", "稍候", "推理"))
+            k in wait_msg for k in ("加载中", "下载", "稍候", "推理"))
         if not show:
             banner.setVisible(False)
             return
@@ -1759,14 +1795,18 @@ class MainWindow(QtWidgets.QMainWindow):
         cb.clear()
         sel = -1
         for m in models:
-            cb.addItem(m["name"], m["name"])
+            # 缺失档位保持可选（界面标注自动下载提示），选中后由运行时
+            # 接管补齐；置灰会让接管永远没有触发入口
+            label = m["name"] if m["available"] \
+                else m["name"] + "（未下载：首次使用时自动下载）"
+            cb.addItem(label, m["name"])
             i = cb.count() - 1
             cb.setItemData(i, m["title"] if m["available"]
                            else m["message"], Qt.ToolTipRole)
-            if not m["available"]:
-                cb.model().item(i).setEnabled(False)
-            elif sel < 0 or m["name"] == want:
+            if m["available"] and (sel < 0 or m["name"] == want):
                 sel = i
+        if sel < 0 and cb.count():
+            sel = 0
         if sel >= 0:
             cb.setCurrentIndex(sel)
         cb.blockSignals(False)

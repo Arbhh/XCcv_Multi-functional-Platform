@@ -40,8 +40,9 @@ osam = _types.SimpleNamespace(
     types=_osam_types,
     apis=_types.SimpleNamespace(
         get_model_type_by_name=(
-            (lambda name: _ai_assist.get_model_type_by_name(name))
-            if _ai_assist is not None else (lambda name: None)
+            (lambda name, notify=None:
+             _ai_assist.get_model_type_by_name(name, notify=notify))
+            if _ai_assist is not None else (lambda name, notify=None: None)
         ),
         generate=(
             (lambda request: _ai_assist.generate(request))
@@ -306,7 +307,12 @@ class Canvas(QtWidgets.QWidget):
         点击会收到 aiStatus 提示而不是卡顿。
         """
         if self._ai_loading:
-            self.aiStatus.emit("AI 模型正在后台加载，请稍候…")
+            # 单加载线程纪律：不并发起第二个加载；当前所选已记录（下拉
+            # 与偏好均已更新），首个模型 ready 后由 _on_ai_model_ready
+            # 按用户最新所选自动续载（切换排队）
+            self.aiStatus.emit(
+                f"当前模型后台加载中，「{model_name}」已排队，"
+                "加载完成后自动加载")
             return
         if self._sam is not None and self._sam.name == model_name:
             self._preload_embedding_async()
@@ -316,8 +322,13 @@ class Canvas(QtWidgets.QWidget):
 
         def _work():
             try:
+                # 权重缺失时后台先经统一下载器接管补齐；进度经 aiStatus
+                # 信号回主窗状态栏（跨线程 queued，信号发射线程安全）
                 self._sam_pending = \
-                    osam.apis.get_model_type_by_name(model_name)()
+                    osam.apis.get_model_type_by_name(
+                        model_name,
+                        notify=lambda text, frac=None:
+                            self.aiStatus.emit(text))()
                 _m = np.zeros((32, 32), bool)
                 _m[8:24, 8:24] = True
                 polygon_from_mask.compute_polygon_from_mask(mask=_m)
@@ -2057,6 +2068,10 @@ class Canvas(QtWidgets.QWidget):
     def wheelEvent(self, ev):
         # 画笔粗细改由 [ ]；滚轮恒为图像缩放
         # XCcv：滚轮直接以鼠标为中心缩放；Shift+滚轮横向滚动
+        if self.pixmap is None:
+            # 未加载图片：不缩放、不报错（此前会触发"请先打开图片"报错）
+            ev.accept()
+            return
         delta = ev.angleDelta()
         if ev.modifiers() & QtCore.Qt.ShiftModifier:
             self.scrollRequest.emit(delta.y(), QtCore.Qt.Horizontal)

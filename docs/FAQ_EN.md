@@ -17,7 +17,7 @@
 6. [Model tools (pruning / TensorRT)](#6-model-tools-pruning--tensorrt)
 7. [Deployment and inference service](#7-deployment-and-inference-service)
 8. [Flow chart and classical operators](#8-flow-chart-and-classical-operators)
-9. [Open source, licensing, and migration](#9-open-source-licensing-and-migration)
+9. [Open source and licensing](#9-open-source-and-licensing)
 
 ---
 
@@ -27,20 +27,20 @@
 Windows 10 / 11 (x64) and Python 3.11. GPU is optional: with an NVIDIA GPU, training and inference are significantly faster; CPU also works (prefer small models and small input sizes). Dependencies occupy roughly 6–8 GB.
 
 **Q1.2  `pip install -r requirements.txt` reports a torch version conflict?**
-Install torch separately first (choose the official index for your CUDA version), then the rest:
+torch is not part of requirements and must be installed separately first (version matrix: torch==2.9.1 + torchvision==0.24.1, same as CI and the README), then the rest:
 
 ```bat
 python -m venv venv && venv\Scripts\activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 ```
 
-On CPU-only machines replace `cu128` with the `cpu` index. ultralytics imposes an upper bound on torch; follow requirements.txt and do not bump major torch versions arbitrarily.
+Pick the index by GPU: recent drivers / RTX 50 series use `cu128`, older drivers may use `cu126`; CPU-only machines and CI use the `cpu` index. ultralytics 8.4.7 requires torch<2.10 — do not install torch 2.10 or newer. Alternatively double-click `install.bat` in the repo root for a one-click install (GPU detection, index selection, venv, dependencies, python_path.txt, env check).
 
-**Q1.3  Double-clicking `run_main.bat` does nothing / flashes and exits?**
+**Q1.3  Double-clicking `run_main.bat` (the root main entry) does nothing / flashes and exits?**
 The launcher probes interpreters in this order, testing whether `PyQt5.QtWebEngineWidgets` imports:
 `XCCV_PY` → `python_path.txt` in the repo root → `python` on PATH → `py -3` → local `venv` / `.venv`.
-Writing one line with the full python.exe path into `python_path.txt` (gitignored) is recommended. When nothing works the script calls `tools\env_check.py`, which prints why each candidate failed.
+Writing one line with the full python.exe path into `python_path.txt` (gitignored) is recommended. When nothing works the script calls `tools\env_check.py`, which prints why each candidate failed. Note: the `python` on PATH may be shadowed by another project's environment — if the install still fails, first check the interpreter path echoed by `install.bat`; the platform entries under `scripts\` locate the repo root relative to their own location and work from anywhere.
 
 **Q1.4  Error `Could not find QtWebEngineProcess` / blank pages?**
 PyQtWebEngine and PyQt5 versions must match (requirements pins 5.15.7 / 5.15.9). If other versions were installed manually, `pip uninstall PyQt5 PyQtWebEngine` first and reinstall per requirements. Corporate environments should also make sure security software is not blocking `QtWebEngineProcess.exe`.
@@ -55,7 +55,7 @@ Usually antivirus scanning QtWebEngine or extraction caches on first run. Whitel
 First confirm `torch.cuda.is_available()` is true and the device resolves to the GPU. Laptops with hybrid graphics may throttle; see the device and service-VRAM panels in Settings; disable system power saving if needed.
 
 **Q1.8  Can I skip the virtual environment?**
-Possible but not recommended. The `run_*.bat` launchers do not require a venv in the folder — `XCCV_PY` can point to any Python 3.11 environment. Mixing multiple torch versions is error-prone; prefer one environment per project.
+Possible but not recommended. The launchers (`run_main.bat` / `install.bat` at the repo root, and the platform entries plus Chinese developer shortcuts under `scripts\`) do not require a venv in the folder — `XCCV_PY` can point to any Python 3.11 environment. Mixing multiple torch versions is error-prone; prefer one environment per project.
 
 ---
 
@@ -65,18 +65,29 @@ Possible but not recommended. The `run_*.bat` launchers do not require a venv in
 This project **does not distribute any model weights**: weight licenses differ (Apache-2.0 / AGPL-3.0 / vendor-specific) and redistribution risks license contamination. The platform provides download/build scripts; users obtain weights under each publisher's terms.
 
 **Q2.2  AI-assisted annotation says weights are missing?**
-SAM-family weights are required (e.g. `sam2.1_t.pt`, `mobile_sam.pt`), placed in `weights/sam/`. When missing, the smart polygon, brush, and batch pre-annotation buttons show guidance; all other annotation features are unaffected.
-
-**Q2.3  CIF / SubspaceAD reports a missing backbone?**
-CIF needs the DINO ViT-B/8 weights (`weights/dino/dino_vitbase8_pretrain.pth`, or env `XCCV_DINO_CKPT`). SubspaceAD prefers a local `weights/dinov2/` directory (or `XCCV_DINOV2_CKPT`); when absent locally it may download standard DINOv2 weights via transformers from Hugging Face. On restricted networks set `HF_ENDPOINT=https://hf-mirror.com`.
-
-**Q2.4  How to prepare baseline pretrained weights (YOLO COCO / ImageNet) in one shot?**
+SAM-family weights are required (e.g. `sam2.1_t.pt`, `mobile_sam.pt`), placed in the engine weights folder `xccv/engine/weights/sam/`. Fetch them with the one-shot downloader:
 
 ```bat
-python xccv\engine\weights\download_weights.py
+python tools\download_weights.py --family sam
 ```
 
-The script downloads YOLO and torchvision weights into `xccv/engine/weights/` (gitignored). For offline machines, run the same script on a connected machine and copy the whole folder.
+When missing, the smart polygon, brush, and batch pre-annotation buttons show guidance; all other annotation features are unaffected.
+
+**Q2.3  CIF / SubspaceAD reports a missing backbone?**
+CIF needs the DINO ViT-B/8 weights (`xccv/engine/weights/dino/dino_vitbase8_pretrain.pth`, or env `XCCV_DINO_CKPT`). SubspaceAD prefers a local `xccv/engine/weights/dinov2/` directory (or `XCCV_DINOV2_CKPT`); when absent locally it may download standard DINOv2 weights via transformers from Hugging Face. On restricted networks set `HF_ENDPOINT=https://hf-mirror.com`. Both can be fetched with `python tools\download_weights.py --family dino`.
+
+**Q2.4  How to prepare baseline pretrained weights (YOLO COCO / ImageNet / SAM / DINO) in one shot?**
+
+```bat
+python tools\download_weights.py --list      # list weights and readiness
+python tools\download_weights.py             # download as needed (--family per family)
+```
+
+All weights land under the engine weights folder `xccv/engine/weights/` in per-family
+subfolders (YOLO/torchvision into `ultralytics/` and `torch/hub/checkpoints/`;
+SAM / DINO / DINOv2 into `sam/`, `dino/`, `dinov2/` — all gitignored). For offline
+machines, download on a connected machine and copy the folders, or see the offline
+guide: `python tools\setup_env.py --offline`.
 
 **Q2.5  Where does the maskrcnn18 slim init weight come from?**
 
@@ -89,7 +100,7 @@ Both outputs are plaintext `.pt`. The training panel's "slim head FPN64" + pretr
 The sample backgrounds and defect cutouts (~33 MB) are distributed separately: download `XCcv-Platform-testdata-0.8.0.zip` and extract into `xccv/defectgen/` (yielding `testdata/`). Without it the synthesis UI still works — point it at your own background and cutout folders.
 
 **Q2.7  Can weights be committed to git?**
-Not recommended and not necessary. `.gitignore` excludes `weights/`, `xccv/engine/weights/`, and `*.pt/.pth/.onnx/.engine/.xva/.xcs`; for team sharing use object storage or release-page attachments.
+Not recommended and not necessary. `.gitignore` excludes the engine weights folder `xccv/engine/weights/` (including the runtime-downloaded sam/ dino/ dinov2/ subfolders) and `*.pt/.pth/.onnx/.engine/.xva/.xcs`; for team sharing use object storage or release-page attachments.
 
 ---
 
@@ -247,7 +258,7 @@ Node errors are isolated: the node turns red, downstream is marked skipped, and 
 
 ---
 
-## 9. Open source, licensing, and migration
+## 9. Open source and licensing
 
 **Q9.1  What is the license? Can I use it commercially?**
 This project is AGPL-3.0; `labelme/` is a GPLv3 vendored copy; the training stack depends on ultralytics (AGPL-3.0). AGPL allows commercial use, but **offering it over a network triggers the source-disclosure obligation**; for closed-source integration, evaluate ultralytics' enterprise licensing and replacing PyQt5 with an LGPL stack.
@@ -261,12 +272,5 @@ Yes, welcome. Contributions are accepted under DCO 1.1 (`git commit -s`); the PR
 **Q9.4  How do I report a security issue?**
 Do not open a public issue. Use the private channel in `SECURITY.md` (GitHub Security Advisories or email) with reproduction steps and environment details.
 
-**Q9.5  What should I watch out for when upgrading from 0.7.x?**
-
-- Weight containers `.xva/.xcs` are no longer supported: retrain or re-export with 0.8.0; loading old files yields a clear migration hint;
-- Training artifacts, epoch weights, flow packages, and engines are all plaintext (`best.pt`, `epoch_NNN.pt`, `.xvap`, `.engine`);
-- Model tools no longer have "weight encrypt / decrypt" cards;
-- Old flow JSON files still load (the port migration table remains compatible); external-operator nodes must switch to the plugin backend.
-
-**Q9.6  Where is the documentation, and how does it stay current?**
-`README*` → `docs/quickstart*` → this FAQ → `CHANGELOG*`. Operator/model counts and supported versions are audited by `python tools\doc_reconcile.py` — any drift fails the build; UI English strings are guarded by a coverage check (currently 904 sites / 1887 entries, 100% coverage).
+**Q9.5  Where is the documentation, and how does it stay current?**
+`README*` → `docs/quickstart*` → this FAQ → `CHANGELOG*`. Operator/model counts and supported versions are audited by `python tools\doc_reconcile.py` — any drift fails the build; UI English strings are guarded by a coverage check (currently 909 sites / 1892 entries, 100% coverage).

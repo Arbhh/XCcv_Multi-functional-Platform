@@ -682,15 +682,30 @@ class RCNNModel(BaseModel):
         self.industrial = industrial
         self.mask_head_light = mask_head_light  # 随 ckpt/引擎容器透传（重建头结构必需）
         self._min_size = self.default_image_size
-        self.net = self._build(arch, num_classes, self._min_size, use_pretrained,
-                               industrial, mask_head_light=mask_head_light).to(self.device)
+        # 骨干初始权重延迟到 fit 阶段经统一下载器接管预取（进度上报训练
+        # 页，与 YOLO 预训练权重下载同通路）：构造期随机初始化骨干且不触
+        # 发 torchvision 自带下载；fit 重建时按 cfg.use_pretrained 补齐
+        self.net = self._build(arch, num_classes, self._min_size, False,
+                               industrial,
+                               mask_head_light=mask_head_light).to(self.device)
 
     def _build(self, arch: str, num_classes: int, min_size: int, use_pretrained: bool,
                industrial: bool = False, freeze_backbone: bool = False,
                rpn_reduced: bool = False, mask_head_light: bool = False,
                max_size: int | None = None, slim_head: bool = False,
-               anchor_base: float | None = None):
+               anchor_base: float | None = None, notify=None):
         bb = "DEFAULT" if use_pretrained else None
+        if use_pretrained:
+            # 运行时接管：ImageNet 骨干初始权重缺失时经统一下载器预取
+            #（超时/校验与训练链路同口径；失败回退 torchvision 自带下载；
+            # 进度经 notify 上报训练页，与 YOLO 预训练权重下载同源可见）
+            try:
+                from ..weights.ensure_family_weights import (
+                    ensure_rcnn_backbones)
+                ensure_rcnn_backbones(arch, slim_head, notify=notify)
+            except Exception:
+                log.warning("R-CNN 骨干初始权重预取失败"
+                            "（回退 torchvision 自带下载）", exc_info=True)
         max_size = max_size or int(min_size * 1333 / 800)
         num_classes = num_classes + 1  # torchvision 检测模型 0 号是背景
         # 冻结骨干：torchvision 官方机制，0=整个 body 冻结（FPN/RPN/头仍可训练）；
@@ -820,7 +835,8 @@ class RCNNModel(BaseModel):
                                    cfg.industrial_opt, cfg.freeze_backbone, cfg.rpn_reduced,
                                    cfg.mask_head_light, max_size=max_size,
                                    slim_head=cfg.slim_head,
-                                   anchor_base=anchor_used).to(self.device)
+                                   anchor_base=anchor_used,
+                                   notify=getattr(reporter, "on_message", None)).to(self.device)
         elif cfg.freeze_backbone:  # 剪枝预训练模型：冻结骨干 body，FPN/RPN/头保持训练
             for p in self.net.backbone.body.parameters():
                 p.requires_grad_(False)

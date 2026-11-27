@@ -130,6 +130,20 @@ def build_result_json(*, task, source: dict, model: dict | None = None,
         "verdict": verdict or verdict_from_count_check(flow_info),
         "error": error,
     }
+    if task_v == "anomaly" and prediction is not None:
+        # 需求：异常检测的图像级判定分数须随检出 JSON 留痕（此前只有
+        # 框级 score，图像分只存在于内存结果）。
+        # 实现：image_score additive 键——图像分优先取 probs[0]，缺省退
+        # 检出最大分；分数语义由 score_semantics 键解释（schema 只增不改）。
+        # 使用：测试平台批量/单图留痕与部署服务共用同一出口。
+        probs = list(getattr(prediction, "probs", None) or [])
+        if probs:
+            payload["image_score"] = _round(probs[0])
+        else:
+            det_scores = [float(v) for v in
+                          (getattr(prediction, "scores", None) or [])]
+            if det_scores:
+                payload["image_score"] = _round(max(det_scores))
     if score_semantics:
         # §三（V0.7.3）additive 键：分数语义元数据（schema 只增不改）
         payload["score_semantics"] = {

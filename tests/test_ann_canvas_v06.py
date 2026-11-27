@@ -111,14 +111,25 @@ class AiAssistContractTest(unittest.TestCase):
                 self.assertIn("权重", m["message"])
 
     def test_missing_weights_get_model_raises_with_hint(self):
+        """缺权重档位仍给中文指引：运行时接管下载失败（无网替身）后
+        回到原"权重缺失"指引路径，不真实联网。"""
+        from unittest import mock as _mock
+
         from xccv.annotation import ai_assist
+        from xccv.engine.weights import ensure_family_weights
 
         models = ai_assist.available_models()
         missing = [m["name"] for m in models if not m["available"]]
         if not missing:
             self.skipTest("权重已就绪（跳过缺权重指引用例）")
-        with self.assertRaises(ValueError) as ctx:
-            ai_assist.get_model_type_by_name(missing[0])
+
+        def _boom(filenames, notify=None, fetcher=None):
+            raise OSError("no network")
+
+        with _mock.patch.object(ensure_family_weights,
+                                "ensure_sam_missing_files", _boom):
+            with self.assertRaises(ValueError) as ctx:
+                ai_assist.get_model_type_by_name(missing[0])
         self.assertIn("权重", str(ctx.exception))
 
     def test_generate_without_embedding_raises(self):

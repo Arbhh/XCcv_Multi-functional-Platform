@@ -10,10 +10,10 @@
 
 ## 1. 标注
 
-1. 打开主界面（`run_main.bat`），点击「标注平台」卡片；
+1. 打开主界面（根目录 `run_main.bat`），点击「标注平台」卡片；
 2. 菜单「文件 → 打开目录」选择图片文件夹；
-3. 按 `Q` 新建多边形 / 按 `W` 新建矩形（沿右侧栏按钮亦可）；第一次标注会提示创建类别文件（labels.txt）；
-4. AI 辅助（可选，需先按 README 放置 SAM 权重到 `weights/sam/`）：
+3. 按 `Q` 新建多边形 / 按 `W` 新建矩形；第一次标注会提示创建类别文件（labels.txt）；
+4. AI 辅助（可选，需先按 README 放置 SAM 权重到引擎权重目录 `xccv/engine/weights/sam/`，或一键下载）：
    - 按 `S`：智能多边形——左键点目标，实时预览轮廓，右键撤销锚点，回车确认；
    - 按 `B`：画笔模式——左键笔画塑形（并集）、右键挖除（差集）；
    - 按 `L`：对当前图执行智能标注；「工具 → AI 批量预标注」可整目录批量；
@@ -47,7 +47,7 @@
 
 大幅面图片（如 4K）勾选「4K 大图分块推理」可显著提升小目标检出。
 
-### 项目复盘（调阈值）
+### 项目复盘
 
 底部页签切换到「项目复盘」：选定项目与训练记录后自动对训练数据集批量推理一次，之后调阈值零重复推理。
 
@@ -62,7 +62,7 @@
 
 ## 4. 流程图（AI + 传统算子）
 
-主界面左侧导航点「流程图」（与 AI 平台同级）：
+主界面左侧导航点「流程图」：
 1. 「选择文件夹」指定待处理图片目录（图片树可预览）；
 2. 「模型目录」选择存放流程 JSON 的目录，「新建」创建空白流程，或选择已有流程 / 模板
    （内置 9 个模板：AI 过滤、级联裁图合并、模板匹配预筛、圆形定位等）；
@@ -90,11 +90,11 @@
    加载模型 → 推理 → 查看统一 JSON 与叠加图；部署平台还提供「一致性自检」
    （同一张图分别走本地推理与 HTTP 服务，逐框比对）。
 
-无界面部署可直接 `run_service.bat`（或 `python -m xccv.service.main --port 8600`）。
+无界面部署可直接 `scripts\run_service.bat`（或 `python -m xccv.service.main --port 8600`）。
 
 ## 6. 模型工具
 
-主界面「模型工具」卡片（或 `run_modeltools.bat`）：
+主界面「模型工具」卡片（或 `scripts\run_modeltools.bat`）：
 
 1. **模型剪枝**：
    - 训练前剪枝：按项目数据集生成剪枝模型（存入项目「模型储存路径\pruned」，
@@ -120,21 +120,21 @@
 ## 常见问题
 
 - **首次训练很慢 / 卡在下载**：训练首次会从官方源下载预训练权重（YOLO / torchvision），
-  0.8.3 起训练窗口会显示"正在下载预训练权重…"进度条，不再无解释等待；
-  离线环境请提前在有网机器下载并放入 `weights/` 目录（参见 `xccv/engine/offline.py` 注释）；
-- **AI 智能标注按钮提示缺权重**：按 README 把 SAM 权重放到 `weights/sam/`；
+  训练窗口会显示"正在下载预训练权重…"进度条，不再无解释等待；
+  离线环境请提前在有网机器下载并放入引擎权重目录 `xccv/engine/weights/`
+  （参见 `xccv/engine/offline.py` 注释）；
+- **AI 智能标注按钮提示缺权重**：按 README 把 SAM 权重放到 `xccv/engine/weights/sam/`；
 - **CIF / SubspaceAD 提示缺骨干权重**：CIF 需 DINO ViT-B/8 权重
-  `weights/dino/dino_vitbase8_pretrain.pth`（或环境变量 `XCCV_DINO_CKPT`）；
-  SubspaceAD 优先使用 `weights/dinov2/`（或 `XCCV_DINOV2_CKPT`）中的本地权重，
+  `xccv/engine/weights/dino/dino_vitbase8_pretrain.pth`（或环境变量 `XCCV_DINO_CKPT`）；
+  SubspaceAD 优先使用 `xccv/engine/weights/dinov2/`（或 `XCCV_DINOV2_CKPT`）中的本地权重，
   本地缺失时 transformers 可能从 Hugging Face 下载标准 DINOv2 权重
   （可用 `HF_ENDPOINT` 镜像）。权重不随包分发，请按各发布方许可使用；
 - **训练报类别不一致**：迁移学习权重必须与当前数据集类别一致；
 - **显存不足**：调小批量大小（batch_size），或开启「冻结骨干」「轻量掩码头」等加速选项；
 - **切换界面语言**：主界面「设置」→「界面语言」选 English，保存后各窗口自动切换（免重启），
   偏好保存在 `platform_data/ui_lang.json`；个别未覆盖文案会回退中文；
-- **模型权重是明文的吗**：是。0.8.0 起训练 / 剪枝 / 加速产物均为明文
-  （`best.pt`、`best_pruned.pt`、`.engine`）；旧版本的加密容器（`.xva` / `.xcs`）
-  不再支持加载，请用当前版本重新训练或导出；
+- **模型权重是明文的吗**：是。训练 / 剪枝 / 加速产物均为明文
+  （`best.pt`、`best_pruned.pt`、`.engine`）；
 - **TensorRT 装哪种**：与本机 CUDA 大版本匹配的 `pip install tensorrt` 即可；
   或设置环境变量 `TENSORRT_DIR` 指向含 `nvinfer_10.dll` 的目录。引擎与生成时
   显卡算力绑定（如 RTX 30 系构建的引擎不能在 20 系加载）；

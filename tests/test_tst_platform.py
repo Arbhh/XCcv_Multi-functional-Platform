@@ -452,5 +452,131 @@ class ContractTest(unittest.TestCase):
         back = json.loads(text)
         self.assertEqual(back["detections"][0]["label"], "夹渣")
 
+# == 分数语义适配：标准推理/阈值部分复用复盘口径 ==
+"""异常检测（score_semantics ≠ 置信度）在标准页的显示/文案/JSON 适配。"""
+
+import unittest
+from types import SimpleNamespace
+
+from xccv.testing.review_logic import (conf_to_score, image_score_of,
+                                       is_conf_like, score_semantics_of)
+
+
+class ScoreSemanticsHelpersTest(unittest.TestCase):
+    """共享判定/换算逻辑（review_logic，标准页与复盘页同一实现）。"""
+
+    def test_is_conf_like(self):
+        self.assertTrue(is_conf_like({}))
+        self.assertTrue(is_conf_like({"key": "conf"}))
+        self.assertFalse(is_conf_like({"key": "z"}))
+
+    def test_conf_to_score(self):
+        sem_z = {"key": "z"}
+        self.assertEqual(conf_to_score({}, 0.25), 0.25)
+        self.assertAlmostEqual(conf_to_score(sem_z, 0.25), 3.0)
+        self.assertAlmostEqual(conf_to_score(sem_z, 0.0), 999.0)   # 钳 1e-3
+        self.assertAlmostEqual(conf_to_score(sem_z, 1.0), 0.0)
+
+    def test_score_semantics_of_sources(self):
+        self.assertEqual(score_semantics_of(None), {})
+        self.assertEqual(score_semantics_of({"score_semantics": {"key": "z"}}),
+                         {"key": "z"})
+        m = SimpleNamespace(score_semantics={"key": "z", "name": "图像分数"})
+        self.assertEqual(score_semantics_of(m)["name"], "图像分数")
+
+    def test_image_score_of_prediction_and_dict(self):
+        pred = Prediction(labels=[0], scores=[2.0, 5.5],
+                          boxes=[[0, 0, 1, 1]], probs=[4.5])
+        self.assertEqual(image_score_of(pred), 4.5)
+        self.assertEqual(image_score_of(Prediction(scores=[2.0, 5.5])), 5.5)
+        self.assertEqual(image_score_of({"image_score": 3.2}), 3.2)
+        self.assertEqual(image_score_of({"detections": [{"score": 1.5}]}), 1.5)
+        self.assertIsNone(image_score_of(Prediction()))
+        self.assertIsNone(image_score_of(None))
+
+
+class AnomalyStandardDisplayTest(unittest.TestCase):
+    """标准页异常检测显示：图像分数行 + 语义标注（与复盘横幅同口径）。"""
+
+    def _make_win(self):
+        win = TestingWindow()
+        win.task = "anomaly"
+        win.model = SimpleNamespace(
+            score_semantics={"key": "z", "name": "图像分数",
+                             "range": [0.0, None],
+                             "higher": "分数越高越异常（OK 分布 z 标定）"})
+        win.classes = ["异常"]
+        return win
+
+    def test_show_result_shows_image_score(self):
+        win = self._make_win()
+        img = np.full((64, 64, 3), 200, np.uint8)
+        pred = Prediction(labels=[0], scores=[3.2, 5.1],
+                          boxes=[[10, 10, 30, 30], [40, 40, 60, 60]],
+                          probs=[4.5])
+        win._show_result("a.png", img, pred)
+        text = win.result_stats.text()
+        self.assertIn("图像分数", text)
+        self.assertIn("4.50", text)
+        self.assertIn("检出目标：2 个", text)
+        win._fill_result_list(pred)
+        self.assertIn("图像分数", win.result_list.item(0).text())
+        self.assertIn("4.50", win.result_list.item(0).text())
+        self.assertIn("3.20", win.result_list.item(1).text())   # 框级异常分数
+
+    def test_show_result_without_image_score(self):
+        win = self._make_win()
+        img = np.full((64, 64, 3), 200, np.uint8)
+        # 全空预测（无 probs 也无检出）才走「无图像分数」；
+        # 有检出无 probs 时退检出最大分（与复盘口径一致）
+        win._show_result("a.png", img, Prediction())
+        self.assertIn("无图像分数", win.result_stats.text())
+
+
+class AppliedThresholdLabelTest(unittest.TestCase):
+    """应用阈值文案随分数语义切换（z 语义写入的是分数阈值而非 conf）。"""
+
+    def test_label_from_stats_semantics(self):
+        win = TestingWindow()
+        win._last_match_stats = {"score_semantics":
+                                 {"key": "z", "name": "图像分数"}}
+        self.assertIn("图像分数", win._applied_threshold_label())
+        win._last_match_stats = {}
+        win.model = None
+        self.assertEqual(win._applied_threshold_label(), "conf")
+
+    def test_threshold_flow_task_source(self):
+        """流程图模板 task 取 self.task（回归锁：曾误引不存在的 _task）。"""
+        src = Path("xccv/testing/testing_window.py").read_text(
+            encoding="utf-8")
+        self.assertIn('getattr(self, "task", "")', src)
+        self.assertNotIn('getattr(self, "_task", "")', src)
+
+
+class AnomalyImageScoreSchemaTest(unittest.TestCase):
+    """异常检测 JSON 留痕：image_score additive 键（图像级分数）。"""
+
+    def test_image_score_from_probs(self):
+        payload = build_result_json(
+            task="anomaly", source=_source(),
+            prediction=Prediction(labels=[0], scores=[3.2],
+                                  boxes=[[0, 0, 4, 4]], probs=[4.5]),
+            classes=["异常"],
+            score_semantics={"key": "z", "name": "图像分数"})
+        self.assertEqual(payload["image_score"], 4.5)
+        self.assertEqual(payload["detections"][0]["score"], 3.2)
+
+    def test_image_score_fallback_max_det(self):
+        payload = build_result_json(
+            task="anomaly", source=_source(),
+            prediction=Prediction(labels=[0], scores=[1.5, 2.5],
+                                  boxes=[[0, 0, 4, 4], [5, 5, 9, 9]]))
+        self.assertEqual(payload["image_score"], 2.5)
+
+    def test_no_image_score_for_detection(self):
+        payload = build_result_json(task="detection", source=_source(),
+                                    prediction=_det_pred())
+        self.assertNotIn("image_score", payload)
+
 if __name__ == '__main__':
     unittest.main()

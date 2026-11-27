@@ -61,6 +61,52 @@ English changelog: [CHANGELOG_EN.md](CHANGELOG_EN.md)
 - 全量回归 `python tools/run_tests.py`：39 模块全绿（逐模块子进程执行）；
   i18n 对账 A 类缺失 0（tr 站点 904 / TABLE 1872）。
 
+### 新增：一键安装器
+
+- 根目录 `install.bat`（纯 ASCII）+ `tools/setup_env.py`：GPU 探测
+  （nvidia-smi 算力/驱动分档）→ torch 源自动选择（cu128 / cu126 / cpu）→
+  虚拟环境创建 → 两段安装（固定版本 torch → requirements.txt）→ 写
+  `python_path.txt` → 环境自检双语结论；Python 3.11 硬门槛，旧版本虚拟环境
+  改名留档后重建；失败分支全中文指引（无 GPU / 无网 / 代理 / 权限）。
+
+### 新增：权重两层下载
+
+- `tools/download_weights.py`（CLI：`--list` / 按族下载 / 断点提示）；
+- 运行时接管 `xccv/engine/weights/ensure_family_weights.py`：SAM /
+  DINO ViT-B/8 / DINOv2 / R-CNN 骨干缺失时训练/推理自动接管下载
+  （进度上报、多源回退、SHA-256 校验等）；
+  支持 `org/<model>` 两层缓存形态，HF 空壳缓存（仅有 config 无权重）自动剔除；
+- 全部权重收敛 `weights/` 族细分目录；DINOv2 缺省走 hf-mirror 镜像。
+
+### 变更：根目录整理
+
+- 根目录只保留 `run_main.bat` 与 `install.bat`，各平台启动脚本迁至 `scripts/`
+  （自动回溯仓库根）。
+
+### 变更：测试平台异常检测适配
+
+- 分数语义模型的阈值滑条改**图像分数刻度**（0~50，步长 0.1，默认 3.0，
+  与置信度互逆换算 `conf=1/(1+z)`），滑条旁支持数值直接输入，双向同步；
+  异常检测下 IOU 滑条隐藏；阈值面板布局防遮挡，窄面板输入框完整可见；
+- 检出 JSON 新增 `image_score` 字段（additive）；阈值换算收敛共享模块
+  `xccv/testing/review_logic.py`。
+
+### 修复：AI 接管全程进度可见
+
+- 统一下载器全局进度钩子：模型初始化 / 画布推理 / 批量预标注等所有接管入口
+  均上报——阶段消息（下载开始 / 换源 / 权重就绪 / 加载中）走状态横幅持续
+  显示，百分比进度走状态栏常驻刷新；下载中切换 SAM 档位自动排队，完成后
+  按用户所选续载；
+- R-CNN 构造期不再触发静默下载（骨干随机初始化，首次训练时经统一下载器
+  接管并显示进度）；滚轮在未加载图片时不再报错。
+
+### 工程与测试
+
+- 依赖矩阵对齐：torch==2.9.1 / torchvision==0.24.1（README 双语 /
+  requirements / CI 三方一致），`tools/doc_reconcile.py` 新增依赖矩阵对账项；
+- 测试：`test_tool_engine` 全离线化（52→54 例）；异常检测契约并入
+  `test_tst_platform` / `test_tst_review`。
+
 ## [0.8.2] - 2026-11-22
 
 > 用户反馈批：标注交互与训练/工具平台体验修复 + 渲染性能优化。

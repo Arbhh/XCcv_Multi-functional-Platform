@@ -11,11 +11,11 @@ sub-folders included).
 
 ## 1. Annotate
 
-1. Open the workbench (`run_main.bat`) and click the "Annotation Platform" card;
+1. Open the workbench (`run_main.bat` in the repo root) and click the "Annotation Platform" card;
 2. Menu "File → Open Directory" and pick the image folder;
-3. Press `Q` to create a polygon / `W` to create a rectangle (the right-side buttons work too);
+3. Press `Q` to create a polygon / `W` to create a rectangle;
    the first label prompts to create the class file (labels.txt);
-4. AI assist (optional; place SAM weights under `weights/sam/` as described in the README):
+4. AI assist (optional; place SAM weights under the engine weights folder `xccv/engine/weights/sam/` as described in the README, or fetch them with the one-shot downloader):
    - Press `S`: smart polygon — left-click the target to preview the outline live,
      right-click to undo anchors, Enter to confirm;
    - Press `B`: brush mode — left strokes add (union), right strokes erase (difference);
@@ -57,7 +57,7 @@ sub-folders included).
 
 For very large images (e.g. 4K), tick "4K tiled inference" to improve small-object detection.
 
-### Project Review (threshold tuning)
+### Project Review
 
 Switch to the "Project Review" tab at the bottom: after picking the project and a training run,
 the platform batch-infers the training dataset once; afterwards every threshold change is free
@@ -77,7 +77,7 @@ The review page decouples **Evaluated / Unevaluated** (toggle on top):
 
 ## 4. Flowchart (AI + classic operators)
 
-Click "Flowchart" in the workbench's left navigation (same level as the AI platform):
+Click "Flowchart" in the workbench's left navigation:
 1. "Select Folder" picks the image directory (the image tree supports preview);
 2. "Model Directory" chooses where flow JSONs live; "New" creates a blank flow, or pick an
    existing flow / template (9 built-in templates: AI filter, cascade crop-merge,
@@ -111,11 +111,11 @@ Click "Deployment" in the workbench's left navigation — three cards:
    and overlay image. The deployment platform also offers a "Consistency Check"
    (the same image through local inference and the HTTP service, compared box by box).
 
-For headless deployment use `run_service.bat` (or `python -m xccv.service.main --port 8600`).
+For headless deployment use `scripts\run_service.bat` (or `python -m xccv.service.main --port 8600`).
 
 ## 6. Model tools
 
-The workbench "Model Tools" card (or `run_modeltools.bat`):
+The workbench "Model Tools" card (or `scripts\run_modeltools.bat`):
 
 1. **Model pruning**:
    - Pre-training pruning: builds a pruned model from the project dataset (saved under the
@@ -145,15 +145,16 @@ The workbench "Model Tools" card (or `run_modeltools.bat`):
 ## FAQ
 
 - **First training is slow / stuck downloading**: pretrained weights (YOLO / torchvision) are
-  downloaded from the official source on first use (with visible progress in the training
-  window since 0.8.3). For offline machines, download them on a
-  connected machine beforehand and place them under `weights/` (see the comments in
-  `xccv/engine/offline.py`);
-- **AI annotation says weights missing**: place the SAM weights under `weights/sam/` as
-  described in the README;
+  downloaded from the official source on first use, with live progress shown in the training
+  window. For offline machines, download them on a
+  connected machine beforehand and place them under the engine weights folder
+  `xccv/engine/weights/` (see the comments in `xccv/engine/offline.py`);
+- **AI annotation says weights missing**: place the SAM weights under
+  `xccv/engine/weights/sam/` as described in the README;
 - **CIF / SubspaceAD reports missing backbone weights**: CIF needs the DINO ViT-B/8 weights at
-  `weights/dino/dino_vitbase8_pretrain.pth` (or `XCCV_DINO_CKPT`); SubspaceAD prefers a local
-  DINOv2 model directory under `weights/dinov2/` (or `XCCV_DINOV2_CKPT`) and may let
+  `xccv/engine/weights/dino/dino_vitbase8_pretrain.pth` (or `XCCV_DINO_CKPT`); SubspaceAD
+  prefers a local DINOv2 model directory under `xccv/engine/weights/dinov2/`
+  (or `XCCV_DINOV2_CKPT`) and may let
   transformers download the standard DINOv2 weights from Hugging Face when no local copy is
   present (use `HF_ENDPOINT` for a mirror). Weights are not distributed with this repository;
   use them under their publishers' terms;
@@ -163,10 +164,8 @@ The workbench "Model Tools" card (or `run_modeltools.bat`):
 - **Switching the UI language**: workbench "Settings" → "Language" → English; all windows
   switch automatically after saving (no restart needed). The preference is stored in
   `platform_data/ui_lang.json`; a few uncovered texts fall back to Chinese;
-- **Are model weights plaintext?** Yes. Since 0.8.0 all training / pruning / acceleration
-  artifacts are plaintext (`best.pt`, `best_pruned.pt`, `.engine`); the legacy encrypted
-  containers (`.xva` / `.xcs`) are no longer supported — retrain or re-export with the
-  current version;
+- **Are model weights plaintext?** Yes. All training / pruning / acceleration artifacts are
+  plaintext (`best.pt`, `best_pruned.pt`, `.engine`);
 - **Which TensorRT to install**: `pip install tensorrt` matching your CUDA major version,
   or set `TENSORRT_DIR` to a folder containing `nvinfer_10.dll`. Engines are bound to the
   building GPU's compute capability (an engine built on an RTX 30 card will not load on a

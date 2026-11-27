@@ -3,9 +3,10 @@
 
 选型（R4 修订：GPU 环境已到位，onnxruntime 仅 CPU EP——改为 ultralytics 原生
 SAM 预测器，编码走 GPU/CPU 均可，与训练/推理共用同一依赖，无新 wheels）：
-- 默认质量档 **SAM2.1 Hiera-Tiny**（weights/sam/sam2.1_t.pt，~74MB）；
-- 轻量档 **MobileSAM**（weights/sam/mobile_sam.pt，~40MB）。
-权重缺失时 `available_models()` 为空、调用方按钮置灰并给中文指引。
+- 默认质量档 **SAM2.1 Hiera-Tiny**（引擎权重目录 sam/sam2.1_t.pt，~74MB）；
+- 轻量档 **MobileSAM**（引擎权重目录 sam/mobile_sam.pt，~40MB）。
+档位权重缺失时仍可选中（界面标注"未下载，选中后自动下载"），选中后经统一下
+载器运行时补齐（多源/超时/校验与训练链路同口径）；接管失败给原中文指引。
 
 性能契约（G-8 验收口径）：
 - **编码器按图缓存**：predictor.set_image 一次，之后逐次点提示只跑轻量解码器
@@ -35,13 +36,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ..app_paths import app_root
+# SAM 权重统一落引擎权重目录（offline.WEIGHTS_DIR：开发态 =
+# xccv/engine/weights，安装态 = <安装根>/weights）下 sam/ 子目录，
+# 与 engine.weights.ensure_family_weights 的注册表落位同源
+from ..engine.offline import WEIGHTS_DIR
 
-# SAM 权重随包 weights\sam：开发态 = 仓库根\weights\sam；安装态 = 环境根
-# （sys.prefix）\weights\sam——与 offline.WEIGHTS_DIR 同一落点，打包脚本
-# 统一复制到运行根 weights\（parents[2] 硬编码在编译形态会落到
-# site-packages\weights，打包时修正）
-_WEIGHTS_DIR = app_root() / "weights" / "sam"
+_WEIGHTS_DIR = WEIGHTS_DIR / "sam"
 
 # 权重注册（name 与 labelme config `ai.default` 对齐的显示名见 TITLES）
 _MODELS = [
@@ -188,6 +188,28 @@ _LAST_RGB: dict = {}   # weights -> 最近编码原图（_engine_by_name 每次
 
 def weights_dir() -> Path:
     return _WEIGHTS_DIR
+
+
+# 全局下载进度回调（UI 侧启动时经 set_progress_hook 注册一次）。所有接管
+# 入口（模型初始化/画布推理/悬停预览/便捷调用）的统一下载器进度都经它
+# 上报——不依赖单一入口显式传 notify，杜绝"某条路径静默下载"。
+_PROGRESS_HOOK = None
+
+
+def set_progress_hook(fn) -> None:
+    """注册全局下载进度回调 fn(text, frac)（后台线程内调用，需线程安全）。"""
+    global _PROGRESS_HOOK
+    _PROGRESS_HOOK = fn
+
+
+def _hook_notify(text: str, frac=None) -> None:
+    fn = _PROGRESS_HOOK
+    if fn is None:
+        return
+    try:
+        fn(text, frac)
+    except Exception:  # noqa: BLE001  进度回调异常不影响下载主流程
+        log.warning("下载进度回调异常", exc_info=True)
 
 
 def available_models() -> list:
@@ -764,7 +786,21 @@ class _EfficientSamOnnx:
         return (ann.mask, 1.0) if ann is not None else (None, 0.0)
 
 
-def _engine_by_name(name: str):
+def _ensure_sam_files(m: dict, notify=None) -> None:
+    """运行时接管：档位权重缺失时经统一下载器补齐（多源/超时/校验与训练
+    链路同口径；进度经 notify 上报；失败只记日志，维持原"权重缺失"指引，
+    不阻塞其余档位）。"""
+    files = [m["file"]] + ([m["file2"]] if m.get("file2") else [])
+    try:
+        from ..engine.weights.ensure_family_weights import (
+            ensure_sam_missing_files)
+
+        ensure_sam_missing_files(files, notify or _hook_notify)
+    except Exception:
+        log.warning("SAM 权重运行时补齐失败：%s", files, exc_info=True)
+
+
+def _engine_by_name(name: str, notify=None):
     for m in _MODELS:
         if m["name"] == name:
             if m.get("predictor") == "efficientsam":
@@ -773,24 +809,37 @@ def _engine_by_name(name: str):
                 if pe.is_file() and pd.is_file():
                     return _EfficientSamOnnx(name=m["name"],
                                              encoder=str(pe), decoder=str(pd))
+                _ensure_sam_files(m, notify)
+                if pe.is_file() and pd.is_file():
+                    return _EfficientSamOnnx(name=m["name"],
+                                             encoder=str(pe), decoder=str(pd))
                 return None
             p = _WEIGHTS_DIR / m["file"]
+            if p.is_file():
+                return _UltralyticsSam(name=m["name"], weights=str(p))
+            _ensure_sam_files(m, notify)
             if p.is_file():
                 return _UltralyticsSam(name=m["name"], weights=str(p))
             return None
     return None
 
 
-def get_model_type_by_name(name: str):
-    """canvas.initializeAiModel：`osam.apis.get_model_type_by_name(name)()`。"""
-    eng = _engine_by_name(name)
+def get_model_type_by_name(name: str, notify=None):
+    """canvas.initializeAiModel：`osam.apis.get_model_type_by_name(name)()`。
+
+    notify(text, frac)：权重缺失接管下载的进度回调（后台线程内调用；
+    未显式传入时回落到 set_progress_hook 注册的全局进度钩子）。"""
+    cb = notify or _hook_notify
+    eng = _engine_by_name(name, cb)
     if eng is None:
         raise ValueError(
             f"AI 模型「{name}」不可用：权重缺失。请将权重放到 {weights_dir()} 下"
             "（sam2.1_t.pt / mobile_sam.pt），或换用已就绪的档位。")
     if hasattr(eng, "warmup"):
         try:
+            cb("权重就绪，正在加载 AI 模型…")
             eng.warmup()
+            cb("AI 模型加载完成")
         except Exception as e:  # noqa: BLE001
             from loguru import logger
 
@@ -801,7 +850,7 @@ def get_model_type_by_name(name: str):
 def decode_points(name: str, image_bgr: np.ndarray, points, labels,
                   multimask: bool = True):
     """便捷入口（批量预标注/测试用）：一次编码 + 一次解码，返回 Annotation。"""
-    eng = _engine_by_name(name)
+    eng = _engine_by_name(name, _hook_notify)
     if eng is None:
         raise ValueError(f"AI 模型「{name}」不可用（权重缺失，见 available_models）")
     emb = eng.encode_image(image_bgr[..., ::-1] if image_bgr.ndim == 3 else image_bgr)
@@ -812,7 +861,7 @@ def decode_points(name: str, image_bgr: np.ndarray, points, labels,
 
 def generate(request: GenerateRequest) -> GenerateResponse:
     """canvas._update_shape_with_sam：`osam.apis.generate(request)`。"""
-    eng = _engine_by_name(request.model)
+    eng = _engine_by_name(request.model, _hook_notify)
     if eng is None:
         raise ValueError(f"AI 模型「{request.model}」不可用（权重缺失）")
     emb = request.image_embedding

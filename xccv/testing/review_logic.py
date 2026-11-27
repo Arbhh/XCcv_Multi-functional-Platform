@@ -172,3 +172,55 @@ def stats_line(groups: dict, scope: str = "evaluated",
     return text
 
 
+# ---------------------------------------------------------------------------
+# 分数语义共享判定/换算（测试平台标准页与复盘页同一实现，勿两处复制）。
+# 模型元数据 score_semantics：key="conf" 为 0~1 置信度（既有口径）；
+# 其余（如 z=OK 分布标定分数）为异常分数轴，conf 滑条值按 1/conf−1 换算
+# （与异常模型预测侧 _z_from_conf 同式）。
+
+def score_semantics_of(source) -> dict:
+    """模型实例 / match_stats dict / None → 分数语义元数据（缺省=置信度）。"""
+    if source is None:
+        return {}
+    sem = getattr(source, "score_semantics", None)
+    if sem is None and isinstance(source, dict):
+        sem = source.get("score_semantics")
+    return dict(sem or {})
+
+
+def is_conf_like(sem: dict) -> bool:
+    """分数语义是否为 0~1 置信度口径（key 缺失按置信度，兼容旧数据）。"""
+    return str((sem or {}).get("key") or "conf") == "conf"
+
+
+def conf_to_score(sem: dict, conf: float) -> float:
+    """conf 滑条值 → 分数轴阈值：置信度原样；其余按 1/conf−1 换算
+    （conf 下限钳 1e-3 防除零）。"""
+    conf = min(max(float(conf), 1e-3), 1.0)
+    if is_conf_like(sem):
+        return conf
+    return 1.0 / conf - 1.0
+
+
+def image_score_of(pred) -> float | None:
+    """图像级分数：probs[0] 优先，缺省退检出最大分。
+
+    接收 Prediction 对象或批量结果 dict（image_score / detections 两种
+    形态）；无任何分数来源返回 None。
+    """
+    if pred is None:
+        return None
+    probs = getattr(pred, "probs", None)
+    if isinstance(pred, dict):
+        if probs is None:
+            img = pred.get("image_score")
+            if img is not None:
+                return float(img)
+            dets = pred.get("detections") or []
+            return max((float(d.get("score", 0.0)) for d in dets), default=None)
+    if probs:
+        return float(probs[0])
+    scores = getattr(pred, "scores", None)
+    return max((float(v) for v in (scores or [])), default=None)
+
+

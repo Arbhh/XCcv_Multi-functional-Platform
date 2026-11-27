@@ -6,7 +6,7 @@
 
 1. Windows 10/11（x64），Python 3.11；
 2. 按 [README](README.md)「安装」章节创建虚拟环境并安装依赖；
-3. 运行 `run_main.bat` 确认主界面可打开。
+3. 运行根目录 `run_main.bat` 确认主界面可打开。
 
 ## 如何贡献
 

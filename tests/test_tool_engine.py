@@ -556,5 +556,528 @@ class ComputeMismatchTest(unittest.TestCase):
                 registry.load_model(eng)
         self.assertIn("重新生成加速模型", str(ctx.exception))
 
+# == 工具脚本契约：环境安装器 / 权重下载器 / 运行时接管 / 文档对账 ==
+# 双态契约：无网 / 无权重环境不挂——下载与探测全部经注入替身，不真实联网。
+import contextlib
+import io
+import os
+import subprocess as _subprocess
+import tempfile as _tempfile
+from unittest import mock
+
+_TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
+if str(_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR))
+
+
+def _fake_nvidia_smi(stdout: str, returncode: int = 0):
+    """注入 detect_gpu 的 subprocess.run 替身（假 nvidia-smi 输出）。"""
+
+    def _run(cmd, capture_output=True, text=True, timeout=15):
+        return _subprocess.CompletedProcess(cmd, returncode,
+                                            stdout=stdout, stderr="")
+
+    return _run
+
+
+class SetupEnvTorchSourceTest(unittest.TestCase):
+    """安装器：GPU 探测与 torch 源选择（含 ultralytics torch<2.10 上界约束）。"""
+
+    def test_detect_gpu_parses_query(self):
+        import setup_env
+
+        runner = _fake_nvidia_smi('"NVIDIA RTX 4070", "550.54", "8.9"\n')
+        gpu = setup_env.detect_gpu(runner=runner)
+        self.assertEqual(gpu["name"], "NVIDIA RTX 4070")
+        self.assertEqual(gpu["driver"], 550)
+        self.assertEqual(gpu["compute_cap"], 89)
+
+    def test_detect_gpu_none_on_failure(self):
+        import setup_env
+
+        def _boom(*_a, **_k):
+            raise OSError("nvidia-smi not executable")
+
+        self.assertIsNone(setup_env.detect_gpu(
+            runner=_fake_nvidia_smi("", returncode=1)))
+        self.assertIsNone(setup_env.detect_gpu(runner=_boom))
+
+    def test_source_cpu_without_gpu(self):
+        import setup_env
+
+        name, url, _reason = setup_env.select_torch_index(None)
+        self.assertEqual(name, "cpu")
+        self.assertEqual(url, setup_env.TORCH_INDEXES["cpu"])
+
+    def test_source_cu128_for_blackwell(self):
+        import setup_env
+
+        gpu = {"name": "RTX 5070", "driver": 576, "compute_cap": 120}
+        name, url, _reason = setup_env.select_torch_index(gpu)
+        self.assertEqual(name, "cu128")
+
+    def test_source_cu126_for_mid_gpu(self):
+        import setup_env
+
+        gpu = {"name": "RTX 4070", "driver": 550, "compute_cap": 89}
+        name, _url, _reason = setup_env.select_torch_index(gpu)
+        self.assertEqual(name, "cu126")
+
+    def test_source_cu128_for_new_driver(self):
+        import setup_env
+
+        gpu = {"name": "RTX 4070", "driver": 576, "compute_cap": 89}
+        name, _url, _reason = setup_env.select_torch_index(gpu)
+        self.assertEqual(name, "cu128")
+
+    def test_source_cpu_for_old_driver(self):
+        import setup_env
+
+        gpu = {"name": "GTX 1060", "driver": 472, "compute_cap": 61}
+        name, _url, _reason = setup_env.select_torch_index(gpu)
+        self.assertEqual(name, "cpu")
+
+    def test_source_override_name_and_url(self):
+        import setup_env
+
+        name, url, _reason = setup_env.select_torch_index(None, "cu126")
+        self.assertEqual((name, url), ("cu126", setup_env.TORCH_INDEXES["cu126"]))
+        name, url, _reason = setup_env.select_torch_index(
+            None, "https://mirror.example/whl")
+        self.assertEqual((name, url), ("custom", "https://mirror.example/whl"))
+
+    def test_torch_210_rejected_by_upper_bound(self):
+        import setup_env
+
+        with self.assertRaises(SystemExit):
+            setup_env.select_torch_index(None, "", "2.10.0")
+
+
+class DownloadWeightsContractTest(unittest.TestCase):
+    """权重下载器：清单 / 注入下载 / 已就绪跳过 / 失败分支（不真实联网）。"""
+
+    def _write_zip_head(self, url, dst, progress=None):
+        dst.write_bytes(b"PK\x03\x04" + b"\x00" * 2048)
+
+    def _write_junk(self, url, dst, progress=None):
+        dst.write_bytes(b"junk")
+
+    def test_list_prints_families_and_targets(self):
+        import download_weights
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            download_weights._list_all()
+        out = buf.getvalue()
+        for fam in ("yolo", "sam", "dino", "rcnn"):
+            self.assertIn(fam, out)
+        self.assertIn("dino_vitbase8_pretrain.pth", out)
+
+    def test_download_generic_writes_and_skips_existing(self):
+        import download_weights
+
+        calls = []
+
+        def fetcher(url, dst, progress=None):
+            calls.append(url)
+            self._write_zip_head(url, dst, progress)
+
+        with _tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "w" / "fake.pt"
+            state = {}
+            result = download_weights.download_generic(
+                "fake.pt", dest, ["https://a/x", "https://b/x"], 1000,
+                True, state, fetcher)
+            self.assertEqual(result, "新下载完成")
+            self.assertEqual(calls, ["https://a/x"])
+            self.assertTrue(dest.is_file())
+            # 已就绪：第二次调用不再触发下载（断点跳过口径）
+            result2 = download_weights.download_generic(
+                "fake.pt", dest, ["https://a/x"], 1000, True, state,
+                self._fail_fetcher)
+            self.assertIn("已就绪", result2)
+            self.assertEqual(calls, ["https://a/x"])
+
+    def _fail_fetcher(self, url, dst, progress=None):
+        raise AssertionError("已就绪文件不应触发下载")
+
+    def test_download_generic_fails_and_cleans_parts(self):
+        import download_weights
+
+        with _tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "w" / "fake.pt"
+            state = {}
+            with self.assertRaises(RuntimeError) as ctx:
+                download_weights.download_generic(
+                    "fake.pt", dest, ["https://a/x", "https://b/x"], 1000,
+                    True, state, self._write_junk)
+            self.assertIn("2 个下载源", str(ctx.exception))
+            self.assertFalse(dest.exists())
+            self.assertEqual(list(dest.parent.glob("*.part*")), [])
+
+    def test_family_yolo_uses_ensure_weight_path(self):
+        """yolo 族与训练链路同一 ensure_pretrained_weight（落位/校验同口径）。
+
+        全部权重在落位目录预置且校验通过时逐个跳过下载（fetcher 注入为
+        立即失败——被调用即说明误触网络），返回就绪数等于清单数。
+        """
+        import download_weights
+        from xccv.engine.weights import ensure_weight
+
+        with _tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            dest_dir = base / "ultralytics"
+            dest_dir.mkdir()
+            for name in download_weights.YOLO_NAMES:
+                (dest_dir / name).write_bytes(
+                    b"PK\x03\x04" + b"\x00" * (200 * 1024))
+            old_dir = ensure_weight.WEIGHTS_DIR
+            old_sha = ensure_weight._KNOWN_SHA256
+            ensure_weight.WEIGHTS_DIR = base
+            ensure_weight._KNOWN_SHA256 = {}
+            self.addCleanup(setattr, ensure_weight, "WEIGHTS_DIR", old_dir)
+            self.addCleanup(setattr, ensure_weight, "_KNOWN_SHA256", old_sha)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                done = download_weights.family_yolo(
+                    {}, fetcher=self._fail_fetcher)
+            self.assertEqual(done, len(download_weights.YOLO_NAMES))
+
+
+class EnsureFamilyWeightsTest(unittest.TestCase):
+    """运行时接管：SAM/DINO/DINOv2/R-CNN 权重缺失时统一下载器补齐。
+
+    双态契约：无网（fetcher 必败）不挂、回退原缺失指引路径；有网替身
+    （注入 fetcher 写本地假权重）完成补齐且二次调用跳过下载。
+    """
+
+    def setUp(self):
+        from xccv.engine.weights import ensure_family_weights as efw
+
+        self._efw = efw
+        self._tmp = _tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._base = Path(self._tmp.name)
+        # 统一落位隔离：引擎权重目录整体指向临时根（WEIGHTS_DIR 单一来源）
+        self.addCleanup(setattr, efw, "WEIGHTS_DIR", efw.WEIGHTS_DIR)
+        efw.WEIGHTS_DIR = self._base
+        # 统一注入：进度/落点路径校验的假 fetcher + 小尺寸门槛（免大文件）
+        self.addCleanup(setattr, efw, "SAM_PT_MIN", efw.SAM_PT_MIN)
+        self.addCleanup(setattr, efw, "SAM_ONNX_MIN", efw.SAM_ONNX_MIN)
+        self.addCleanup(setattr, efw, "DINO_PTH_MIN", efw.DINO_PTH_MIN)
+        self.addCleanup(setattr, efw, "TV_PTH_MIN", efw.TV_PTH_MIN)
+        self.addCleanup(setattr, efw, "HF_WEIGHT_MIN", efw.HF_WEIGHT_MIN)
+        efw.SAM_PT_MIN = efw.SAM_ONNX_MIN = 1000
+        efw.DINO_PTH_MIN = efw.TV_PTH_MIN = efw.HF_WEIGHT_MIN = 1000
+        self._calls: list = []
+
+    def _ok_fetcher(self, url, dst, progress=None):
+        self._calls.append(url)
+        dst.write_bytes(b"PK\x03\x04" + b"\x00" * 2048)
+
+    def _boom_fetcher(self, url, dst, progress=None):
+        raise OSError("no network")
+
+    def test_sam_weight_download_skip_and_failure(self):
+        efw = self._efw
+
+        dest = efw.ensure_sam_weight("sam2.1_t.pt", fetcher=self._ok_fetcher)
+        self.assertEqual(dest, self._base / "sam" / "sam2.1_t.pt")
+        self.assertTrue(dest.is_file())
+        # 已就绪：二次调用不再触发下载
+        dest2 = efw.ensure_sam_weight("sam2.1_t.pt", fetcher=self._ok_fetcher)
+        self.assertEqual(dest2, dest)
+        self.assertEqual(len(self._calls), 1)
+        # 无网：中文 RuntimeError + .part 清理
+        with self.assertRaises(RuntimeError) as ctx:
+            efw.ensure_sam_weight("sam_b.pt", fetcher=self._boom_fetcher)
+        self.assertIn("下载失败", str(ctx.exception))
+        self.assertIn("手动下载", str(ctx.exception))
+        self.assertEqual(list((self._base / "sam").glob("*.part*")), [])
+
+    def test_sam_missing_files_survive_no_network(self):
+        efw = self._efw
+
+        # 双态：无网不挂，返回完成数 0（回退原缺失指引）
+        self.assertEqual(efw.ensure_sam_missing_files(
+            ["sam_b.pt", "mobile_sam.pt"], fetcher=self._boom_fetcher), 0)
+
+    def test_all_entries_land_in_engine_weights_dir(self):
+        """落位统一契约：全部下载条目的落点必须在引擎权重目录（WEIGHTS_DIR）
+        之下，禁止仓库根 weights/ 等其他位置。"""
+        efw = self._efw
+        for fam in ("sam", "dino", "rcnn"):
+            for e in efw.entries_for(fam):
+                try:
+                    dest = e.dest
+                except RuntimeError:
+                    continue  # torchvision 枚举不可用（文件名待解析）
+                self.assertTrue(
+                    str(dest).lower().startswith(str(efw.WEIGHTS_DIR).lower()),
+                    f"{fam}/{e.key or e.label} 落点越界：{dest}")
+        self.assertEqual(efw.hf_local_dir().parents[2], efw.WEIGHTS_DIR)
+        self.assertEqual(efw.hub_checkpoints_dir().parents[2], efw.WEIGHTS_DIR)
+
+    def test_registry_matches_ai_assist_models(self):
+        efw = self._efw
+        from xccv.annotation import ai_assist
+
+        sam_keys = {e.key for e in efw.entries_for("sam")}
+        for m in ai_assist._MODELS:
+            self.assertIn(m["file"], sam_keys)
+            if m.get("file2"):
+                self.assertIn(m["file2"], sam_keys)
+        self.assertIn("dino_vitbase8_pretrain.pth",
+                      {e.key for e in efw.entries_for("dino")})
+
+    def test_ai_assist_hook_downloads_missing_weight(self):
+        efw = self._efw
+        from xccv.annotation import ai_assist
+
+        self.addCleanup(setattr, ai_assist, "_WEIGHTS_DIR",
+                        ai_assist._WEIGHTS_DIR)
+        ai_assist._WEIGHTS_DIR = self._base / "sam"
+        real = efw.ensure_sam_missing_files
+        efw.ensure_sam_missing_files = (
+            lambda files, notify=None: real(files, notify,
+                                            fetcher=self._ok_fetcher))
+        self.addCleanup(setattr, efw, "ensure_sam_missing_files", real)
+        eng = ai_assist._engine_by_name("Sam2 (balanced)")
+        self.assertIsNotNone(eng)
+        self.assertTrue((self._base / "sam" / "sam2.1_t.pt").is_file())
+
+    def test_dino_vitb8_find_hook(self):
+        efw = self._efw
+        import xccv.engine.offline as _offline
+        from xccv.engine.models import dino_vit
+
+        # dino_vit 默认落点经 offline.WEIGHTS_DIR 解析——隔离到临时根
+        self.addCleanup(setattr, _offline, "WEIGHTS_DIR", _offline.WEIGHTS_DIR)
+        _offline.WEIGHTS_DIR = self._base
+        old_env = os.environ.pop("XCCV_DINO_CKPT", None)
+        self.addCleanup(lambda: os.environ.__setitem__(
+            "XCCV_DINO_CKPT", old_env) if old_env else None)
+        real = efw.ensure_dino_vitb8
+        efw.ensure_dino_vitb8 = (
+            lambda notify=None: real(notify, fetcher=self._ok_fetcher))
+        self.addCleanup(setattr, efw, "ensure_dino_vitb8", real)
+        got = dino_vit.find_dino_checkpoint()
+        self.assertEqual(got,
+                         self._base / "dino" / "dino_vitbase8_pretrain.pth")
+        # 清掉补齐产物再测无网：接管失败回退 None（原缺失指引路径），不挂
+        got.unlink()
+        efw.ensure_dino_vitb8 = (
+            lambda notify=None: real(notify, fetcher=self._boom_fetcher))
+        self.assertIsNone(dino_vit.find_dino_checkpoint())
+
+    def test_dinov2_ready_and_failure_paths(self):
+        efw = self._efw
+        import types as _types
+
+        # 下载路径（离线桩）：快照下载以桩替代——落盘齐备文件后返回落点
+        dest = self._base / "dinov2" / efw.DINOV2_REPO_ID
+
+        def _fake_dl(**kw):
+            p = Path(kw["local_dir"])
+            p.mkdir(parents=True, exist_ok=True)
+            (p / "config.json").write_text("{}", encoding="utf-8")
+            (p / "preprocessor_config.json").write_text("{}", encoding="utf-8")
+            (p / "model.safetensors").write_bytes(b"\x00" * (10 * 1024 * 1024 + 1))
+
+        fake = _types.ModuleType("huggingface_hub")
+        fake.snapshot_download = _fake_dl
+        with mock.patch.dict(sys.modules, {"huggingface_hub": fake}):
+            self.assertEqual(efw.ensure_dinov2(), dest)
+
+        # 无网路径：权重低于门槛（未就绪）且 snapshot_download 必败 → None
+        (dest / "model.safetensors").write_bytes(b"\x00" * 100)
+        boom = _types.ModuleType("huggingface_hub")
+
+        def _boom(**kw):
+            raise OSError("no network")
+
+        boom.snapshot_download = _boom
+        with mock.patch.dict(sys.modules, {"huggingface_hub": boom}):
+            self.assertIsNone(efw.ensure_dinov2())
+
+        # 发现路径：一层子目录 config+权重齐备 → 直接返回，不联网
+        ready = self._base / "dinov2" / "local-dinov2"
+        ready.mkdir(parents=True)
+        (ready / "config.json").write_text("{}", encoding="utf-8")
+        (ready / "model.safetensors").write_bytes(b"\x00" * (10 * 1024 * 1024 + 1))
+        self.assertEqual(efw.ensure_dinov2(), ready)
+
+    def test_dinov2_find_backbone_discovery(self):
+        efw = self._efw
+        import xccv.engine.offline as _offline
+        from xccv.engine.models import subspacead
+
+        # subspacead 扫描 offline.WEIGHTS_DIR/dinov2；本机 HF 缓存
+        # （Path.home）命中也会早退——一并隔离到临时根
+        self.addCleanup(setattr, _offline, "WEIGHTS_DIR", _offline.WEIGHTS_DIR)
+        _offline.WEIGHTS_DIR = self._base
+        real_home = Path.home
+        Path.home = classmethod(lambda cls: self._base)
+        self.addCleanup(setattr, Path, "home", real_home)
+        d = self._base / "dinov2" / "local-dinov2"
+        d.mkdir(parents=True)
+        (d / "config.json").write_text("{}", encoding="utf-8")
+        # 发现口径要求 config 与权重文件齐备（空壳缓存不视作就绪）
+        (d / "model.safetensors").write_bytes(b"\x00" * (1024 * 1024 + 1))
+        src, digest = subspacead._find_backbone()
+        self.assertEqual(src, str(d))
+        self.assertTrue(digest)
+
+        # 接管下载的嵌套落点（org/<model>）同样可被发现
+        nested = (self._base / "dinov2" / "facebook"
+                  / "dinov2-with-registers-small")
+        nested.mkdir(parents=True)
+        (nested / "config.json").write_text("{}", encoding="utf-8")
+        (nested / "model.safetensors").write_bytes(b"\x00" * (1024 * 1024 + 1))
+        src2, digest2 = subspacead._find_backbone()
+        self.assertEqual(src2, str(nested))
+        self.assertTrue(digest2)
+
+    def test_dinov2_find_backbone_empty_cache_skipped(self):
+        """空壳 HF 缓存（快照仅有 config 无权重）不视作就绪：
+        发现期不返回、不联网，抛 FileNotFoundError 由创建方延迟接管。"""
+        efw = self._efw
+        import xccv.engine.offline as _offline
+        from xccv.engine.models import subspacead
+
+        self.addCleanup(setattr, _offline, "WEIGHTS_DIR", _offline.WEIGHTS_DIR)
+        _offline.WEIGHTS_DIR = self._base
+        real_home = Path.home
+        Path.home = classmethod(lambda cls: self._base)
+        self.addCleanup(setattr, Path, "home", real_home)
+        # 空壳：config 有、权重无
+        d = self._base / "dinov2" / efw.DINOV2_REPO_ID
+        d.mkdir(parents=True)
+        (d / "config.json").write_text("{}", encoding="utf-8")
+        with self.assertRaises(FileNotFoundError):
+            subspacead._find_backbone()
+
+    def test_dinov2_backbone_takeover_at_ensure(self):
+        """创建期缺骨干 → 首用（_ensure_backbone）经统一下载器接管，
+        notify 原样透传；接管后 transformers 加载失败给中文指引。"""
+        efw = self._efw
+        import xccv.engine.offline as _offline
+        from xccv.engine.models import subspacead
+
+        self.addCleanup(setattr, _offline, "WEIGHTS_DIR", _offline.WEIGHTS_DIR)
+        _offline.WEIGHTS_DIR = self._base
+        real_home = Path.home
+        Path.home = classmethod(lambda cls: self._base)
+        self.addCleanup(setattr, Path, "home", real_home)
+        # 无任何本地骨干：发现期只抛 FileNotFoundError，不联网
+        with self.assertRaises(FileNotFoundError):
+            subspacead._find_backbone()
+        # 惰性接管：_ensure_backbone 调统一下载器（notify 透传），
+        # 拿到落点后再走 transformers 加载（离线夹具必然失败 → RuntimeError）
+        inst = subspacead.SubspaceAdModel.__new__(subspacead.SubspaceAdModel)
+        inst._bb_id = None
+        inst._bb_sha = ""
+        inst._bb_loaded = False
+        inst._bb = None
+        inst._proc = None
+        inst.device = "cpu"
+        d = self._base / "dinov2" / efw.DINOV2_REPO_ID
+        d.mkdir(parents=True)
+        (d / "config.json").write_text("{}", encoding="utf-8")
+        calls = []
+
+        def _fake_ensure(notify=None):
+            calls.append(notify)
+            return d
+
+        with mock.patch.object(efw, "ensure_dinov2", _fake_ensure):
+            with self.assertRaises(RuntimeError):
+                inst._ensure_backbone(notify="N")
+        self.assertEqual(calls, ["N"])
+        self.assertEqual(inst._bb_id, str(d))
+
+    def test_rcnn_backbones_ensure(self):
+        efw = self._efw
+        hub = self._base / "torch" / "hub" / "checkpoints"
+        # maskrcnn18 → resnet18 V1 预取到引擎权重目录的 torch.hub 缓存
+        efw.ensure_rcnn_backbones("maskrcnn18", fetcher=self._ok_fetcher)
+        self.assertTrue((hub / "resnet18-f37072fd.pth").is_file())
+        # fasterrcnn → torchvision 默认 backbone 枚举（落点可解析）
+        efw.ensure_rcnn_backbones("fasterrcnn", fetcher=self._ok_fetcher)
+        self.assertTrue(any(hub.glob("resnet50-*.pth")))
+        # use_pretrained=False：不触发任何下载
+        before = len(self._calls)
+        efw.ensure_rcnn_backbones("maskrcnn18", use_pretrained=False,
+                                  fetcher=self._ok_fetcher)
+        self.assertEqual(len(self._calls), before)
+
+    def test_rcnn_backbones_survive_no_network(self):
+        efw = self._efw
+        # 双态：无网不挂（仅记日志，回退 torchvision 自带下载路径）
+        efw.ensure_rcnn_backbones("maskrcnn18", fetcher=self._boom_fetcher)
+        self.assertFalse((self._base / "torch" / "hub" / "checkpoints"
+                          / "resnet18-f37072fd.pth").exists())
+
+
+class DocReconcileDependencyTest(unittest.TestCase):
+    """文档对账：torch/torchvision 版本矩阵三方一致（漂移即失败）。"""
+
+    def test_real_repo_matrix_green(self):
+        import doc_reconcile
+
+        repo = Path(__file__).resolve().parents[1]
+        problems = []
+        doc_reconcile.check_dependency_matrix(repo, problems)
+        self.assertEqual(problems, [])
+
+    def test_drifted_matrix_reports_problems(self):
+        import doc_reconcile
+
+        with _tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            wf = root / ".github" / "workflows"
+            wf.mkdir(parents=True)
+            (wf / "ci.yml").write_text(
+                'pip install "torch==1.8.0" "torchvision==0.9.0" '
+                '--index-url https://download.pytorch.org/whl/cpu\n',
+                encoding="utf-8")
+            (root / "README.md").write_text("readme", encoding="utf-8")
+            (root / "README_EN.md").write_text("readme", encoding="utf-8")
+            (root / "requirements.txt").write_text(
+                "ultralytics==8.4.7\n", encoding="utf-8")
+            problems = []
+            doc_reconcile.check_dependency_matrix(root, problems)
+            self.assertTrue(problems)
+            joined = "；".join(problems)
+            self.assertIn("torch==2.9.1", joined)
+            self.assertIn("1.8.0", joined)
+
+    def test_torch_line_in_requirements_rejected(self):
+        """requirements.txt 不应包含 torch 安装行（torch 单独按源安装）。"""
+        import doc_reconcile
+
+        with _tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            wf = root / ".github" / "workflows"
+            wf.mkdir(parents=True)
+            (wf / "ci.yml").write_text(
+                'pip install "torch==2.9.1" "torchvision==0.24.1" '
+                '--index-url https://download.pytorch.org/whl/cpu\n'
+                "# ultralytics 8.4.7 constraint torch<2.10\n",
+                encoding="utf-8")
+            readme = (
+                "pip install torch==2.9.1 torchvision==0.24.1 "
+                "--index-url https://download.pytorch.org/whl/cu128\n"
+                "CI uses --index-url https://download.pytorch.org/whl/cpu; "
+                "torch<2.10 applies.\n")
+            (root / "README.md").write_text(readme, encoding="utf-8")
+            (root / "README_EN.md").write_text(readme, encoding="utf-8")
+            (root / "requirements.txt").write_text(
+                "ultralytics==8.4.7\ntorch==2.9.1\n", encoding="utf-8")
+            problems = []
+            doc_reconcile.check_dependency_matrix(root, problems)
+            self.assertTrue(any("requirements.txt 不应包含 torch" in p
+                                for p in problems))
+
 if __name__ == '__main__':
     unittest.main()

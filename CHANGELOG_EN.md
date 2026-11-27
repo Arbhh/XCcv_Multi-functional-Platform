@@ -76,6 +76,63 @@ Chinese changelog: [CHANGELOG.md](CHANGELOG.md)
 - Full regression `python tools/run_tests.py`: all 39 modules green;
   i18n audit A-class missing 0 (tr sites 904 / TABLE 1872).
 
+### Added: one-click installer
+
+- Root `install.bat` (pure ASCII) + `tools/setup_env.py`: GPU detection
+  (nvidia-smi compute capability / driver tiers) → automatic torch source
+  selection (cu128 / cu126 / cpu) → venv creation → two-phase install
+  (pinned torch → requirements.txt) → writes `python_path.txt` → bilingual
+  environment self-check. Python 3.11 hard requirement; stale-version venvs
+  are renamed aside and rebuilt; failure branches give Chinese guidance.
+
+### Added: two-layer weight download
+
+- `tools/download_weights.py` (CLI: `--list` / per-family download /
+  resume hints);
+- Runtime takeover `xccv/engine/weights/ensure_family_weights.py`: SAM /
+  DINO ViT-B/8 / DINOv2 / R-CNN backbones are downloaded automatically on
+  first use (progress reporting, multi-source fallback, SHA-256 verification
+  and more); supports two-level
+  `org/<model>` cache layout and prunes HF cache shells that contain only
+  configs;
+- All weights live under the family-split `weights/` layout; DINOv2
+  defaults to the hf-mirror endpoint.
+
+### Changed: root directory cleanup
+
+- The repository root keeps only `run_main.bat` and `install.bat`; the
+  per-platform launchers moved to `scripts/` (they resolve the repository
+  root automatically).
+
+### Changed: anomaly detection in the testing platform
+
+- Score-semantics threshold slider now uses the **image-score scale**
+  (0~50, step 0.1, default 3.0, reciprocal conversion `conf=1/(1+z)`)
+  with a direct numeric input box kept in two-way sync; the IOU slider is
+  hidden for anomaly detection; panel layout keeps the input fully visible
+  on narrow docks;
+- Detection JSON gains an `image_score` field (additive); threshold
+  conversion converged into the shared module `xccv/testing/review_logic.py`.
+
+### Fixed: end-to-end progress for AI takeover
+
+- Global progress hook for the unified downloader: every takeover entry
+  (model init / canvas inference / batch pre-annotation) reports progress —
+  stage messages persist on the status banner while percentages refresh the
+  status bar; switching SAM variants while a download is running now queues
+  and auto-loads the user's selection afterwards;
+- R-CNN no longer triggers silent downloads at construction time (randomly
+  initialized backbone; the unified downloader takes over on first fit with
+  visible progress); mouse wheel no longer errors with no image loaded.
+
+### Engineering and tests
+
+- Dependency matrix aligned: torch==2.9.1 / torchvision==0.24.1 (README /
+  requirements / CI in sync); `tools/doc_reconcile.py` gains a matrix
+  reconciliation check;
+- Tests: `test_tool_engine` fully offline (52→54 cases); anomaly contracts
+  merged into `test_tst_platform` / `test_tst_review`.
+
 ## [0.8.2] - 2026-11-22
 
 > User-feedback batch: annotation interaction fixes plus training/tool

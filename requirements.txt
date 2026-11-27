@@ -2,9 +2,13 @@
 PyQt5==5.15.9
 PyQtWebEngine==5.15.7
 
-# 深度学习（torch/torchvision 请先按官方源安装，CUDA 版示例：
-#   pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128
-# CPU 版直接 pip install torch torchvision 即可）
+# 深度学习（torch/torchvision 不在本文件内，请先按官方源单独安装，版本矩阵：
+#   torch==2.9.1 + torchvision==0.24.1，与 CI / README 口径一致，
+#   见 tools/doc_reconcile.py 依赖对账。ultralytics 8.4.7 约束 torch<2.10。
+#   本地按显卡选源（示例为 CUDA 12.8）：
+#   pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
+#   较旧驱动可退 cu126；无 NVIDIA 显卡用 --index-url https://download.pytorch.org/whl/cpu
+#   （CI 即此 CPU 源口径）；或直接运行根目录 安装XCcv环境.bat 自动选择）
 ultralytics==8.4.7
 onnxruntime==1.19.2
 

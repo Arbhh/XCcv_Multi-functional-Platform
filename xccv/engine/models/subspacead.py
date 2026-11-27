@@ -23,9 +23,10 @@ Anomaly Detection via Subspace Modeling；平台按论文口径复现并适配�
 权重红线（"用户自备"，与 dino_vit.py 同惯例）：DINOv2 骨干不自动下载
 大权重、不随包分发（只记指纹）。发现顺序：
 ①环境变量 XCCV_DINOV2_CKPT（本地 HF 模型目录，含 config.json）；
-②<app_root>/weights/dinov2/ 同结构目录；③HF 本地缓存（优先大模型）；
-④默认 hub id facebook/dinov2-with-registers-small（需要网络或
-HF_ENDPOINT=https://hf-mirror.com 镜像）。
+②引擎权重目录 weights/dinov2/（offline.WEIGHTS_DIR）同结构目录；
+③HF 本地缓存（优先大模型）；④默认 hub id facebook/dinov2-with-registers-small
+（需要网络或 HF_ENDPOINT=https://hf-mirror.com 镜像）；本地与缓存均缺失时
+经 engine.weights.ensure_family_weights 运行时接管补齐（保留镜像口径）。
 TensorRT .engine：PCA 子空间后端不支持（与 patchcore/CIF 同口径）。
 """
 
@@ -78,15 +79,25 @@ def _find_backbone() -> tuple[str, str]:
     candidates: list[Path] = []
     if env:
         candidates.append(Path(env))
-    from ...app_paths import app_root
+    from ..offline import WEIGHTS_DIR
 
-    local_root = app_root() / "weights" / "dinov2"
+    local_root = WEIGHTS_DIR / "dinov2"
     if local_root.is_dir():
         if (local_root / "config.json").is_file():
             candidates.append(local_root)
         for sub in sorted(local_root.iterdir()):
-            if sub.is_dir() and (sub / "config.json").is_file():
+            if not sub.is_dir():
+                continue
+            # 两种放置形态：sub 即模型目录；或 sub=<org>、其子目录才是
+            # 模型目录（统一下载器落点 facebook/<model>）
+            if (sub / "config.json").is_file():
                 candidates.append(sub)
+            try:
+                candidates.extend(
+                    p for p in sorted(sub.iterdir())
+                    if p.is_dir() and (p / "config.json").is_file())
+            except OSError:
+                pass
     # HF 本地缓存（hub/models--facebook--dinov2-with-registers-<size>）
     hf_hub = Path.home() / ".cache" / "huggingface" / "hub"
     if hf_hub.is_dir():
@@ -110,6 +121,10 @@ def _find_backbone() -> tuple[str, str]:
                 (snap / f).is_file() and (snap / f).stat().st_size > 1e6
                 for f in ("model.safetensors", "pytorch_model.bin",
                           "model.safetensors.index.json"))
+            if not has_weights:
+                # 空壳缓存（快照仅有 config 无权重文件）→ 跳过该候选，
+                # 走下方统一下载器补齐，避免建模成功、加载期才报缺权重
+                continue
             digest_src = (snap / "config.json").read_bytes()
             if has_weights:
                 for wf in sorted(snap.glob("*.safetensors")) + sorted(snap.glob("*.bin")):
@@ -117,9 +132,13 @@ def _find_backbone() -> tuple[str, str]:
                     digest_src += str(wf.stat().st_size).encode()
             digest = hashlib.sha256(digest_src).hexdigest()[:16]
             return str(snap), digest
-    # 兜底：默认 hub id（需要网络；本机直连被墙时用 HF_ENDPOINT 镜像）
-    return DEFAULT_CKPT_ID, hashlib.sha256(
-        DEFAULT_CKPT_ID.encode()).hexdigest()[:16]
+    # 本地无可用骨干：不在发现期联网，由创建方（__init__）延迟到首次
+    # fit/predict 时经统一下载器接管补齐
+    raise FileNotFoundError(
+        "DINOv2-with-registers 特征骨干缺失：请将权重目录放到 "
+        "weights/dinov2/，或用环境变量 XCCV_DINOV2_CKPT 指向本地模型"
+        "目录；训练/推理首用时也会自动尝试在线补齐（HF 快照，缺省走 "
+        "hf-mirror 镜像）")
 
 
 def _augment_fn(aug_count: int):
@@ -197,7 +216,12 @@ class SubspaceAdModel(BaseModel):
         self._bb_id: str | None = None
         self._bb_sha: str = ""
         self._bb_loaded = False
-        self._bb_id, self._bb_sha = _find_backbone()
+        try:
+            self._bb_id, self._bb_sha = _find_backbone()
+        except FileNotFoundError:
+            # 本地无可用骨干：创建不阻断、不联网，首次 fit/predict 时
+            # 经统一下载器接管补齐（进度上报训练页，与 YOLO 同口径）
+            self._bb_id, self._bb_sha = None, ""
         # PCA 参数（fit 后填充；容器加载恢复）
         self.mu = None                           # (D,) fp32
         self.components = None                   # (k, D) fp32
@@ -209,10 +233,36 @@ class SubspaceAdModel(BaseModel):
         self.score_sigma = 1.0
 
     # ---- 骨干 ----
-    def _ensure_backbone(self):
-        """惰性加载 DINOv2（首次 fit/predict 时；权重缺失给明确报错）。"""
+    def _ensure_backbone(self, notify=None):
+        """惰性加载 DINOv2（首次 fit/predict 时）。
+
+        创建期未发现本地骨干（_bb_id 为 None）时先经统一下载器接管
+        补齐（HF 快照，保留 HF_ENDPOINT 镜像口径；进度经 notify 上报
+        训练页），失败给原中文指引后抛错。"""
         if self._bb_loaded:
             return
+        if self._bb_id is None:
+            try:
+                from ..weights.ensure_family_weights import ensure_dinov2
+
+                local = ensure_dinov2(notify)
+            except Exception:
+                log.warning("DINOv2 骨干接管补齐异常", exc_info=True)
+                local = None
+            if local is None:
+                raise RuntimeError(
+                    "SubspaceAD 需要 DINOv2-with-registers 特征骨干"
+                    "（本地与 HF 缓存均未发现可用权重），自动下载未成功。"
+                    "请检查网络或代理后重试；也可将权重目录放到 "
+                    "weights/dinov2/，或用环境变量 XCCV_DINOV2_CKPT 指向"
+                    "本地模型目录")
+            digest_src = (local / "config.json").read_bytes()
+            for wf in sorted(local.glob("*.safetensors")) \
+                    + sorted(local.glob("*.bin")):
+                digest_src += wf.name.encode()
+                digest_src += str(wf.stat().st_size).encode()
+            self._bb_id = str(local)
+            self._bb_sha = hashlib.sha256(digest_src).hexdigest()[:16]
         try:
             from transformers import AutoImageProcessor, AutoModel
 
@@ -243,7 +293,7 @@ class SubspaceAdModel(BaseModel):
         （省约 13.6GB 显存，主流程不使用注意力图）。"""
         from PIL import Image
 
-        self._ensure_backbone()
+        self._ensure_backbone(notify=getattr(self, "_notify", None))
         res = int(self.params.get("res") or self.default_image_size)
         pil = [Image.fromarray(im[:, :, ::-1]) for im in imgs_rgb]
         inputs = self._proc(images=pil, return_tensors="pt", do_resize=True,
@@ -310,6 +360,8 @@ class SubspaceAdModel(BaseModel):
     # ---- 训练 ----
     def fit(self, data, cfg: TrainConfig, reporter: TrainReporter | None = None) -> dict:
         reporter = reporter or TrainReporter()
+        # 骨干接管补齐的进度回调（首次 fit/predict 下载时经训练页可见）
+        self._notify = getattr(reporter, "on_message", None)
         started = datetime.now()
         self.image_size = self.default_image_size
         params = dict(self.params)

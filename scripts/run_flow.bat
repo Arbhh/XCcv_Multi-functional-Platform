@@ -2,29 +2,29 @@
 rem XCcv Community launcher (ASCII only).
 rem Interpreter precedence:
 rem   1) XCCV_PY environment variable
-rem   2) python_path.txt in this folder (one line: full path to python.exe)
+rem   2) python_path.txt in the repo root (one line: full path to python.exe)
 rem   3) python on PATH
 rem   4) py launcher (-3)
-rem   5) .\venv and .\.venv in this folder (optional, last resort)
+rem   5) venv and .venv under the repo root (optional, last resort)
 rem Each candidate is accepted only if it can import PyQt5.QtWebEngineWidgets.
 setlocal EnableExtensions
-set "ROOT=%~dp0"
+set "ROOT=%~dp0.."
 cd /d "%ROOT%"
 
 set "PYEXE="
 set "PYARGS="
 set "PYCFG="
-if exist "%ROOT%python_path.txt" set /p PYCFG=<"%ROOT%python_path.txt"
+if exist "%ROOT%\python_path.txt" set /p PYCFG=<"%ROOT%\python_path.txt"
 
 call :try "%XCCV_PY%" ""
 call :try "%PYCFG%" ""
 call :try "python" ""
 call :try "py" "-3"
-call :try "%ROOT%venv\Scripts\python.exe" ""
-call :try "%ROOT%.venv\Scripts\python.exe" ""
+call :try "%ROOT%\venv\Scripts\python.exe" ""
+call :try "%ROOT%\.venv\Scripts\python.exe" ""
 if not defined PYEXE goto nogui
 
-"%PYEXE%" %PYARGS% -m xccv.training.training_window
+"%PYEXE%" %PYARGS% -m xccv.flow_platform
 
 exit /b %errorlevel%
 
@@ -53,11 +53,11 @@ echo                set XCCV_PY=C:\Python311\python.exe
 echo           2) Install the dependencies into your own Python 3.11:
 echo                pip install -r requirements.txt
 echo.
-if exist "%ROOT%tools\env_check.py" call :diag
+if exist "%ROOT%\tools\env_check.py" call :diag
 pause
 exit /b 1
 
 :diag
-python "%ROOT%tools\env_check.py" 2>nul
+python "%ROOT%\tools\env_check.py" 2>nul
 if errorlevel 1 echo (env_check.py needs a working python on PATH; skipped)
 exit /b 0

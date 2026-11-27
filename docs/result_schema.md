@@ -156,3 +156,14 @@ Demo 见 platform_data/csharp_demo/XCcvCSharpDemo.exe）。
    - 「保存图像」(image_sink)：`<来源图名><后缀>.png|jpg|bmp`，overlay 模式叠加检出框蒙版。
    - 「按检出裁图」/「网格分块」设置落盘目录时：`<前缀>_<来源图名>_<序号>.png` /
      `<前缀>_<来源图名>_r<行>c<列>.png`。
+
+## 十、V0.8.3 延伸批增补（2026-11-27，只增不改——上文全部字段与语义保持不变）
+
+1. **`image_score`（顶层键，仅 `task="anomaly"` 输出）**：图像级异常分数
+   （float，取 `probs[0]`；无 probs 时回退 detections 最大框分）。其语义由模型
+   元数据 `score_semantics` 解释（如 SubspaceAD 为"分数越高越异常（OK 分布
+   z 标定）"）——消费方不应假设其取值范围，判定阈值以模型元数据与阈值面板
+   口径为准。其它 task 不输出该键；既有消费方零分支兼容（未读取即无感知）。
+2. **`inference.conf` 对异常检测的语义**：传入 `model.predict` 的 conf 与图像
+   分数阈值按 `z=1/conf−1` 互逆换算（测试平台阈值面板已按分数语义直接展示
+   分数值）；JSON 内 conf 仍为推理参数原值回显，语义不变。

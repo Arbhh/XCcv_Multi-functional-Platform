@@ -49,9 +49,14 @@ for _ext, _mt in ((".js", "text/javascript"), (".mjs", "text/javascript"),
                   (".css", "text/css"), (".wasm", "application/wasm"),
                   (".json", "application/json"), (".svg", "image/svg+xml")):
     mimetypes.add_type(_mt, _ext)
-# XCcv：权重与主项目共用 weights/sam（标注平台同目录）
-WEIGHTS_DIR = os.path.join(os.path.dirname(os.path.dirname(ROOT)),
-                           "weights", "sam")
+# XCcv：SAM 权重与主项目共用引擎权重目录（offline.WEIGHTS_DIR）下的 sam/
+try:
+    from ...engine.offline import WEIGHTS_DIR as _XCCV_WEIGHTS_DIR
+
+    WEIGHTS_DIR = str(_XCCV_WEIGHTS_DIR / "sam")
+except Exception:  # 包上下文异常时按源码布局回推引擎权重目录
+    WEIGHTS_DIR = os.path.join(os.path.dirname(ROOT), "engine", "weights",
+                               "sam")
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp")
 
 app = FastAPI(title="Defect Augment Studio", version="1.1")

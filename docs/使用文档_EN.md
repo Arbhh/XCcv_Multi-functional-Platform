@@ -10,7 +10,7 @@ status shows at the top-right. Each platform runs as an independent process.
 ## 1. Annotation Platform
 
 - Open: the "Annotation" card on the main window, or drag a dataset folder onto the
-  desktop shortcut (argv[1] as directory).
+  desktop shortcut.
 - Smart polygon (S key / "Create smart polygon"): left-click on the target to include,
   Shift+left-click to exclude, right-click to undo the last anchor, double-click or
   Ctrl+left-click to finish. The first use loads the SAM model in the background; the
@@ -86,19 +86,23 @@ status shows at the top-right. Each platform runs as an independent process.
 ```
 <repo root>\
   xccv\ labelme\    ← platform source (Python packages)
-  run_*.bat         ← per-platform launchers (pythonw -m …)
+  run_main.bat      ← main workbench launcher (the only launcher at root)
+  install.bat       ← one-click environment installer entry
+  scripts\          ← per-platform launch bats (repo-root backtracking)
+                       and run_tools.py
   docs\             ← user guide / operation manual / result contract
                        (result_schema.md) and the project introduction
-  weights\          ← where weights go (not distributed with the repo, see below)
+  xccv\engine\weights\ ← engine weights folder (not distributed with the
+                       repo, family subfolders below)
   platform_data\    ← user data (logs / projects / training artifacts)
 ```
 
 Logs live under `platform_data\logs\` (crash.log / main.log / training.log /
 service.log, etc.). Model weights and sample data are not distributed with the
-repository: COCO/torchvision baselines can be fetched with
-`python xccv/engine/weights/download_weights.py`; place the rest per the
-"weights and sample data" table in the README; defect-synthesis sample images
-ship as a separate data package on the release page.
+repository: baseline weights (YOLO / torchvision / SAM / DINO) can be fetched
+with `python tools/download_weights.py` (`--list` for the manifest); place the
+rest per the "weights and sample data" table in the README; defect-synthesis
+sample images ship as a separate data package on the release page.
 
 ## 7. FAQ
 

@@ -2347,6 +2347,11 @@ TABLE = {
     "先扫描预览，确认后执行；同名文件跳过；自动包含子目录": "Preview first, then execute; same-name files skipped; subfolders included",
     "预览确认后开始导出；自动包含子目录": "Export starts after preview confirmation; subfolders included",
     "数据工具集工作台：替换/删除标签、迁移标注数据、滑窗裁图、视频切分图片": "Data tool suite: replace and delete labels, move annotations, tile large images, extract video frames",
+    "可直接输入数值后回车": "Type a value and press Enter",
+    "图像分数阈值": "Image score threshold",
+    "阈值范围 0~50，拖动滑条或直接输入数值皆可": "Range 0~50 - drag the slider or type a value",
+    "可前往流程图界面查看": "Open the flow-chart view to inspect it",
+    "已写入项目默认检出流程": "Saved to the project default detection flow",
 }
 
 

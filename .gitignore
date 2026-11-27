@@ -11,12 +11,12 @@ python_path.txt
 # 运行期用户数据
 platform_data/
 
-# 权重与数据（体积大且许可各异，不随仓库分发；见 xccv/engine/weights/download_weights.py）
-weights/*
-!**/weights/download_weights.py
+# 权重与数据（体积大且许可各异，不随仓库分发；统一落引擎权重目录
+# xccv/engine/weights/，运行时下载子目录 sam/ dino/ dinov2/ 亦不入库）
 xccv/engine/weights/*
 !xccv/engine/weights/download_weights.py
 !xccv/engine/weights/ensure_weight.py
+!xccv/engine/weights/ensure_family_weights.py
 !xccv/engine/weights/__init__.py
 *.pt
 *.pth

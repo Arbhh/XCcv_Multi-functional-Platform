@@ -719,9 +719,14 @@ class SubspaceAdMathTest(unittest.TestCase):
         self.assertEqual(out.shape, (56, 56))
 
     def test_find_backbone_returns(self):
+        """DINOv2 骨干可发现时返回 (来源, 16 位指纹)；缺失则跳过（首用时自动接管下载）。"""
         from xccv.engine.models.subspacead import _find_backbone
 
-        src, sha = _find_backbone()
+        try:
+            src, sha = _find_backbone()
+        except FileNotFoundError:
+            self.skipTest("未放置 DINOv2 特征骨干（可选；训练/推理首用时自动接管下载）")
+            return
         self.assertIsInstance(src, str)
         self.assertEqual(len(sha), 16)
 

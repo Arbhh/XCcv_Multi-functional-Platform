@@ -5,10 +5,12 @@
 VisionTransformer 一致：150 键 cls_token/pos_embed/patch_embed.proj/12×
 block/norm，逐键核对；保留零依赖能力）。
 
-权重路径（用户自备或可选下载，与 SAM weights/sam 惯例一致）：
+权重路径（用户自备或可选下载，与 SAM 引擎权重目录惯例一致）：
   1) 环境变量 XCCV_DINO_CKPT 指向权重文件；
-  2) <app_root>/weights/dino/dino_vitbase8_pretrain.pth
-不自动下载、不随包分发。
+  2) 引擎权重目录 weights/dino/dino_vitbase8_pretrain.pth
+     （offline.WEIGHTS_DIR：开发态=xccv/engine/weights，安装态=<安装根>/weights）
+不自动下载、不随包分发；缺失时经 engine.weights.ensure_family_weights
+运行时接管补齐（统一下载器，失败回退缺失指引）。
 """
 
 from __future__ import annotations
@@ -140,10 +142,22 @@ def find_dino_checkpoint() -> Path | None:
         if p.is_file():
             return p
         log.warning("XCCV_DINO_CKPT 指向的文件不存在: %s", p)
-    from ...app_paths import app_root
+    from ..offline import WEIGHTS_DIR
 
-    p = app_root() / "weights" / "dino" / _CKPT_FILENAME
-    return p if p.is_file() else None
+    p = WEIGHTS_DIR / "dino" / _CKPT_FILENAME
+    if p.is_file():
+        return p
+    # 运行时接管：默认落点缺失时经统一下载器补齐（多源/超时/校验口径与
+    # 训练链路一致；失败返回 None，由上层抛原缺失指引文案）
+    try:
+        from ..weights.ensure_family_weights import ensure_dino_vitb8
+
+        got = ensure_dino_vitb8()
+        if got is not None:
+            return got
+    except Exception:
+        log.warning("DINO 权重运行时补齐失败", exc_info=True)
+    return None
 
 
 class _TimmViT(nn.Module):

@@ -12,8 +12,8 @@ orchestrator** (57 built-in operators) and a **defect sample synthesis** tool.
 A first-time user can take a vision model from raw data to trained weights — and to a
 production inference service — entirely through the desktop UI, running fully offline so
 data never leaves the local network.
-The UI supports **one-click Chinese / English switching** (in the workbench "Settings"
-dialog; applies across the whole platform).
+The UI supports **one-click Chinese / English switching**, applied across the
+whole platform.
 
 ![XCcv main window (AI platform)](docs/images/main.png)
 
@@ -50,37 +50,54 @@ dialog; applies across the whole platform).
 
 ## Installation
 
+**One-click install (recommended)**: double-click `install.bat` in the repo root —
+it detects your GPU and driver, picks the torch index, creates the `venv`, installs the
+dependencies, writes `python_path.txt`, and finishes with a bilingual environment
+diagnosis; failure branches (no GPU / offline / proxy / permission) carry guidance.
+
+**Manual install** (equivalent steps):
+
 ```bat
 :: 1) Create and activate a virtual environment (Python 3.11)
 python -m venv venv
 venv\Scripts\activate
 
-:: 2) Install PyTorch (pick CUDA / CPU from the official index; CUDA 12.8 shown)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+:: 2) Install PyTorch (version matrix: torch==2.9.1 + torchvision==0.24.1, same as CI;
+::    pick the index by GPU, CUDA 12.8 shown; ultralytics 8.4.7 requires torch<2.10 —
+::    do not install torch 2.10 or newer)
+pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
 
 :: 3) Install the remaining dependencies
 pip install -r requirements.txt
 ```
 
+> **Torch index and version matrix**: versions are pinned to torch==2.9.1 +
+> torchvision==0.24.1. Pick the index by hardware — recent NVIDIA drivers / RTX 50
+> series use `cu128`, older drivers may use `cu126`; **CI uses the CPU index**
+> (`--index-url https://download.pytorch.org/whl/cpu`), and machines without an NVIDIA
+> GPU use the CPU index too. The three sources (README / requirements.txt comment /
+> ci.yml) are kept consistent by the dependency check in `tools/doc_reconcile.py`.
+
 ## Quick Start
 
 > **Launcher environment (important)**: the workbench, flow canvas and defect synthesis all
-> depend on PyQtWebEngine. The `run_*.bat` scripts are pure-ASCII and **do not require a venv
-> in this folder**; they probe candidates in this order (the only criterion is whether
-> `import PyQt5.QtWebEngineWidgets` succeeds):
+> depend on PyQtWebEngine. The root `run_main.bat` and `install.bat` are pure-ASCII and
+> **do not require a venv in this folder**; they probe candidates in this order; the
+> other platform entries live in `scripts\` (they locate the repo root automatically
+> and work from anywhere):
 >
 > 1. the `XCCV_PY` environment variable;
 > 2. `python_path.txt` in this folder (one line: full path to python.exe);
 > 3. `python` on PATH;
-> 4. the `py` launcher (`py -3`);
-> 5. `venv` / `.venv` in this folder (optional fallback).
+> 4. the `py` launcher;
+> 5. `venv` / `.venv` in this folder.
 >
 > If none works, the scripts print English guidance and run `tools\env_check.py` for a detailed
 > diagnosis. It is recommended to write one line into `python_path.txt` on the target machine,
-> e.g. `<project>\venv\Scripts\python.exe` (the file is gitignored; it may differ per machine).
+> e.g. `<project>\venv\Scripts\python.exe` (the file is gitignored).
 
-Double-click `run_main.bat` (or `python -m xccv.app`) to open the workbench, then enter each
-platform from its card:
+Double-click `run_main.bat` in the repo root (or `python -m xccv.app`) to open the
+workbench, then enter each platform from its card:
 
 1. **Annotate**: create a project → import images → draw rectangles / polygons
    (optionally press S for AI-assisted polygons);
@@ -91,10 +108,10 @@ platform from its card:
    results on the Standard page, or switch to the "Project Review" page: tune thresholds under
    "Evaluated" (Correct / Missed / Over-kill), then switch to "Unevaluated" to check production
    images as OK / NG; review reflow and A/B comparison supported;
-4. **Deployment platform** (same-level module in the left navigation): start the HTTP inference
+4. **Deployment platform**: start the HTTP inference
    service → load models/flows as resident APIs → single / batch / WebSocket inference;
    the C# Test card compiles and runs the WinForms demo in one click;
-5. **Flowchart** (same-level module): pick the data path and a flow JSON → "Run Flow" for
+5. **Flowchart**: pick the data path and a flow JSON → "Run Flow" for
    single-image results, or "Edit Flow" to orchestrate AI / classic operators on the canvas,
    pack as `.xvap` and run batches;
 6. **Model Tools**: pre/post-training pruning for lightweight models; export best.pt to a
@@ -104,17 +121,17 @@ platform from its card:
 8. **UI Language**: workbench "Settings" → "Language" → English; all platform windows switch
    automatically after saving.
 
-Command-line entries (equivalent to the workbench cards):
+Command-line entries (equivalent to the workbench cards, all under `scripts\`):
 
 ```bat
-run_annotation.bat   :: Annotation platform
-run_training.bat     :: Training platform
-run_testing.bat      :: Testing platform
-run_flow.bat         :: Flowchart (standalone window; also in the left navigation)
-run_modeltools.bat   :: Model tools (pruning / TensorRT acceleration)
-run_deploy.bat       :: Deployment platform (inference service / model loading / C# test)
-run_service.bat      :: Inference service (headless service process)
-run_defectgen.bat    :: Defect sample synthesis
+scripts\run_annotation.bat   :: Annotation platform
+scripts\run_training.bat     :: Training platform
+scripts\run_testing.bat      :: Testing platform
+scripts\run_flow.bat         :: Flowchart (standalone window; also in the left navigation)
+scripts\run_modeltools.bat   :: Model tools (pruning / TensorRT acceleration)
+scripts\run_deploy.bat       :: Deployment platform (inference service / model loading / C# test)
+scripts\run_service.bat      :: Inference service (headless service process)
+scripts\run_defectgen.bat    :: Defect sample synthesis
 ```
 
 The inference service can also start directly: `python -m xccv.service.main --host 127.0.0.1
@@ -129,10 +146,10 @@ For the detailed getting-started guide see
 **Documentation index**: project introduction in
 [docs/XCcv多功能视觉平台_项目简介_EN.docx](docs/XCcv多功能视觉平台_项目简介_EN.docx)
 (中文: [docs/XCcv多功能视觉平台_项目简介.docx](docs/XCcv多功能视觉平台_项目简介.docx));
-FAQs on environment, weights, annotation, training, deployment and 0.7.x migration in
+FAQs on environment, weights, annotation, training and deployment in
 [docs/FAQ_EN.md](docs/FAQ_EN.md) (中文: [docs/FAQ.md](docs/FAQ.md)).
 
-### Optional: weights and sample data (not distributed here)
+### Optional: weights and sample data
 
 > **This repository ships no model weights and no sample data.** Weights follow their
 > publishers' licenses and must be obtained by the user; sample data is distributed as a
@@ -140,34 +157,29 @@ FAQs on environment, weights, annotation, training, deployment and 0.7.x migrati
 
 | Resource | How to obtain | Where to put it |
 |---|---|---|
-| SAM family (AI-assisted annotation) | Official channels (e.g. `sam2.1_t.pt`, `mobile_sam.pt`), under their license terms | `weights/sam/` |
-| DINO ViT-B/8 (CIF) | Official channels | `weights/dino/` (or `XCCV_DINO_CKPT`) |
-| DINOv2 (SubspaceAD) | Official channels; mainland networks may set `HF_ENDPOINT=https://hf-mirror.com` | `weights/dinov2/` (or `XCCV_DINOV2_CKPT`) |
-| YOLO COCO / torchvision baselines | `python xccv/engine/weights/download_weights.py` (one-shot, local only) | `xccv/engine/weights/` |
+| SAM family (AI-assisted annotation) | `python tools/download_weights.py --family sam` (license notes printed along) | `xccv/engine/weights/sam/` |
+| DINO ViT-B/8 + DINOv2 (CIF / SubspaceAD) | `python tools/download_weights.py --family dino`; mainland networks may set `HF_ENDPOINT=https://hf-mirror.com` | `xccv/engine/weights/dino/`, `xccv/engine/weights/dinov2/` (or `XCCV_DINO_CKPT` / `XCCV_DINOV2_CKPT`) |
+| YOLO COCO / torchvision baselines | `python tools/download_weights.py --family yolo` (reuses the training-pipeline multi-source download and checks) | family subfolders under `xccv/engine/weights/` (`--list` shows targets) |
 | Defect-synthesis sample data (~33 MB) | Download `XCcv-Platform-testdata-0.8.0.zip` | Extract under `xccv/defectgen/` (yields `testdata/`) |
-| maskrcnn18 slim initial weights | Build with `python tools/build_maskrcnn18_init.py`, or convert mmdet weights with `tools/convert_mmdet_r18.py` | `weights/` |
+| maskrcnn18 slim initial weights | Build with `python tools/build_maskrcnn18_init.py`, or convert mmdet weights with `tools/convert_mmdet_r18.py` | `xccv/engine/weights/` |
 
 When a resource is missing, the affected features show clear guidance and everything else
-keeps working. `.gitignore` excludes `weights/`, `xccv/engine/weights/`,
-`xccv/defectgen/testdata/` and `*.pt / *.pth / *.onnx / *.engine / *.xva / *.xcs`.
-
-### Migrating from 0.7.x
-
-Since 0.8.0 model weights are **plaintext** `best.pt` / `.engine` (training artifacts are no
-longer wrapped in encrypted containers); the legacy encrypted containers (`.xva` / `.xcs`)
-are no longer supported — loading one raises a clear message. Retrain or re-export with 0.8.0.
+keeps working. All model weights live in the engine weights folder
+`xccv/engine/weights/` (installed state: `<install root>/weights/`);
+`.gitignore` excludes its runtime artifacts, `xccv/defectgen/testdata/` and
+`*.pt / *.pth / *.onnx / *.engine / *.xva / *.xcs`.
 
 ## Repository Layout
 
 ```
-XCcv-Multi-functional platform/
+XCcv-Multi-functional-Platform/
 ├── xccv/                  # Main package
 │   ├── annotation/        #   Annotation platform (labelme host + AI-assisted annotation)
 │   ├── training/          #   Training platform
 │   ├── testing/           #   Testing platform (Standard + Project Review pages)
 │   ├── deploy_platform.py #   Deployment platform (service window / model loading / C# test)
 │   ├── service/           #   HTTP inference service (FastAPI + C# SDK and demo)
-│   ├── modeltools/        #   Model-tools window (pruning / TensorRT) + flow canvas host
+│   ├── modeltools/        #   Model-tools window (pruning / TensorRT / Toolbox) + flow canvas host
 │   ├── defectgen/         #   Defect sample synthesis (FastAPI + embedded web)
 │   ├── flow_platform.py   #   Flowchart page (same level as the AI platform)
 │   ├── workbench.py       #   Classic-operator workbench
@@ -175,20 +187,21 @@ XCcv-Multi-functional platform/
 │   │   ├── models/        #     14 built-in models (with pruning / export support)
 │   │   └── flow/          #     Flow engine (typed-port IR / executor / 57 operators)
 │   └── assets/            #   Icons
-├── labelme/               # vendored labelme 5.8.1 (GPLv3, with local modifications,
-│                          #   see labelme/MODIFICATIONS.md)
-├── tests/                 # Unit tests (incl. tests/modules behavior locks)
-├── tools/                 # env check / doc reconcile / per-module test runner
-├── docs/                  # Quick start / images
-├── licenses/              # License texts (AGPL-3.0 / labelme GPLv3 / CIF MIT /
-│                          #   SubspaceAD Apache-2.0 / BSD-3 / MIT)
+├── labelme/               # vendored labelme 5.8.1 (GPLv3; modifications in MODIFICATIONS.md)
+├── tests/                 # 39 domain test modules + tests/modules behavior locks
+├── scripts/               # Per-platform launch scripts (repo-root auto-backtracking) + run_tools.py
+├── tools/                 # Installer / weight downloader / env check / doc reconcile / test runner
+├── docs/                  # Quick start / FAQ / user guide / images
+├── licenses/              # License texts (AGPL-3.0 / GPLv3 / MIT / Apache-2.0 / BSD-3)
 ├── requirements.txt
-└── run_*.bat              # Per-platform launch scripts
+├── run_main.bat           # Main workbench launcher (the only launcher at root)
+└── install.bat            # One-click environment installer entry
 ```
 
 Runtime data (projects, logs, preferences) is generated under `platform_data/` and is not
-distributed with the repository; engine weights live in `weights/` or
-`xccv/engine/weights/` (both gitignored).
+distributed with the repository; engine weights (including runtime-downloaded
+family folders sam/ dino/ dinov2/) live in `xccv/engine/weights/`
+(installed state: `<install root>/weights/`, gitignored).
 
 ## License
 

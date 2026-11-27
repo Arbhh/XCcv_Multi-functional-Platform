@@ -245,10 +245,11 @@ class ThresholdPanel(QWidget):
         return (_DIM_SPECS["score"][0],) + _DIM_SPECS["score"][1:]
 
     def _initial_score_thr(self, conf: float) -> float:
-        """score 维初始阈值：z 语义按 conf→z=1/conf−1 换算（与预测同式）。"""
-        if not self._score_unbounded():
-            return float(conf)
-        return 1.0 / min(max(float(conf), 1e-3), 1.0) - 1.0
+        """score 维初始阈值：conf 滑条值换算到分数轴（换算式与标准页
+        共用 review_logic.conf_to_score，z 语义按 1/conf−1）。"""
+        from .review_logic import conf_to_score
+
+        return conf_to_score(self._stats.get("score_semantics") or {}, conf)
 
     # ---- 数据注入与刷新 ----
     def set_stats(self, stats: dict, conf: float):

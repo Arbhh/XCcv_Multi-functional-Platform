@@ -16,7 +16,7 @@
 6. [模型工具（剪枝 / TensorRT）](#6-模型工具剪枝--tensorrt)
 7. [部署与推理服务](#7-部署与推理服务)
 8. [流程图与传统算子](#8-流程图与传统算子)
-9. [开源、许可与迁移](#9-开源许可与迁移)
+9. [开源与许可](#9-开源与许可)
 
 ---
 
@@ -26,20 +26,20 @@
 Windows 10 / 11（x64）＋ Python 3.11。GPU 可选：有 NVIDIA 显卡时训练与推理显著更快；CPU 也能跑（建议小模型、小尺寸）。依赖占盘约 6~8 GB。
 
 **Q1.2　`pip install -r requirements.txt` 报 torch 版本冲突？**
-先单独装 torch（按 CUDA 版本选官方源），再装其余依赖：
+torch 不在 requirements 内，需先单独装（版本矩阵：torch==2.9.1 + torchvision==0.24.1，与 CI / README 一致），再装其余依赖：
 
 ```bat
 python -m venv venv && venv\Scripts\activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 ```
 
-CPU 机器把 `cu128` 换成 `cpu` 源即可。ultralytics 对 torch 有上界约束，版本以 requirements 为准，不要随意升 torch 大版本。
+本地按显卡选源：较新驱动 / RTX 50 系用 `cu128`，较旧驱动可退 `cu126`；CPU 机器与 CI 用 `cpu` 源。ultralytics 8.4.7 约束 torch<2.10，不要装 torch 2.10 及以上。也可以直接双击根目录 `install.bat` 一键完成（自动探测 GPU 并选源、建 venv、装依赖、写 python_path.txt、环境体检）。
 
-**Q1.3　双击 `run_main.bat` 没反应 / 一闪而过？**
+**Q1.3　双击 `run_main.bat`（根目录主入口）没反应 / 一闪而过？**
 启动脚本按以下顺序探测解释器，判据是能否 `import PyQt5.QtWebEngineWidgets`：
-`XCCV_PY` → 本目录 `python_path.txt` → PATH 的 `python` → `py -3` → 本目录 `venv` / `.venv`。
-推荐在仓库根写一行 `python_path.txt`（完整 python.exe 路径，已 gitignore）。全部不可用时脚本会调用 `tools\env_check.py` 输出每个候选的失败原因。
+`XCCV_PY` → 仓库根 `python_path.txt` → PATH 的 `python` → `py -3` → 仓库根 `venv` / `.venv`。
+推荐在仓库根写一行 `python_path.txt`（完整 python.exe 路径，已 gitignore）。全部不可用时脚本会调用 `tools\env_check.py` 输出每个候选的失败原因。注意：PATH 中的 `python` 可能被其他项目的环境占用（装完仍报错时先核对 `install.bat` 回显的解释器路径是否符合预期）；`scripts\` 下的平台入口按"相对脚本自身回溯根"定位仓库根，从任何位置双击均可用。
 
 **Q1.4　报错 `Could not find QtWebEngineProcess` / 页面空白？**
 PyQtWebEngine 与 PyQt5 版本必须匹配（requirements 已固定 5.15.7 / 5.15.9）。若手工装过其它版本，先 `pip uninstall PyQt5 PyQtWebEngine` 再按 requirements 重装。企业环境还需确认没有安全软件拦截 `QtWebEngineProcess.exe`。
@@ -54,7 +54,7 @@ PyQtWebEngine 与 PyQt5 版本必须匹配（requirements 已固定 5.15.7 / 5.1
 先确认 `torch.cuda.is_available()` 为真且设备解析到 GPU；笔记本混合架构可能出现功耗/调度降频，参考主界面「设置」中的设备与推理服务显存面板；必要时关闭系统省电模式。
 
 **Q1.8　能不能不用虚拟环境？**
-可以但不推荐。`run_*.bat` 不要求目录内 venv，可用 `XCCV_PY` 指向任意 Python 3.11 环境。混装多版本 torch 容易踩坑，建议一项目一环境。
+可以但不推荐。启动脚本（根目录 `run_main.bat` / `install.bat`，以及 `scripts\` 下的平台入口与中文开发机快捷入口）不要求目录内 venv，可用 `XCCV_PY` 指向任意 Python 3.11 环境。混装多版本 torch 容易踩坑，建议一项目一环境。
 
 ---
 
@@ -64,18 +64,25 @@ PyQtWebEngine 与 PyQt5 版本必须匹配（requirements 已固定 5.15.7 / 5.1
 本项目**不分发任何模型权重**：权重许可各异（Apache-2.0 / AGPL-3.0 / 各发布方自定义），随仓库分发会产生许可传染风险。平台提供下载/自建脚本，权重由使用者按各发布方条款自行获取。
 
 **Q2.2　AI 智能标注提示缺权重？**
-需要 SAM 系列权重（如 `sam2.1_t.pt`、`mobile_sam.pt`），放到仓库根 `weights/sam/`。缺失时智能多边形、画笔、批量预标注按钮给出指引，其余标注功能不受影响。
-
-**Q2.3　CIF / SubspaceAD 提示缺骨干？**
-CIF 需要 DINO ViT-B/8 权重（`weights/dino/dino_vitbase8_pretrain.pth`，或环境变量 `XCCV_DINO_CKPT`）；SubspaceAD 优先用 `weights/dinov2/` 本地目录（或 `XCCV_DINOV2_CKPT`），本地缺失时可能经 transformers 从 Hugging Face 下载标准 DINOv2 权重。国内网络可设 `HF_ENDPOINT=https://hf-mirror.com`。
-
-**Q2.4　预训练基准权重（YOLO COCO / ImageNet）怎么一次性备好？**
+需要 SAM 系列权重（如 `sam2.1_t.pt`、`mobile_sam.pt`），放到引擎权重目录 `xccv/engine/weights/sam/`。可用一键下载脚本按需补齐：
 
 ```bat
-python xccv\engine\weights\download_weights.py
+python tools\download_weights.py --family sam
 ```
 
-脚本把 YOLO 与 torchvision 权重下到 `xccv/engine/weights/`（已 gitignore）。离线机器可在有网环境跑同一个脚本后整目录拷贝。
+缺失时智能多边形、画笔、批量预标注按钮给出指引，其余标注功能不受影响。
+
+**Q2.3　CIF / SubspaceAD 提示缺骨干？**
+CIF 需要 DINO ViT-B/8 权重（`xccv/engine/weights/dino/dino_vitbase8_pretrain.pth`，或环境变量 `XCCV_DINO_CKPT`）；SubspaceAD 优先用 `xccv/engine/weights/dinov2/` 本地目录（或 `XCCV_DINOV2_CKPT`），本地缺失时可能经 transformers 从 Hugging Face 下载标准 DINOv2 权重。国内网络可设 `HF_ENDPOINT=https://hf-mirror.com`。两者都可用一键下载脚本补齐：`python tools\download_weights.py --family dino`。
+
+**Q2.4　预训练基准权重（YOLO COCO / ImageNet / SAM / DINO）怎么一次性备好？**
+
+```bat
+python tools\download_weights.py --list      # 查看清单与就绪状态
+python tools\download_weights.py             # 全部按需下载（可 --family 按族）
+```
+
+全部权重统一落引擎权重目录 `xccv/engine/weights/` 下的族子目录（YOLO/torchvision 落 `ultralytics/` 与 `torch/hub/checkpoints/`，SAM / DINO / DINOv2 落 `sam/`、`dino/`、`dinov2/`，均已 gitignore）。离线机器可在有网环境下载后把对应目录整体拷贝，或参考离线安装指引：`python tools\setup_env.py --offline`。
 
 **Q2.5　maskrcnn18 的 slim 初始权重从哪来？**
 
@@ -88,7 +95,7 @@ python xccv\engine\weights\download_weights.py
 示例背景与缺陷贴图约 33 MB，独立分发：下载 `XCcv-Platform-testdata-0.8.0.zip` 解压到 `xccv/defectgen/`（得到 `testdata/`）。缺失时合成界面仍可用，自行指定背景与贴图目录。
 
 **Q2.7　权重可以放进 git 吗？**
-不建议也不必要。`.gitignore` 已排除 `weights/`、`xccv/engine/weights/`、`*.pt/.pth/.onnx/.engine/.xva/.xcs`；确有团队共享需求请用对象存储或发布页附件。
+不建议也不必要。`.gitignore` 已排除引擎权重目录 `xccv/engine/weights/`（含运行时下载的 sam/ dino/ dinov2/ 子目录）与 `*.pt/.pth/.onnx/.engine/.xva/.xcs`；确有团队共享需求请用对象存储或发布页附件。
 
 ---
 
@@ -246,7 +253,7 @@ V0.8.0 把外部算子改为**插件后端**：仓库内置 OpenCV 展示后端�
 
 ---
 
-## 9. 开源、许可与迁移
+## 9. 开源与许可
 
 **Q9.1　项目是什么许可？能商用吗？**
 本工程为 AGPL-3.0；`labelme/` 为 GPLv3 vendored 副本；训练链路依赖 ultralytics（AGPL-3.0）。AGPL 允许商业使用，但**通过网络对外提供服务时须履行源码开放义务**；如需闭源集成，请自行评估 ultralytics 企业许可与替换 PyQt5 为 LGPL 方案的可行性。
@@ -260,12 +267,5 @@ V0.8.0 把外部算子改为**插件后端**：仓库内置 OpenCV 展示后端�
 **Q9.4　发现安全问题怎么报？**
 不要开公开 Issue。走 `SECURITY.md` 的私下渠道（GitHub Security Advisories 或邮件），附复现步骤与环境信息。
 
-**Q9.5　从 0.7.x 升级要注意什么？**
-
-- 权重容器 `.xva/.xcs` 不再支持：用 0.8.0 重新训练或重新导出，加载旧文件会得到明确迁移提示；
-- 训练产物、轮次权重、流程包、引擎一律明文（`best.pt`、`epoch_NNN.pt`、`.xvap`、`.engine`）；
-- 模型工具不再有「权重加密 / 解密」卡片；
-- 旧流程 JSON 可继续加载（端口迁移表保留兼容），外部算子节点需改选插件后端。
-
-**Q9.6　文档在哪、怎么保证不过期？**
-`README*` → `docs/quickstart*` → 本 FAQ → `CHANGELOG*`。算子数/模型数/支持版本由 `python tools\doc_reconcile.py` 自动对账，漂移即失败；UI 英文词条由覆盖检查脚本守护（当前 904 站点 / 1887 词条，覆盖 100%）。
+**Q9.5　文档在哪、怎么保证不过期？**
+`README*` → `docs/quickstart*` → 本 FAQ → `CHANGELOG*`。算子数/模型数/支持版本由 `python tools\doc_reconcile.py` 自动对账，漂移即失败；UI 英文词条由覆盖检查脚本守护（当前 909 站点 / 1892 词条，覆盖 100%）。
